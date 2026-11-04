@@ -36,6 +36,8 @@ data class LiveText(val type: String, val text: String)
 sealed interface LiveEvent {
     data object Started : LiveEvent
     data class Transcript(val fragment: LiveFragment) : LiveEvent
+    /** Authoritative subscription user turn, null if its final transcript is missing. */
+    data class UserFinal(val text: String?) : LiveEvent
     /** The voice handed the request to Hermes. The event carries no text; the transcript says what was asked. */
     data class Delegation(val id: String) : LiveEvent
     data class Failure(val message: String) : LiveEvent

@@ -61,6 +61,15 @@ data class VoiceLiveStatus(
 private data class LiveSessionRequest(val sdp: String, val history: List<LiveHistoryMessage>)
 
 @Serializable
+private data class SubscriptionStatus(val ok: Boolean = false, val source: String = "", val contract: Int = 0)
+
+@Serializable
+private data class SubscriptionSessionRequest(val sdp: String, val history: List<LiveHistoryMessage>, val billing: String = "subscription")
+
+@Serializable
+private data class SubscriptionSessionResponse(val ok: Boolean = false, val auth: String = "", val source: String = "", val transport: LiveTransport? = null)
+
+@Serializable
 private data class LiveTransport(val sdp: String = "")
 
 @Serializable
@@ -117,6 +126,31 @@ class AudioApi(private val client: HttpClient) {
             waitUpTo(LIVE_SESSION_MS)
         }
     }.map { it.body<LiveSessionResponse>().transport?.sdp.orEmpty() }
+
+    /** Read-only, local plugin and profile preflight; does not verify provider entitlement. */
+    suspend fun subscriptionStatus(url: GatewayUrl, profile: String): ApiResult<Unit> = apiCall {
+        client.get(url.resolve("api/plugins/kyllene_voice/gpt-live/status")) { parameter("profile", profile) }
+    }.map { response ->
+        val status = response.body<SubscriptionStatus>()
+        require(status.ok && status.source == "plugin" && status.contract == 1) { "Incompatible subscription voice plugin." }
+    }
+
+    /** Explicit opt-in path; errors never retry against the stock API endpoint. */
+    suspend fun startSubscriptionLive(url: GatewayUrl, offerSdp: String, history: List<LiveHistoryMessage>, profile: String): ApiResult<String> = apiCall {
+        client.post(url.resolve("api/plugins/kyllene_voice/gpt-live/session")) {
+            parameter("profile", profile)
+            contentType(ContentType.Application.Json)
+            setBody(SubscriptionSessionRequest(offerSdp, history))
+            waitUpTo(LIVE_SESSION_MS)
+        }
+    }.map { response ->
+        val result = response.body<SubscriptionSessionResponse>()
+        val answer = result.transport?.sdp.orEmpty()
+        require(result.ok && result.auth == "subscription" && result.source == "plugin" && answer.startsWith("v=0")) {
+            "Invalid subscription voice response; no API fallback."
+        }
+        answer
+    }
 
     /**
      * Tells the gateway a voice surface is active, so it warms the speech engine before the first

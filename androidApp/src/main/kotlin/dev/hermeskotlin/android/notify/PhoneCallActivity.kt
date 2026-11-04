@@ -2,6 +2,9 @@ package dev.hermeskotlin.android.notify
 
 import android.Manifest
 import android.app.KeyguardManager
+import android.app.AlertDialog
+import dev.hermeskotlin.core.profiles.ProfilesApi
+import dev.hermeskotlin.core.network.ApiResult
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
@@ -35,6 +38,8 @@ class PhoneCallActivity : ComponentActivity() {
 
     private val notifications: ChatNotifications by inject()
     private val model: PhoneCallModel by viewModel()
+    private val profiles: ProfilesApi by inject()
+    private var choosing = false
 
     private val microphone = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) model.start() else leave(getString(R.string.call_needs_microphone))
@@ -68,7 +73,7 @@ class PhoneCallActivity : ComponentActivity() {
         val chat = ringing?.storedSessionId
         // A call from the agent may have no chat on this gateway (Desktop's, say): it talks in a new one.
         if (requestId == null || ringing == null || (chat == null && ringing.agent == null)) return finish()
-        model.pickUp(PickedUpCall(requestId, chat, ringing.title?.takeIf { it.isNotBlank() } ?: "Hermes", ringing.request, ringing.agent))
+        model.pickUp(PickedUpCall(requestId, chat, ringing.title?.takeIf { it.isNotBlank() } ?: "Hermes", ringing.request, ringing.agent, ringing.origin))
         // Picked up: it stops ringing at once, whatever comes next.
         notifications.answered(requestId)
         unlockThenTalk()
@@ -96,6 +101,30 @@ class PhoneCallActivity : ComponentActivity() {
 
     private fun withMicrophone() {
         if (isFinishing || isDestroyed) return
+        if (model.needsProfileChoice()) {
+            if (choosing) return
+            val gateway = model.pickingUp?.origin?.gateway ?: return leave("The call's gateway is unknown. Open the question in its chat.")
+            choosing = true
+            lifecycleScope.launch {
+                val roster = profiles.roster(gateway)
+                if (isFinishing || isDestroyed) return@launch
+                val options = (roster as? ApiResult.Success)?.value?.profiles.orEmpty().filter { it.name.isNotBlank() }
+                if (options.isEmpty()) {
+                    choosing = false
+                    return@launch leave("Could not load profiles. Open the question in its chat.")
+                }
+                AlertDialog.Builder(this@PhoneCallActivity)
+                    .setTitle("Choose the profile for this question")
+                    .setItems(options.map { it.label + " (" + it.name + ")" }.toTypedArray()) { _, which ->
+                        choosing = false
+                        model.chooseProfile(options[which].name)
+                        withMicrophone()
+                    }
+                    .setOnCancelListener { choosing = false; leave(null) }
+                    .show()
+            }
+            return
+        }
         val permission = Manifest.permission.RECORD_AUDIO
         if (ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED) model.start()
         else microphone.launch(permission)

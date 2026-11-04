@@ -1,0 +1,6 @@
+name: kyllene_voice
+manifest_version: 1
+version: 0.1.0
+description: Subscription-only outgoing voice host
+author: Kyllene
+kind: standalone

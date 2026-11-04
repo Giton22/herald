@@ -273,6 +273,8 @@ fun SettingsScreen(
     val appIcons = key(appIconOpen) { rememberAppIcons() }
     val language = rememberLanguageChoice()
     val suggestions by viewModel.suggestions.collectAsStateWithLifecycle()
+    val voiceInstall by viewModel.voiceInstall.collectAsStateWithLifecycle()
+    val voiceSetup by viewModel.voiceSetup.collectAsStateWithLifecycle()
     LaunchedEffect(gateway, profile) { viewModel.bind(gateway, profile) }
     PlatformBackHandler(enabled = !checkOpen && !phoneToolsOpen && !appIconOpen && !startInstructionOpen && !callTargetOpen && !languageOpen && !sidebarPagesOpen, onBack = onBack)
     // The desktop lists the sections beside the page; they say here where they start.
@@ -309,7 +311,12 @@ fun SettingsScreen(
         suggestions = suggestions,
         onInstallSuggestions = viewModel::installSuggestions,
         onCheckSuggestions = viewModel::checkSuggestions,
+        onInstallVoice = viewModel::openVoiceInstall,
+        voiceSetup = voiceSetup,
+        onSubscriptionVoice = viewModel::setSubscriptionVoice,
+        onCheckSubscriptionVoice = viewModel::checkSubscriptionVoice,
     ) }
+    VoiceInstallSheet(voiceInstall, viewModel::closeVoiceInstall, viewModel::selectVoiceProfile, viewModel::confirmVoiceInstall)
     if (callTargetOpen) CallTargetPicker(gateway, viewModel, botFaces, onDismiss = { callTargetOpen = false }) { target ->
         viewModel.update { it.copy(callTargets = it.callTargets + (gateway.url to target)) }
         callTargetOpen = false
@@ -415,6 +422,10 @@ internal fun SettingsView(
     suggestions: SuggestionsPlugin = SuggestionsPlugin.Checking,
     onInstallSuggestions: () -> Unit = {},
     onCheckSuggestions: () -> Unit = {},
+    onInstallVoice: () -> Unit = {},
+    voiceSetup: String? = null,
+    onSubscriptionVoice: (Boolean) -> Unit = {},
+    onCheckSubscriptionVoice: () -> Unit = {},
 ) {
     Box(
         Modifier
@@ -696,6 +707,23 @@ internal fun SettingsView(
 
                 if (hasVoice) Section(stringResource(Res.string.settings_section_voice)) {
                     CallTargetRow(settings.callTargets[gatewayUrl] ?: CallTarget(), botFaces, onChooseCallTarget)
+                    Divider()
+                    SwitchRow(
+                        title = "Subscription live voice",
+                        detail = "Subscription voice on phone; watch uses API. Chat context is shared.",
+                        checked = settings.subscriptionVoicePreview,
+                        onCheckedChange = onSubscriptionVoice,
+                    )
+                    if (settings.subscriptionVoicePreview) {
+                        if (voiceSetup != null) {
+                            Divider()
+                            Field("Setup check", detail = voiceSetup) {}
+                        }
+                        Divider()
+                        ActionRow("Check setup", Lucide.RefreshCw, onClick = onCheckSubscriptionVoice)
+                        Divider()
+                        ActionRow("Install voice plugin", Lucide.Download, onClick = onInstallVoice)
+                    }
                     Divider()
                     SwitchRow(
                         title = stringResource(Res.string.settings_dictation),

@@ -121,6 +121,21 @@ class SessionWatcherTest {
     }
 
     @Test
+    fun requestOriginsFollowTheActualRuntimeAndAreRemovedOnCancellation() = runTest {
+        openRequests = """[{"id":"old","method":"clarify","params":{"session_id":"rt-a","question":"Old?"}}]"""
+        live.value = listOf(Row("a", "waiting"))
+        val watcher = setup().watcher
+        val initial = watcher.chats.first { it["a"]?.requests?.isNotEmpty() == true }.getValue("a")
+        assertEquals(dev.hermeskotlin.core.wear.CallOrigin(FakeGateway.URL, null, "rt-a", "old", "clarify"), initial.origins["old"])
+        sockets.last().push(approval("new", "rt-a"))
+        val next = watcher.chats.first { it["a"]?.requests?.size == 2 }.getValue("a")
+        assertEquals(dev.hermeskotlin.core.wear.CallOrigin(FakeGateway.URL, null, "rt-a", "new", "approval"), next.origins["new"])
+        sockets.last().push(event("request.cancel", "rt-a", """{"id":"old"}"""))
+        val cancelled = watcher.chats.first { it["a"]?.requests?.size == 1 }.getValue("a")
+        assertTrue("old" !in cancelled.origins, "Cancelled requests must not retain an origin")
+    }
+
+    @Test
     fun requestsComeFromTheAttachAndLiveAndLeaveWhenWithdrawnOrTheTurnEnds() = runTest {
         openRequests = """[{"id":"srq-old","method":"approval","params":{"session_id":"rt-a","command":"ls","choices":["once","deny"]}}]"""
         live.value = listOf(Row("a", "waiting"))

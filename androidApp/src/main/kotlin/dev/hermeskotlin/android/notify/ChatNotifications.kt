@@ -33,6 +33,7 @@ import dev.hermeskotlin.core.phone.AgentCall
 import dev.hermeskotlin.core.phone.CallOpeners
 import dev.hermeskotlin.core.phone.CallOutcome
 import dev.hermeskotlin.core.phone.CallReason
+import dev.hermeskotlin.core.wear.CallOrigin
 import dev.hermeskotlin.ui.calls.agentCallReason
 import dev.hermeskotlin.ui.calls.callReason
 import java.util.UUID
@@ -133,6 +134,7 @@ class ChatNotifications(
         val request: InputRequest?,
         val talk: Boolean = false,
         val agent: AgentCall? = null,
+        val origin: CallOrigin? = null,
     ) {
         /** The ring-out's token: Android matches it by identity, and request ids come back as copies from intents. */
         internal val timer = Any()
@@ -235,9 +237,10 @@ class ChatNotifications(
         ring: Boolean = false,
         talk: Boolean = false,
         quiet: Boolean = false,
+        origin: CallOrigin? = null,
     ): Boolean {
         val rings = ring && !voiceOn() && !quietNow() && (request is InputRequest.Approval || request is InputRequest.Clarify) && synchronized(rang) { request.id !in rang }
-        if (rings) return postCall(Ringing(request.id, storedSessionId, title, request, talk))
+        if (rings) return postCall(Ringing(request.id, storedSessionId, title, request, talk, origin = origin))
         val builder = base(CHANNEL_REQUESTS, storedSessionId, title)
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .setPriority(NotificationCompat.PRIORITY_HIGH)

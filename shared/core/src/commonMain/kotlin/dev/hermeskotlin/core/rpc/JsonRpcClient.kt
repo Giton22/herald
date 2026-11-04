@@ -195,11 +195,15 @@ class JsonRpcClient(
      * Answers server request [id], live or replayed from `open_requests`. A late answer is harmless:
      * the gateway drops responses for requests that are no longer open.
      */
-    suspend fun respond(id: String, result: JsonElement) = send(buildJsonObject {
-        put("jsonrpc", "2.0")
-        put("id", id)
-        put("result", result)
-    })
+    suspend fun respond(id: String, result: JsonElement, canSend: (() -> Boolean)? = null): Boolean = sendMutex.withLock {
+        val frame = buildJsonObject {
+            put("jsonrpc", "2.0")
+            put("id", id)
+            put("result", result)
+        }
+        val text = HermesJson.encodeToString(JsonObject.serializer(), frame)
+        if (canSend != null) transport.sendGuarded(text, canSend) else { transport.send(text); true }
+    }
 
     suspend fun close() = transport.close()
 

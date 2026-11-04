@@ -26,6 +26,9 @@ jobs:
     steps:
       # Pinned to commits, not tags, so a moved tag can't change what runs with the signing key.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
 
       # JetBrains Runtime, as everywhere else: Gradle's daemon asks for it (gradle/gradle-daemon-jvm.properties).
       - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
@@ -53,12 +56,27 @@ jobs:
             echo "keyPassword=$KEY_PASSWORD"
           } > keystore.properties
 
+      # Signing writes keystore.properties, so check only the plugin subtree.
+      - name: Verify voice plugin release pin
+        shell: bash
+        run: |
+          set -euo pipefail
+          [ "$GITHUB_SERVER_URL" = 'https://github.com' ] || { echo '::error::Untrusted GitHub server'; exit 1; }
+          [ "$(printf '%s' "$GITHUB_REPOSITORY" | tr '[:upper:]' '[:lower:]')" = 'giton22/kyllene' ] || { echo '::error::Untrusted release repository'; exit 1; }
+          [[ "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo '::error::Invalid release SHA'; exit 1; }
+          [ "$(git rev-parse HEAD)" = "$GITHUB_SHA" ] || { echo '::error::Checkout does not match release SHA'; exit 1; }
+          git merge-base --is-ancestor "$GITHUB_SHA" refs/remotes/origin/master || { echo '::error::Release is not on upstream master'; exit 1; }
+          [ -d plugins/kyllene_voice ] && git cat-file -e "$GITHUB_SHA:plugins/kyllene_voice/plugin.yaml" || { echo '::error::Voice plugin missing from release'; exit 1; }
+          plugin_status="$(git status --porcelain --untracked-files=all --ignored -- plugins/kyllene_voice)"
+          [ -z "$plugin_status" ] || { echo '::error::Voice plugin subtree is not clean'; exit 1; }
+          echo "VOICE_PLUGIN_REVISION=$GITHUB_SHA" >> "$GITHUB_ENV"
+
       - name: Test and build
         run: >
           ./gradlew --no-daemon
           :shared:core:testAndroidHostTest :shared:designsystem:testAndroidHostTest :shared:ui:testAndroidHostTest :shared:wearlink:testAndroidHostTest
           :wearApp:testDebugUnitTest :androidApp:assembleRelease :wearApp:assembleRelease
-          -PappVersion="${GITHUB_REF_NAME#v}" -PreleasesRepo="$GITHUB_REPOSITORY"
+          -PappVersion="${GITHUB_REF_NAME#v}" -PreleasesRepo="$GITHUB_REPOSITORY" -PvoicePluginRevision="$VOICE_PLUGIN_REVISION"
 
       - name: Draft release
         env:
@@ -141,6 +159,9 @@ jobs:
         shell: bash
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
 
       # JetBrains Runtime, which the installer bundles: Kyllene's own title bar needs its window decorations API, and
       # widgets and plugin pages its Chromium (JCEF). Another JDK gives the OS's title bar and opens those in the
@@ -190,13 +211,27 @@ jobs:
             echo "NOTARIZE=1" >> "$GITHUB_ENV"
           fi
 
+      # Keep this identical to the Android verification above.
+      - name: Verify voice plugin release pin
+        run: |
+          set -euo pipefail
+          [ "$GITHUB_SERVER_URL" = 'https://github.com' ] || { echo '::error::Untrusted GitHub server'; exit 1; }
+          [ "$(printf '%s' "$GITHUB_REPOSITORY" | tr '[:upper:]' '[:lower:]')" = 'giton22/kyllene' ] || { echo '::error::Untrusted release repository'; exit 1; }
+          [[ "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo '::error::Invalid release SHA'; exit 1; }
+          [ "$(git rev-parse HEAD)" = "$GITHUB_SHA" ] || { echo '::error::Checkout does not match release SHA'; exit 1; }
+          git merge-base --is-ancestor "$GITHUB_SHA" refs/remotes/origin/master || { echo '::error::Release is not on upstream master'; exit 1; }
+          [ -d plugins/kyllene_voice ] && git cat-file -e "$GITHUB_SHA:plugins/kyllene_voice/plugin.yaml" || { echo '::error::Voice plugin missing from release'; exit 1; }
+          plugin_status="$(git status --porcelain --untracked-files=all --ignored -- plugins/kyllene_voice)"
+          [ -z "$plugin_status" ] || { echo '::error::Voice plugin subtree is not clean'; exit 1; }
+          echo "VOICE_PLUGIN_REVISION=$GITHUB_SHA" >> "$GITHUB_ENV"
+
       - name: Build the installer
         # The installer bundles this JDK, not whichever one Gradle's own toolchain settings pick to run on.
         env:
           HERALD_PACKAGING_JDK: ${{ env.JAVA_HOME }}
         run: >
           ./gradlew --no-daemon :desktopApp:${{ matrix.task }} ${{ env.NOTARIZE && ':desktopApp:notarizeReleaseDmg' || '' }}
-          -PappVersion="${GITHUB_REF_NAME#v}" -PreleasesRepo="$GITHUB_REPOSITORY"
+          -PappVersion="${GITHUB_REF_NAME#v}" -PreleasesRepo="$GITHUB_REPOSITORY" -PvoicePluginRevision="$VOICE_PLUGIN_REVISION"
 
       - name: Sign the MSI
         if: runner.os == 'Windows'

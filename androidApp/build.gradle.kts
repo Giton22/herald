@@ -10,6 +10,33 @@ plugins {
 val appVersion = (findProperty("appVersion") as String?)?.removePrefix("v") ?: "0.1.0"
 val releasesRepo = (findProperty("releasesRepo") as String?).orEmpty()
 
+abstract class GenerateThirdPartyNotices : DefaultTask() {
+    @get:InputFile
+    abstract val notice: RegularFileProperty
+
+    @get:OutputDirectory
+    abstract val outputDirectory: DirectoryProperty
+
+    @TaskAction
+    fun generate() {
+        val output = outputDirectory.get().asFile
+        output.mkdirs()
+        notice.get().asFile.copyTo(output.resolve("THIRD_PARTY_NOTICES.md"), overwrite = true)
+    }
+}
+
+// Package the repository notice without keeping a second copy in the source tree.
+val generateThirdPartyNotices = tasks.register<GenerateThirdPartyNotices>("generateThirdPartyNotices") {
+    notice.set(rootProject.layout.projectDirectory.file("THIRD_PARTY_NOTICES.md"))
+    outputDirectory.set(layout.buildDirectory.dir("generated/thirdPartyNotices/assets"))
+}
+
+androidComponents {
+    onVariants { variant ->
+        variant.sources.assets?.addGeneratedSourceDirectory(generateThirdPartyNotices, GenerateThirdPartyNotices::outputDirectory)
+    }
+}
+
 android {
     namespace = "dev.hermeskotlin.android"
     compileSdk {

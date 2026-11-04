@@ -46,6 +46,7 @@ class AndroidLiveCall(context: Context) : LiveCall {
     private var previousMode = AudioManager.MODE_NORMAL
     private var routed = false
 
+
     @Volatile private var closed = false
     @Volatile private var micLevel = 0f
     @Volatile private var loudAt = 0L
@@ -110,7 +111,8 @@ class AndroidLiveCall(context: Context) : LiveCall {
         channel.registerObserver(object : DataChannel.Observer {
             override fun onMessage(buffer: DataChannel.Buffer) {
                 val bytes = ByteArray(buffer.data.remaining()).also(buffer.data::get)
-                incoming.trySend(bytes.decodeToString())
+                val raw = bytes.decodeToString()
+                incoming.trySend(raw)
             }
 
             override fun onStateChange() {

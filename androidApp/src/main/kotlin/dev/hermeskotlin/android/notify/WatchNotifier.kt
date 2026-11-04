@@ -90,7 +90,7 @@ class WatchNotifier(
                         for (chat in waiting) {
                             for (request in chat.requests) {
                                 if (request.id in takenDown) continue
-                                if (request.id !in notified && notifications.postRequest(chat.storedId, chat.title.ifBlank { null }, request, prefs.ringsForAnswers, prefs.phoneRingsTalk)) notified.add(request.id)
+                                if (request.id !in notified && notifications.postRequest(chat.storedId, chat.title.ifBlank { null }, request, prefs.ringsForAnswers, prefs.phoneRingsTalk, origin = chat.origins[request.id])) notified.add(request.id)
                             }
                         }
                     }

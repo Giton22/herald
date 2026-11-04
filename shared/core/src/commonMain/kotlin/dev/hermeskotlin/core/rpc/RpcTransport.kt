@@ -42,6 +42,10 @@ interface RpcTransport {
 
     suspend fun send(text: String)
 
+    /** Non-suspending enqueue only. Unsupported or full transports fail closed. The guard and
+     * enqueue are adjacent, not atomic with external lock or gateway state changes. */
+    fun sendGuarded(text: String, canSend: () -> Boolean): Boolean = false
+
     suspend fun close(code: Short = CloseReason.Codes.NORMAL.code, reason: String = "")
 }
 
@@ -56,6 +60,9 @@ private class KtorWebSocketTransport(private val session: DefaultClientWebSocket
     }
 
     override suspend fun send(text: String) = session.send(Frame.Text(text))
+
+    override fun sendGuarded(text: String, canSend: () -> Boolean): Boolean =
+        canSend() && session.outgoing.trySend(Frame.Text(text)).isSuccess
 
     override suspend fun close(code: Short, reason: String) = session.close(CloseReason(code, reason))
 }

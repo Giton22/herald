@@ -6,6 +6,32 @@ plugins {
     alias(libs.plugins.room)
 }
 
+// Only an explicitly supplied, release-reviewed upstream commit may enable installation.
+// Do not derive this from the checkout: local trees and forks are not trusted releases.
+val voicePluginRevision = providers.gradleProperty("voicePluginRevision")
+val generateVoicePluginRelease = tasks.register("generateVoicePluginRelease") {
+    val revision = voicePluginRevision.orElse("")
+    inputs.property("revision", revision)
+    val output = layout.buildDirectory.dir("generated/voicePluginRelease")
+    outputs.dir(output)
+    doLast {
+        val value = revision.get()
+        require(value.isEmpty() || value.matches(Regex("[0-9a-fA-F]{40}"))) {
+            "voicePluginRevision must be a full 40-character hexadecimal commit SHA"
+        }
+        val literal = if (value.isEmpty()) "null" else "\"$value\""
+        val file = output.get().file("dev/hermeskotlin/core/plugins/VoicePluginRelease.kt").asFile
+        file.parentFile.mkdirs()
+        file.writeText("""
+            package dev.hermeskotlin.core.plugins
+
+            object VoicePluginRelease {
+                val revision: String? = $literal
+            }
+        """.trimIndent() + "\n")
+    }
+}
+
 kotlin {
     android {
         namespace = "dev.hermeskotlin.core"
@@ -24,6 +50,7 @@ kotlin {
     jvm()
 
     sourceSets {
+        commonMain.get().kotlin.srcDir(generateVoicePluginRelease)
         // What Android and the desktop share: the JDK's crypto, text and time, jsoup and OkHttp.
         val jvmShared by creating {
             dependsOn(commonMain.get())

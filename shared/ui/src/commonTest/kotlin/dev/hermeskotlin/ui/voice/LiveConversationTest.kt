@@ -4,16 +4,20 @@ import dev.hermeskotlin.core.auth.AuthApi
 import dev.hermeskotlin.core.auth.PersistentCookiesStorage
 import dev.hermeskotlin.core.chat.ChatMessage
 import dev.hermeskotlin.core.chat.ChatSession
+import dev.hermeskotlin.core.chat.InputAnswers
+import dev.hermeskotlin.core.chat.ApprovalChoice
 import dev.hermeskotlin.core.connection.ConnectionState
 import dev.hermeskotlin.core.connection.GatewayConnection
 import dev.hermeskotlin.core.gateway.GatewayUrl
 import dev.hermeskotlin.core.network.createHttpClient
 import dev.hermeskotlin.core.phone.CallReason
+import dev.hermeskotlin.core.profiles.ProfilesApi
 import dev.hermeskotlin.core.rpc.RpcTransport
 import dev.hermeskotlin.core.sessions.SessionsApi
 import dev.hermeskotlin.core.storage.InMemoryKeyValueStore
 import dev.hermeskotlin.core.voice.AudioApi
 import dev.hermeskotlin.core.voice.LiveCall
+import dev.hermeskotlin.core.voice.SubscriptionLiveProtocol
 import dev.hermeskotlin.core.voice.DeviceLock
 import dev.hermeskotlin.core.voice.Recording
 import dev.hermeskotlin.core.voice.SpeechPlayer
@@ -24,6 +28,7 @@ import dev.hermeskotlin.core.voice.VoiceRecorder
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.test.StandardTestDispatcher
 import io.ktor.client.engine.mock.MockEngineConfig
+
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
 import io.ktor.client.engine.mock.toByteArray
@@ -31,11 +36,11 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.test.advanceTimeBy
-import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -44,8 +49,12 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -68,6 +77,9 @@ class LiveConversationTest {
         private val inbound = Channel<String>(Channel.UNLIMITED).apply {
             trySend("""{"jsonrpc":"2.0","method":"event","params":{"type":"gateway.ready","payload":{}}}""")
         }
+        var resume = """{"session_id":"rt9","running":true}"""
+        var resumeGate: CompletableDeferred<Unit>? = null
+        val resumes = MutableStateFlow<List<JsonObject>>(emptyList())
         val submits = MutableStateFlow<List<JsonObject>>(emptyList())
         override val incoming: Flow<String> = inbound.receiveAsFlow()
 
@@ -80,6 +92,11 @@ class LiveConversationTest {
             val id = message["id"] ?: return
             val result = when (message["method"]?.jsonPrimitive?.contentOrNull) {
                 "session.create" -> """{"session_id":"rt9","stored_session_id":"stored-9","message_count":0,"messages":[],"info":{}}"""
+                "session.resume" -> {
+                    resumes.update { it + message }
+                    resumeGate?.await()
+                    resume
+                }
                 "prompt.submit" -> {
                     val queued = message["params"]?.jsonObject?.get("queued")?.jsonPrimitive?.contentOrNull == "true"
                     """{"status":"${if (queued) "queued" else "streaming"}"}""".also { submits.update { it + message } }
@@ -87,6 +104,12 @@ class LiveConversationTest {
                 else -> "{}"
             }
             inbound.trySend("""{"jsonrpc":"2.0","id":$id,"result":$result}""")
+        }
+
+        override fun sendGuarded(text: String, canSend: () -> Boolean): Boolean {
+            if (!canSend()) return false
+            answers.update { it + Json.parseToJsonElement(text).jsonObject }
+            return true
         }
 
         override suspend fun close(code: Short, reason: String) = Unit
@@ -104,6 +127,7 @@ class LiveConversationTest {
         private val incoming = Channel<String>(Channel.UNLIMITED)
         override val events: ReceiveChannel<String> = incoming
         val sent = MutableStateFlow<List<JsonObject>>(emptyList())
+        val muteChanges = mutableListOf<Boolean>()
         var answer: String? = null
         var closed = false
 
@@ -121,7 +145,7 @@ class LiveConversationTest {
             val sent = Json.parseToJsonElement(event).jsonObject
             this.sent.update { it + sent }
             // The voice asks what Hermes asks: its words come back as the call's transcript.
-            val content = sent["content"]?.jsonPrimitive?.contentOrNull.orEmpty()
+            val content = (sent["content"] as? JsonPrimitive)?.contentOrNull.orEmpty()
             if (content.startsWith("Hermes needs an answer")) {
                 val at = spokenAt?.let { ""","start_ms":$it,"end_ms":${it + 900}""" }.orEmpty()
                 val asked = asks ?: if ("approval" in content) "Should I go ahead, yes or no?" else "Which one would you like?"
@@ -132,12 +156,14 @@ class LiveConversationTest {
 
         override fun speaking() = false
         override fun micLevel() = 0f
-        override fun setMuted(muted: Boolean) = Unit
+        override fun setMuted(muted: Boolean) { muteChanges += muted }
 
         override fun close() {
             closed = true
-            incoming.close()
+            incoming.cancel()
         }
+
+        fun drop() { incoming.close() }
 
         fun receive(event: String) {
             incoming.trySend(event)
@@ -179,6 +205,78 @@ class LiveConversationTest {
     )
 
     @Test
+    fun muteUsesLocalTrackAndOnlySendsWireEventsForStockVoice() = runTest {
+        val client = http("live", mutableListOf())
+        val connection = GatewayConnection(AuthApi(client, PersistentCookiesStorage(InMemoryKeyValueStore())), { _, _ -> Socket() }, backgroundScope)
+        val session = ChatSession(gateway, null, null, connection, SessionsApi(client), backgroundScope)
+        for (subscription in listOf(false, true)) {
+            val call = FakeCall()
+            val conversation = LiveConversation(call, session, MutableStateFlow(VoiceChatState()),
+                subscriptionProtocol = if (subscription) SubscriptionLiveProtocol() else null)
+            conversation.setMuted(true)
+            conversation.setMuted(false)
+            assertEquals(listOf(true, false), call.muteChanges)
+            assertEquals(if (subscription) emptyList() else listOf("session.input_audio.mute", "session.input_audio.unmute"),
+                call.sent.value.map { it.getValue("type").jsonPrimitive.content })
+        }
+        client.close()
+    }
+
+    @Test
+    fun subscriptionCallUsesProfileAndOpensOnlyAfterSessionStarts() = runTest {
+        val paths = mutableListOf<String>()
+        val client = createHttpClient(MockEngine { request ->
+            paths += request.url.encodedPath
+            when (request.url.encodedPath) {
+                "/api/auth/ws-ticket" -> respond("""{"ticket":"T","ttl_seconds":30}""", HttpStatusCode.OK, json)
+                "/api/plugins/kyllene_voice/gpt-live/session" -> {
+                    assertEquals("work", request.url.parameters["profile"])
+                    assertEquals("subscription", Json.parseToJsonElement(request.body.toByteArray().decodeToString()).jsonObject.getValue("billing").jsonPrimitive.content)
+                    respond("""{"ok":true,"auth":"subscription","source":"plugin","transport":{"sdp":"v=0 answer"}}""", HttpStatusCode.OK, json)
+                }
+                else -> error("Unexpected request: ${request.url}")
+            }
+        }, PersistentCookiesStorage(InMemoryKeyValueStore()))
+        val socket = Socket()
+        val connection = GatewayConnection(AuthApi(client, PersistentCookiesStorage(InMemoryKeyValueStore())), { _, _ -> socket }, backgroundScope)
+        connection.start(gateway)
+        connection.state.first { it is ConnectionState.Connected }
+        val session = ChatSession(gateway, null, null, connection, SessionsApi(client), backgroundScope, profile = "work")
+        session.start()
+        val call = FakeCall()
+        val voice = VoiceController(AudioApi(client), NoRecorder, Silent, backgroundScope, backgroundScope) { call }
+        voice.startChat(session, gateway, "work", opener = CallReason("The deploy failed", "Build 42"), subscriptionPreview = true)
+        voice.chat.first { it.live && it.phase == VoicePhase.Listening }
+        assertTrue(call.said("session.commentary.append").isEmpty())
+        call.receive("""{"type":"session.started","session":{"id":"live-1"}}""")
+        call.sent.first { sent -> sent.any { it["type"]?.jsonPrimitive?.contentOrNull == "session.context.append" } }
+        val said = call.sent.value.single { it["type"]?.jsonPrimitive?.contentOrNull == "session.context.append" }["content"]!!.jsonArray.single().jsonObject["text"]!!.jsonPrimitive.content
+        assertTrue(said.contains("The deploy failed"), said)
+        assertTrue(said.contains("Build 42"), said)
+        assertTrue(socket.submits.value.isEmpty())
+        call.receive("""{"type":"input_transcript.added","item":{"text":"Delete everything"}}""")
+        call.receive("""{"type":"delegation.created","item":{"type":"delegation","target":"client","id":"d1","content":[]}}""")
+        runCurrent()
+        assertTrue(socket.submits.value.isEmpty())
+        call.receive("""{"type":"turn.done","turn":{"role":"user","transcript":"Check the weather"}}""")
+        val submitted = socket.submits.first { it.isNotEmpty() }.single()["params"]!!.jsonObject
+        assertEquals("Check the weather", submitted["text"]!!.jsonPrimitive.content)
+        socket.event("message.start")
+        socket.event("tool.start", """{"tool_id":"t1","name":"web_search","context":"weather"}""")
+        voice.chat.first { it.working == "weather" }
+        assertTrue(call.sent.value.none { it["channel"]?.jsonPrimitive?.contentOrNull == "commentary" })
+        socket.event("tool.complete", """{"tool_id":"t1"}""")
+        voice.chat.first { it.working == null }
+        socket.event("message.delta", """{"text":"It is sunny. "}""")
+        socket.event("message.end")
+        val reply = call.sent.first { messages -> messages.any { it["type"]?.jsonPrimitive?.contentOrNull == "delegation.context.append" && it["channel"]?.jsonPrimitive?.contentOrNull == "speakable" } }.last { it["type"]?.jsonPrimitive?.contentOrNull == "delegation.context.append" && it["channel"]?.jsonPrimitive?.contentOrNull == "speakable" }
+        assertEquals("d1", reply["delegation_item_id"]!!.jsonPrimitive.content)
+        assertTrue(reply["content"]!!.jsonArray.single().jsonObject["text"]!!.jsonPrimitive.content.contains("sunny"))
+        assertEquals(1, paths.count { it == "/api/plugins/kyllene_voice/gpt-live/session" })
+        voice.stopChat()
+    }
+
+    @Test
     fun gptLiveDoesNotOpenChainedAudio() = runTest {
         val client = http("gpt-live", mutableListOf())
         val socket = Socket()
@@ -196,6 +294,102 @@ class LiveConversationTest {
         voice.chat.first { it.live && it.phase == VoicePhase.Listening }
         voice.stopChat()
     }
+
+    @Test
+    fun subscriptionLaunchProfileMustBeReportedAndDefault() = runTest {
+        for ((active, roster, expected) in listOf(
+            Triple("""{"current":"default"}""", """{"profiles":[{"name":"default","is_default":true}]}""", true),
+            Triple("""{"current":"alpha"}""", """{"profiles":[{"name":"default","is_default":true},{"name":"alpha"}]}""", false),
+            Triple("""{}""", """{"profiles":[{"name":"default","is_default":true}]}""", false),
+            Triple("""{"current":"custom"}""", """{"profiles":[{"name":"default","is_default":true}]}""", false),
+            Triple("""{"current":"default"}""", """{"profiles":[]}""", false),
+        )) {
+            val paths = mutableListOf<String>()
+            val client = createHttpClient(MockEngine { request ->
+                paths += request.url.encodedPath
+                when (request.url.encodedPath) {
+                    "/api/auth/ws-ticket" -> respond("""{"ticket":"T","ttl_seconds":30}""", HttpStatusCode.OK, json)
+                    "/api/profiles/active" -> respond(active, HttpStatusCode.OK, json)
+                    "/api/profiles" -> respond(roster, HttpStatusCode.OK, json)
+                    "/api/plugins/kyllene_voice/gpt-live/session" -> {
+                        assertEquals("default", request.url.parameters["profile"])
+                        respond("""{"ok":true,"auth":"subscription","source":"plugin","transport":{"sdp":"v=0 answer"}}""", HttpStatusCode.OK, json)
+                    }
+                    else -> error("Unexpected request: ${request.url}")
+                }
+            }, PersistentCookiesStorage(InMemoryKeyValueStore()))
+            val socket = Socket()
+            val connection = GatewayConnection(AuthApi(client, PersistentCookiesStorage(InMemoryKeyValueStore())), { _, _ -> socket }, backgroundScope)
+            connection.start(gateway)
+            connection.state.first { it is ConnectionState.Connected }
+            val session = ChatSession(gateway, null, null, connection, SessionsApi(client), backgroundScope)
+            session.start()
+            var created = 0
+            val voice = VoiceController(AudioApi(client), NoRecorder, Silent, backgroundScope, backgroundScope, profiles = ProfilesApi(client)) { created++; FakeCall() }
+            voice.startChat(session, gateway, null, subscriptionPreview = true)
+            if (expected) voice.chat.first { it.live && it.phase == VoicePhase.Listening }
+            else voice.chat.first { it.phase == VoicePhase.Off && it.error != null }
+            assertEquals(if (expected) 1 else 0, created, active)
+            assertEquals(if (expected) 1 else 0, paths.count { it == "/api/plugins/kyllene_voice/gpt-live/session" }, active)
+            assertTrue(paths.none { it.contains("/api/audio/") })
+            voice.stopChat()
+        }
+    }
+
+    @Test
+    fun subscriptionHistoryFailureNeverCreatesCallOrFallsBack() = runTest {
+        val paths = mutableListOf<String>()
+        val client = createHttpClient(MockEngine { request ->
+            paths += request.url.encodedPath
+            when {
+                request.url.encodedPath == "/api/auth/ws-ticket" -> respond("""{"ticket":"T","ttl_seconds":30}""", HttpStatusCode.OK, json)
+                request.url.encodedPath.endsWith("/messages") -> respond("offline", HttpStatusCode.ServiceUnavailable)
+                else -> respond("{}", HttpStatusCode.OK, json)
+            }
+        }, PersistentCookiesStorage(InMemoryKeyValueStore()))
+        val connection = GatewayConnection(AuthApi(client, PersistentCookiesStorage(InMemoryKeyValueStore())), { _, _ -> Socket() }, backgroundScope)
+        connection.start(gateway)
+        connection.state.first { it is ConnectionState.Connected }
+        val session = ChatSession(gateway, "stored-1", null, connection, SessionsApi(client), backgroundScope, profile = "work")
+        session.start()
+        var created = 0
+        val voice = VoiceController(AudioApi(client), NoRecorder, Silent, backgroundScope, backgroundScope) { created++; FakeCall() }
+        voice.startChat(session, gateway, "work", subscriptionPreview = true)
+        val state = voice.chat.first { it.phase == VoicePhase.Off && it.error != null }
+        assertTrue(state.error!!.contains("could not read the chat history"))
+        assertEquals(0, created)
+        assertTrue(paths.none { it.contains("kyllene") || it.contains("/api/audio/") })
+    }
+
+    @Test
+    fun subscriptionFailureAndProfileMismatchNeverFallBack() = runTest {
+        val paths = mutableListOf<String>()
+        val client = createHttpClient(MockEngine { request ->
+            paths += request.url.encodedPath
+            when (request.url.encodedPath) {
+                "/api/auth/ws-ticket" -> respond("""{"ticket":"T","ttl_seconds":30}""", HttpStatusCode.OK, json)
+                "/api/plugins/kyllene_voice/gpt-live/session" -> respond("""{"ok":true,"auth":"api","source":"plugin","transport":{"sdp":"v=0 answer"}}""", HttpStatusCode.OK, json)
+                else -> error("Unexpected fallback: ${request.url}")
+            }
+        }, PersistentCookiesStorage(InMemoryKeyValueStore()))
+        val connection = GatewayConnection(AuthApi(client, PersistentCookiesStorage(InMemoryKeyValueStore())), { _, _ -> Socket() }, backgroundScope)
+        connection.start(gateway)
+        connection.state.first { it is ConnectionState.Connected }
+        val session = ChatSession(gateway, null, null, connection, SessionsApi(client), backgroundScope, profile = "work")
+        session.start()
+        val voice = VoiceController(AudioApi(client), NoRecorder, Silent, backgroundScope, backgroundScope) { FakeCall() }
+        voice.startChat(session, gateway, "other", subscriptionPreview = true)
+        voice.chat.first { it.phase == VoicePhase.Off && it.error != null }
+        assertTrue(paths.none { it.contains("audio") || it.contains("kyllene") })
+        voice.startChat(session, GatewayUrl.parse("https://other.example"), "work", subscriptionPreview = true)
+        voice.chat.first { it.phase == VoicePhase.Off && it.error != null }
+        assertTrue(paths.none { it.contains("audio") || it.contains("kyllene") })
+        voice.startChat(session, gateway, "work", subscriptionPreview = true)
+        voice.chat.first { it.phase == VoicePhase.Off && it.error != null }
+        assertEquals(1, paths.count { it == "/api/plugins/kyllene_voice/gpt-live/session" })
+        assertTrue(paths.none { it.contains("/api/audio/") })
+    }
+
 
     @Test
     fun aCallTheAgentPlacedOpensWithWhyOnceTheVoiceIsUp() = runTest {
@@ -372,6 +566,359 @@ class LiveConversationTest {
         socket.event("message.start")
         session.state.first { it.running }
         return Queued(socket, session, call, voice)
+    }
+
+    private data class SubscriptionRequestCall(val socket: Socket, val session: ChatSession, val call: FakeCall, val state: MutableStateFlow<VoiceChatState>)
+
+    private suspend fun TestScope.subscriptionRequestCall(lock: DeviceLock = DeviceLock.None, method: String = "approval", customParams: String? = null): SubscriptionRequestCall {
+        val params = customParams ?: if (method == "approval") """"command":"example","choices":["once","always","deny"]""" else """"question":"Color?","choices":["Red","Blue"]"""
+        val client = http("gpt-live", mutableListOf())
+        val socket = Socket().apply { resume = """{"session_id":"rt9","running":true,"open_requests":[{"id":"bound","method":"$method","params":{"session_id":"rt9",$params}}]}""" }
+        val connection = GatewayConnection(AuthApi(client, PersistentCookiesStorage(InMemoryKeyValueStore())), { _, _ -> socket }, backgroundScope)
+        connection.start(gateway)
+        connection.state.first { it is ConnectionState.Connected }
+        val session = ChatSession(gateway, "stored-9", null, connection, SessionsApi(client), backgroundScope, profile = "work")
+        session.start()
+        val request = session.state.first { it.inputRequests.isNotEmpty() }.inputRequests.single()
+        val origin = dev.hermeskotlin.core.wear.CallOrigin(gateway, "work", "rt9", "bound", method)
+        val call = FakeCall()
+        val state = MutableStateFlow(VoiceChatState())
+        backgroundScope.launch { LiveConversation(call, session, state, lock = lock, subscriptionProtocol = SubscriptionLiveProtocol(), incoming = IncomingVoiceRequest(origin, "stored-9", request)).run {} }
+        call.receive("""{"type":"session.started"}""")
+        runCurrent()
+        return SubscriptionRequestCall(socket, session, call, state)
+    }
+
+    private fun FakeCall.subscriptionAsked(method: String = "approval") {
+        val question = if (method == "approval") "Should I run example, yes or no?" else "Color?"
+        receive("""{"type":"output_transcript.added","item":{"text":"$question"}}""")
+    }
+
+    private fun FakeCall.subscriptionFinal(text: String) {
+        receive("""{"type":"turn.done","turn":{"role":"user","transcript":"$text"}}""")
+    }
+
+    @Test
+    fun subscriptionUnrelatedApprovalQuestionCannotAuthorize() = runTest {
+        val (socket, _, call) = subscriptionRequestCall()
+        call.receive("""{"type":"output_transcript.added","item":{"text":"Should I go ahead, yes or no?"}}""")
+        call.subscriptionFinal("yes")
+        advanceTimeBy(10_000); runCurrent()
+        assertTrue(socket.answers.value.isEmpty())
+        call.close()
+    }
+
+    @Test
+    fun subscriptionLongRequestsPresentTheWholeIdentityBeforeTakingAnAnswer() = runTest {
+        for (method in listOf("approval", "clarify")) {
+            val identity = if (method == "approval") "Review ${"details ".repeat(30)}then delete all backups"
+                else "Which ${"details ".repeat(30)}should be kept?"
+            val field = if (method == "approval") "description" else "question"
+            val params = "\"$field\":${JsonPrimitive(identity)},\"command\":\"example\",\"choices\":[${if (method == "approval") "\"once\",\"deny\"" else "\"Red\",\"Blue\""}]"
+            val (socket, _, call) = subscriptionRequestCall(method = method, customParams = params)
+            val presented = call.sent.value.filter { it["type"]?.jsonPrimitive?.contentOrNull == "session.context.append" }
+                .joinToString("") { it.getValue("content").jsonArray.single().jsonObject.getValue("text").jsonPrimitive.content }
+            assertTrue(identity in presented, presented)
+            // A partial description/question must never pass the existing presentation gate.
+            val partial = identity.take(100) + "? yes or no?"
+            call.receive("""{"type":"output_transcript.added","item":{"text":${JsonPrimitive(partial)}}}""")
+            call.subscriptionFinal(if (method == "approval") "yes" else "Blue")
+            advanceTimeBy(10_000); runCurrent()
+            assertTrue(socket.answers.value.isEmpty(), method)
+            call.close()
+            val (freshSocket, _, freshCall) = subscriptionRequestCall(method = method, customParams = params)
+            freshCall.receive("""{"type":"output_transcript.added","item":{"text":${JsonPrimitive(presented)}}}""")
+            freshCall.subscriptionFinal(if (method == "approval") "yes" else "Blue")
+            advanceTimeBy(10_000); runCurrent()
+            assertEquals(1, freshSocket.answers.value.size, method)
+            freshCall.close()
+        }
+    }
+
+    @Test
+    fun subscriptionDuplicateFinalCannotBecomePrompt() = runTest {
+        val (socket, _, call) = subscriptionRequestCall()
+        call.subscriptionAsked()
+        call.subscriptionFinal("yes")
+        advanceTimeBy(10_000); runCurrent()
+        assertEquals(1, socket.answers.value.size)
+        call.subscriptionFinal("yes")
+        call.receive("""{"type":"delegation.created","item":{"type":"delegation","target":"client","id":"duplicate","content":[]}}""")
+        advanceTimeBy(10_000); runCurrent()
+        assertTrue(socket.submits.value.isEmpty())
+        call.subscriptionFinal("Check disk space")
+        call.receive("""{"type":"delegation.created","item":{"type":"delegation","target":"client","id":"next","content":[]}}""")
+        advanceTimeBy(10_000); runCurrent()
+        assertEquals("Check disk space", socket.submits.value.single().getValue("params").jsonObject.getValue("text").jsonPrimitive.content)
+        call.close()
+    }
+
+    @Test
+    fun subscriptionCorrectedFinalReplacesPartialCaption() = runTest {
+        val (_, _, call, state) = subscriptionRequestCall()
+        call.subscriptionAsked()
+        call.receive("""{"type":"input_transcript.added","item":{"text":"yes"}}""")
+        call.subscriptionFinal("no")
+        runCurrent()
+        assertEquals("no", state.value.caption)
+    }
+
+    @Test
+    fun subscriptionLateDelegationDoesNotSubmitAnswerOrContaminateNextPrompt() = runTest {
+        for (method in listOf("approval", "clarify")) {
+            val (socket, _, call) = subscriptionRequestCall(method = method)
+            call.subscriptionAsked(method)
+            call.subscriptionFinal(if (method == "approval") "yes" else "Blue")
+            advanceTimeBy(10_000); runCurrent()
+            assertEquals(1, socket.answers.value.size)
+            call.receive("""{"type":"delegation.created","item":{"type":"delegation","target":"client","id":"late","content":[]}}""")
+            advanceTimeBy(10_000); runCurrent()
+            assertTrue(socket.submits.value.isEmpty(), "late $method answer was submitted as a prompt")
+            call.subscriptionFinal("Check disk space")
+            call.receive("""{"type":"delegation.created","item":{"type":"delegation","target":"client","id":"next","content":[]}}""")
+            advanceTimeBy(10_000); runCurrent()
+            val submitted = socket.submits.value.single().getValue("params").jsonObject
+            assertEquals("Check disk space", submitted.getValue("text").jsonPrimitive.content)
+            val context = submitted.getValue("voice_context").jsonPrimitive.content
+            assertFalse("User: ${if (method == "approval") "yes" else "Blue"}" in context, context)
+            call.close()
+        }
+    }
+
+    @Test
+    fun subscriptionUnclearAnswerCanBeRetriedHandsFree() = runTest {
+        for (method in listOf("approval", "clarify")) {
+            val (socket, _, call) = subscriptionRequestCall(method = method)
+            call.subscriptionAsked(method)
+            call.subscriptionFinal(if (method == "approval") "maybe" else "I don't know")
+            advanceTimeBy(10_000); runCurrent()
+            assertTrue(socket.answers.value.isEmpty())
+            assertTrue(socket.submits.value.isEmpty())
+            call.subscriptionAsked(method)
+            call.subscriptionFinal(if (method == "approval") "no" else "Blue")
+            advanceTimeBy(10_000); runCurrent()
+            assertEquals(if (method == "approval") "deny" else "Blue", socket.answers.value.single().getValue("result").jsonObject.getValue(if (method == "approval") "choice" else "answer").jsonPrimitive.content)
+            assertTrue(socket.submits.value.isEmpty())
+            call.close()
+        }
+    }
+
+    @Test
+    fun subscriptionHandsFreeAnswersGenuineRequestsOnce() = runTest {
+        for ((method, spoken, expected) in listOf(
+            Triple("approval", "yes", "once"), Triple("approval", "always", "always"),
+            Triple("approval", "no", "deny"), Triple("clarify", "Blue", "Blue"),
+        )) {
+            val (socket, session, call) = subscriptionRequestCall(method = method)
+            call.subscriptionAsked(method)
+            call.subscriptionFinal(spoken)
+            advanceTimeBy(10_000); runCurrent()
+            val answer = socket.answers.value.single()
+            assertEquals("bound", answer.getValue("id").jsonPrimitive.content)
+            assertEquals(expected, answer.getValue("result").jsonObject.getValue(if (method == "approval") "choice" else "answer").jsonPrimitive.content)
+            assertTrue(session.state.value.inputRequests.isEmpty())
+            call.subscriptionFinal(spoken)
+            advanceTimeBy(10_000); runCurrent()
+            assertEquals(1, socket.answers.value.size)
+            assertTrue(socket.submits.value.isEmpty())
+            call.close()
+        }
+    }
+
+    @Test
+    fun subscriptionRequiresPresentedQuestionAndAuthoritativeAnswer() = runTest {
+        for (method in listOf("approval", "clarify")) {
+            val (socket, _, call) = subscriptionRequestCall(method = method)
+            call.subscriptionFinal(if (method == "approval") "yes" else "Blue")
+            advanceTimeBy(10_000); runCurrent()
+            assertTrue(socket.answers.value.isEmpty(), "unpresented $method")
+            call.subscriptionAsked(method)
+            call.receive("""{"type":"input_transcript.added","item":{"text":"${if (method == "approval") "yes" else "Blue"}"}}""")
+            advanceTimeBy(10_000); runCurrent()
+            assertTrue(socket.answers.value.isEmpty(), "partial $method")
+            call.subscriptionFinal(if (method == "approval") "maybe" else "I don't know")
+            advanceTimeBy(10_000); runCurrent()
+            assertTrue(socket.answers.value.isEmpty(), "ambiguous $method")
+            assertTrue(socket.submits.value.isEmpty())
+            call.close()
+        }
+    }
+
+    @Test
+    fun subscriptionApprovalHonorsLockBeforeAndDuringVerification() = runTest {
+        var locked = true
+        val (socket, session, call) = subscriptionRequestCall(DeviceLock { locked })
+        call.subscriptionAsked()
+        call.subscriptionFinal("yes")
+        advanceTimeBy(10_000); runCurrent()
+        assertTrue(socket.answers.value.isEmpty())
+        locked = false
+        advanceTimeBy(2_000); runCurrent()
+        call.subscriptionAsked()
+        runCurrent()
+        socket.resumeGate = CompletableDeferred()
+        call.subscriptionFinal("yes")
+        socket.resumes.first { it.size >= 2 }
+        locked = true
+        socket.resumeGate!!.complete(Unit)
+        advanceTimeBy(10_000); runCurrent()
+        assertTrue(socket.answers.value.isEmpty())
+        assertEquals("bound", session.state.value.inputRequests.single().id)
+        assertTrue(socket.submits.value.isEmpty())
+    }
+
+    @Test
+    fun subscriptionNeverAnswersCanceledReplacedOrDifferentRequest() = runTest {
+        for (scenario in listOf("canceled", "replaced", "different")) {
+            val (socket, session, call) = subscriptionRequestCall()
+            call.subscriptionAsked()
+            runCurrent()
+            socket.resumeGate = CompletableDeferred()
+            call.subscriptionFinal("yes")
+            socket.resumes.first { it.size >= 2 }
+            when (scenario) {
+                "canceled" -> {
+                    socket.event("request.cancel", """{"id":"bound"}""")
+                    session.state.first { it.inputRequests.isEmpty() }
+                    socket.resume = """{"session_id":"rt9","running":true,"open_requests":[]}"""
+                }
+                "replaced" -> socket.resume = """{"session_id":"rt9","running":true,"open_requests":[{"id":"bound","method":"approval","params":{"session_id":"rt9","command":"different","choices":["once","always","deny"]}}]}"""
+                else -> socket.resume = """{"session_id":"rt9","running":true,"open_requests":[{"id":"other","method":"approval","params":{"session_id":"rt9","command":"example","choices":["once","always","deny"]}}]}"""
+            }
+            socket.resumeGate!!.complete(Unit)
+            advanceTimeBy(10_000); runCurrent()
+            assertTrue(socket.answers.value.isEmpty(), scenario)
+            assertTrue(socket.submits.value.isEmpty(), scenario)
+            call.close()
+        }
+    }
+
+    @Test
+    fun subscriptionUsesFinalCorrectionForGenuineQuestion() = runTest {
+        for (method in listOf("approval", "clarify")) {
+            val client = http("gpt-live", mutableListOf())
+            val params = if (method == "approval") """"command":"example","choices":["once","deny"]""" else """"question":"Color?","choices":["Red","Blue"]"""
+            val socket = Socket().apply { resume = """{"session_id":"rt9","running":true,"open_requests":[{"id":"bound","method":"$method","params":{"session_id":"rt9",$params}}]}""" }
+            val connection = GatewayConnection(AuthApi(client, PersistentCookiesStorage(InMemoryKeyValueStore())), { _, _ -> socket }, backgroundScope)
+            connection.start(gateway)
+            connection.state.first { it is ConnectionState.Connected }
+            val session = ChatSession(gateway, "stored-9", null, connection, SessionsApi(client), backgroundScope, profile = "work")
+            session.start()
+            val request = session.state.first { it.inputRequests.isNotEmpty() }.inputRequests.single()
+            val origin = dev.hermeskotlin.core.wear.CallOrigin(gateway, "work", "rt9", "bound", method)
+            val call = FakeCall()
+            val job = backgroundScope.launch { LiveConversation(call, session, MutableStateFlow(VoiceChatState()), subscriptionProtocol = SubscriptionLiveProtocol(), incoming = IncomingVoiceRequest(origin, "stored-9", request)).run {} }
+            call.receive("""{"type":"session.started"}""")
+            call.sent.first { it.any { msg -> msg["type"]?.jsonPrimitive?.contentOrNull == "session.context.append" } }
+            call.receive("""{"type":"output_transcript.added","item":{"text":"${if (method == "approval") "Should I run example, yes or no?" else "Color?"}"}}""")
+            val partial = if (method == "approval") "yes" else "Red"
+            val corrected = if (method == "approval") "no" else "Blue"
+            call.receive("""{"type":"input_transcript.added","item":{"text":"$partial"}}""")
+            advanceTimeBy(10_000); runCurrent()
+            assertTrue(socket.answers.value.isEmpty(), "partial $method answered")
+            call.receive("""{"type":"turn.done","turn":{"role":"user","transcript":"$corrected"}}""")
+            advanceTimeBy(10_000); runCurrent()
+            val answer = socket.answers.value.single()
+            assertEquals("bound", answer["id"]!!.jsonPrimitive.content)
+            assertEquals(if (method == "approval") "deny" else "Blue", answer["result"]!!.jsonObject[if (method == "approval") "choice" else "answer"]!!.jsonPrimitive.content)
+            call.receive("""{"type":"turn.done","turn":{"role":"user","transcript":"yes"}}""")
+            call.receive("""{"type":"delegation.created","item":{"type":"delegation","target":"client","id":"d","content":[]}}""")
+            runCurrent()
+            assertEquals(1, socket.answers.value.size)
+            job.cancel()
+        }
+    }
+
+    @Test
+    fun incomingApprovalRechecksLockAfterResumeSuspends() = runTest {
+        val client = http("gpt-live", mutableListOf())
+        val socket = Socket().apply { resume = """{"session_id":"rt9","running":true,"open_requests":[{"id":"bound","method":"approval","params":{"session_id":"rt9","command":"example","choices":["once","deny"]}}]}""" }
+        val connection = GatewayConnection(AuthApi(client, PersistentCookiesStorage(InMemoryKeyValueStore())), { _, _ -> socket }, backgroundScope)
+        connection.start(gateway); connection.state.first { it is ConnectionState.Connected }
+        val session = ChatSession(gateway, "stored-9", null, connection, SessionsApi(client), backgroundScope, profile = "work")
+        session.start()
+        val request = session.state.first { it.inputRequests.isNotEmpty() }.inputRequests.single()
+        val origin = dev.hermeskotlin.core.wear.CallOrigin(gateway, "work", "rt9", "bound", "approval")
+        var locked = false
+        val call = FakeCall()
+        val job = backgroundScope.launch { LiveConversation(call, session, MutableStateFlow(VoiceChatState()), lock = DeviceLock { locked }, incoming = IncomingVoiceRequest(origin, "stored-9", request)).run {} }
+        call.receive("""{"type":"session.started"}""")
+        call.sent.first { it.any { msg -> msg["content"]?.jsonPrimitive?.contentOrNull?.contains("example") == true } }
+        socket.resumeGate = CompletableDeferred()
+        call.receive("""{"type":"session.input_transcript.delta","delta":"Yes","start_ms":2000,"end_ms":3000}""")
+        call.receive("""{"type":"session.delegation.created","delegation":{"id":"d2"}}""")
+        socket.resumes.first { it.size >= 2 }
+        locked = true
+        socket.resumeGate!!.complete(Unit)
+        runCurrent()
+        assertTrue(socket.answers.value.isEmpty())
+        assertTrue(session.state.value.inputRequests.any { it.id == "bound" })
+        job.cancel()
+    }
+
+    @Test
+    @JvmOnly // The drop message uses Compose resources, unavailable to Android host tests.
+    fun incomingSpokenDenialRemovesRequestWithoutFalseRejection() = runTest {
+        val client = http("gpt-live", mutableListOf())
+        val socket = Socket().apply { resume = """{"session_id":"rt9","running":true,"open_requests":[{"id":"bound","method":"approval","params":{"session_id":"rt9","command":"example","description":"Example operation","choices":["once","session","deny"]}}]}""" }
+        val connection = GatewayConnection(AuthApi(client, PersistentCookiesStorage(InMemoryKeyValueStore())), { _, _ -> socket }, backgroundScope)
+        connection.start(gateway)
+        connection.state.first { it is ConnectionState.Connected }
+        val session = ChatSession(gateway, "stored-9", null, connection, SessionsApi(client), backgroundScope, profile = "work")
+        session.start()
+        val request = session.state.first { it.inputRequests.isNotEmpty() }.inputRequests.single()
+        val origin = dev.hermeskotlin.core.wear.CallOrigin(gateway, "work", "rt9", "bound", "approval")
+        val call = FakeCall()
+        val voiceState = MutableStateFlow(VoiceChatState())
+        val conversation = LiveConversation(call, session, voiceState, incoming = IncomingVoiceRequest(origin, "stored-9", request))
+        val result = backgroundScope.async { conversation.run {} }
+        call.receive("""{"type":"session.started","session":{"id":"live-1"}}""")
+        call.sent.first { it.any { msg -> msg["content"]?.jsonPrimitive?.contentOrNull?.contains("Example operation") == true } }
+        assertTrue(socket.answers.value.isEmpty())
+        call.receive("""{"type":"session.input_transcript.delta","delta":"No","start_ms":2000,"end_ms":3000}""")
+        call.receive("""{"type":"session.delegation.created","delegation":{"id":"d2"}}""")
+        val answer = socket.answers.first { it.isNotEmpty() }.single()
+        assertEquals("bound", answer["id"]!!.jsonPrimitive.content)
+        assertEquals("deny", answer["result"]!!.jsonObject["choice"]!!.jsonPrimitive.content)
+        session.state.first { it.inputRequests.isEmpty() }
+        runCurrent()
+        assertFalse(result.isCompleted)
+        call.drop()
+        assertEquals("The live call dropped.", result.await())
+        assertTrue(voiceState.value.error?.contains("no longer verified") != true)
+        assertEquals(1, socket.answers.value.size)
+        assertTrue(socket.submits.value.isEmpty())
+    }
+
+    @Test
+    fun incomingCallAnswersItsBoundRequestNotTheFirstPendingRequest() = runTest {
+        val client = http("gpt-live", mutableListOf())
+        val socket = Socket().apply { resume = """{"session_id":"rt9","running":true,"open_requests":[{"id":"first","method":"clarify","params":{"session_id":"rt9","question":"First?"}},{"id":"bound","method":"clarify","params":{"session_id":"rt9","question":"Bound?","choices":["Red","Blue"]}}]}""" }
+        val connection = GatewayConnection(AuthApi(client, PersistentCookiesStorage(InMemoryKeyValueStore())), { _, _ -> socket }, backgroundScope)
+        connection.start(gateway)
+        connection.state.first { it is ConnectionState.Connected }
+        val session = ChatSession(gateway, "stored-9", null, connection, SessionsApi(client), backgroundScope, profile = "work")
+        session.start()
+        val pending = session.state.first { it.inputRequests.size == 2 }.inputRequests
+        val bound = pending.single { it.id == "bound" }
+        val origin = dev.hermeskotlin.core.wear.CallOrigin(gateway, "work", "rt9", "bound", "clarify")
+        val call = FakeCall()
+        val conversation = LiveConversation(call, session, MutableStateFlow(VoiceChatState()), incoming = IncomingVoiceRequest(origin, "stored-9", bound))
+        val job = backgroundScope.launch { conversation.run {} }
+        call.receive("""{"type":"session.started","session":{"id":"live-1"}}""")
+        call.sent.first { it.any { msg -> msg["content"]?.jsonPrimitive?.contentOrNull?.contains("Bound?") == true } }
+        assertTrue(call.said("session.commentary.append").none { it.contains("First?") })
+        call.receive("""{"type":"session.input_transcript.delta","delta":"Blue","start_ms":2000,"end_ms":3000}""")
+        call.receive("""{"type":"session.delegation.created","delegation":{"id":"d2"}}""")
+        val answer = socket.answers.first { it.isNotEmpty() }.single()
+        assertEquals("bound", answer["id"]!!.jsonPrimitive.content)
+        assertEquals("Blue", answer["result"]!!.jsonObject["answer"]!!.jsonPrimitive.content)
+        assertTrue(socket.resumes.value.size >= 2)
+        val params = socket.resumes.value.last()["params"]!!.jsonObject
+        assertEquals("stored-9", params["session_id"]!!.jsonPrimitive.content)
+        assertEquals("work", params["profile"]!!.jsonPrimitive.content)
+        assertTrue(socket.submits.value.isEmpty())
+        job.cancel()
     }
 
     @Test

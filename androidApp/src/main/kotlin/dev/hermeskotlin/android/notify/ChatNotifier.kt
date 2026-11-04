@@ -6,6 +6,7 @@ import dev.hermeskotlin.core.chat.ChatMessage
 import dev.hermeskotlin.core.chat.ChatSession
 import dev.hermeskotlin.core.chat.ChatState
 import dev.hermeskotlin.core.chat.TurnOutcome
+import dev.hermeskotlin.core.wear.CallOrigin
 import dev.hermeskotlin.core.connection.ConnectionState
 import dev.hermeskotlin.core.connection.GatewayConnection
 import dev.hermeskotlin.core.phone.ringsForAnswers
@@ -95,7 +96,7 @@ class ChatNotifier(
                     notified.clear()
                 } else if (prefs.notifyRequests) {
                     for (request in state.inputRequests) {
-                        if (request.id !in notified && notifications.postRequest(state.storedSessionId, state.title, request, prefs.ringsForAnswers, prefs.phoneRingsTalk)) {
+                        if (request.id !in notified && notifications.postRequest(state.storedSessionId, state.title, request, prefs.ringsForAnswers, prefs.phoneRingsTalk, origin = CallOrigin(session.gateway, session.profile, state.runtimeSessionId, request.id, when (request) { is dev.hermeskotlin.core.chat.InputRequest.Approval -> "approval"; is dev.hermeskotlin.core.chat.InputRequest.Clarify -> "clarify"; else -> null }))) {
                             notified.add(request.id)
                         }
                     }

@@ -77,6 +77,8 @@ class GatewayConnection(
 
     private var job: Job? = null
     private var url: GatewayUrl? = null
+    /** Gateway of the current socket; captured with incoming requests. */
+    val gateway: GatewayUrl? get() = url
     private val wake = Channel<Unit>(Channel.CONFLATED)
 
     fun start(gateway: GatewayUrl) {

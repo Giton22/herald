@@ -2,7 +2,13 @@ package dev.hermeskotlin.ui.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import dev.hermeskotlin.core.voice.AudioApi
 import dev.hermeskotlin.core.auth.AuthApi
+import dev.hermeskotlin.core.connection.GatewayConnection
+import dev.hermeskotlin.core.connection.ConnectionState
+import dev.hermeskotlin.core.plugins.VoicePluginInstaller
+import dev.hermeskotlin.core.plugins.VoicePluginRelease
+import dev.hermeskotlin.core.plugins.VoiceInstallResult
 import dev.hermeskotlin.core.gateway.CheckStage
 import dev.hermeskotlin.core.gateway.ConnectionCheck
 import dev.hermeskotlin.core.gateway.GatewayProbe
@@ -61,6 +67,17 @@ sealed interface SuggestionsPlugin {
 /** "Check connection": the stages done so far, and whether it's still going. */
 data class ConnectionCheckState(val results: Map<CheckStage, StageResult> = emptyMap(), val running: Boolean = false)
 
+data class VoiceInstallUi(
+    val visible: Boolean = false,
+    val gateway: String = "",
+    val revision: String = "",
+    val profiles: List<String> = emptyList(),
+    val selected: Set<String> = emptySet(),
+    val loading: Boolean = false,
+    val error: String? = null,
+    val results: Map<String, VoiceInstallResult>? = null,
+)
+
 class SettingsViewModel(
     private val store: SettingsStore,
     private val auth: AuthApi,
@@ -71,6 +88,8 @@ class SettingsViewModel(
     private val profilesApi: ProfilesApi,
     private val sessionsApi: SessionsApi,
     private val nextPrompt: NextPromptApi,
+    private val connection: GatewayConnection,
+    private val audio: AudioApi,
 ) : ViewModel() {
 
     /** The chat background's encoded image, or null when there's none (or it isn't read yet). */
@@ -105,6 +124,117 @@ class SettingsViewModel(
     private var bound: SavedGateway? = null
     private var boundProfile: String? = null
 
+    private val _voiceSetup = MutableStateFlow<String?>(null)
+    val voiceSetup: StateFlow<String?> = _voiceSetup.asStateFlow()
+    private var voiceSetupJob: Job? = null
+
+    fun setSubscriptionVoice(on: Boolean) {
+        voiceSetupJob?.cancel()
+        store.update { it.copy(subscriptionVoicePreview = on) }
+        if (!on) { _voiceSetup.value = null; return }
+        checkSubscriptionVoice()
+    }
+
+    fun checkSubscriptionVoice() {
+        voiceSetupJob?.cancel()
+        val target = bound
+        val selected = boundProfile
+        if (target == null) { _voiceSetup.value = "Connect to a gateway to check setup."; return }
+        _voiceSetup.value = "Checking selected profile…"
+        voiceSetupJob = viewModelScope.launch {
+            val profile = selected ?: (profilesApi.roster(target.gatewayUrl) as? ApiResult.Success)?.value
+                ?.takeIf { it.launchKnown && it.launch == ProfilesApi.DEFAULT && it.profiles.any { p -> p.name == ProfilesApi.DEFAULT && p.isDefault } }?.launch
+            val message = if (profile.isNullOrBlank()) "Could not verify the launch profile. Select an explicit profile and check again."
+            else when (val result = audio.subscriptionStatus(target.gatewayUrl, profile)) {
+                is ApiResult.Success -> "Setup found for $profile. Test a call."
+                ApiResult.SessionExpired, ApiResult.InvalidCredentials -> "Dashboard sign-in expired. Sign in to the gateway again; this is separate from Codex provider credentials."
+                ApiResult.RateLimited -> "Gateway rate limited the setup check; try again later."
+                is ApiResult.Failed -> if (result.status == 404) "Subscription voice plugin or compatible status route not found for $profile. Install or update it and check again." else result.message
+                is ApiResult.Unavailable -> "Setup check failed: ${result.message}"
+            }
+            if (bound == target && boundProfile == selected) _voiceSetup.value = message
+        }
+    }
+
+    private val _voiceInstall = MutableStateFlow(VoiceInstallUi())
+    val voiceInstall: StateFlow<VoiceInstallUi> = _voiceInstall.asStateFlow()
+    private var voiceInstaller: VoicePluginInstaller? = null
+    private var voiceSnapshot: VoicePluginInstaller.ProfileSnapshot? = null
+    private var voiceClient: dev.hermeskotlin.core.rpc.JsonRpcClient? = null
+    private var voiceJob: Job? = null
+    internal var voiceReleaseRevision: () -> String? = { VoicePluginRelease.revision }
+
+    fun openVoiceInstall() {
+        if (_voiceInstall.value.loading) return
+        val target = bound ?: return
+        voiceSnapshot = null
+        voiceInstaller = null
+        voiceClient = null
+        val revision = voiceReleaseRevision()
+        val client = (connection.state.value as? ConnectionState.Connected)?.client
+        val error = when {
+            revision == null || !Regex("[0-9a-fA-F]{40}").matches(revision) -> "This build has no valid release revision. Installation is unavailable."
+            client == null || connection.gateway != target.gatewayUrl -> "Connect to this gateway first."
+            else -> null
+        }
+        _voiceInstall.value = VoiceInstallUi(visible = true, gateway = target.url, revision = revision.orEmpty(), loading = error == null, error = error)
+        if (error != null || revision == null || client == null) return
+        val installer = VoicePluginInstaller(connection, revision) { bound == target && connection.gateway == target.gatewayUrl }
+        voiceInstaller = installer
+        voiceClient = client
+        voiceJob = viewModelScope.launch {
+            try {
+                val snapshot = installer.profiles()
+                if (bound != target || connection.gateway != target.gatewayUrl || (connection.state.value as? ConnectionState.Connected)?.client !== client) {
+                    _voiceInstall.update { it.copy(loading = false, error = "Gateway connection changed; reopen the picker.") }
+                } else {
+                    voiceSnapshot = snapshot
+                    _voiceInstall.update { it.copy(loading = false, profiles = snapshot.choices, error = null) }
+                }
+            } catch (e: CancellationException) { throw e } catch (_: Exception) {
+                _voiceInstall.update { it.copy(loading = false, error = "Could not verify profile-scoped plugin management or obtain the profile list. Installation is unavailable.") }
+            }
+        }
+    }
+
+    fun selectVoiceProfile(profile: String) {
+        _voiceInstall.update { state ->
+            if (state.loading || state.error != null || profile !in state.profiles || state.results != null) state
+            else state.copy(selected = if (profile in state.selected) state.selected - profile else state.selected + profile)
+        }
+    }
+
+    fun closeVoiceInstall() {
+        if (_voiceInstall.value.loading && voiceSnapshot != null) return // An install may be in flight.
+        voiceJob?.cancel()
+        voiceSnapshot = null
+        voiceInstaller = null
+        voiceClient = null
+        _voiceInstall.value = VoiceInstallUi()
+    }
+
+    fun confirmVoiceInstall() {
+        val state = _voiceInstall.value
+        val snapshot = voiceSnapshot ?: return
+        val installer = voiceInstaller ?: return
+        val target = bound ?: return
+        if (state.loading || state.error != null || state.selected.isEmpty() || state.results != null) return
+        if (connection.gateway != target.gatewayUrl || (connection.state.value as? ConnectionState.Connected)?.client !== voiceClient || target.url != state.gateway) {
+            _voiceInstall.update { it.copy(error = "Gateway connection changed; reopen the picker.") }
+            return
+        }
+        val selected = state.selected.toList()
+        _voiceInstall.update { it.copy(loading = true, error = null) }
+        voiceJob = viewModelScope.launch {
+            try {
+                val results = installer.install(snapshot, selected)
+                _voiceInstall.update { it.copy(loading = false, results = results) }
+            } catch (e: CancellationException) { throw e } catch (_: Exception) {
+                _voiceInstall.update { it.copy(loading = false, error = "Installation could not be completed; inspect selected profiles before retrying.") }
+            }
+        }
+    }
+
     private val _suggestions = MutableStateFlow<SuggestionsPlugin>(SuggestionsPlugin.Checking)
 
     /** Whether the gateway has the Next Prompt plugin that Suggested replies needs, for the profile the chats use. */
@@ -115,6 +245,8 @@ class SettingsViewModel(
     fun bind(gateway: SavedGateway, profile: String? = null) {
         if (bound == gateway && boundProfile == profile) return
         val sameGateway = bound == gateway
+        voiceSetupJob?.cancel()
+        _voiceSetup.value = if (settings.value.subscriptionVoicePreview) "Gateway or profile changed. Check subscription voice setup again." else null
         bound = gateway
         boundProfile = profile
         checkSuggestions()

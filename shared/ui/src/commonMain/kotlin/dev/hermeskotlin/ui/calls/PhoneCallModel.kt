@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import dev.hermeskotlin.core.chat.InputRequest
 import dev.hermeskotlin.core.phone.AgentCall
 import dev.hermeskotlin.core.phone.CallOutcome
+import dev.hermeskotlin.core.profiles.ProfilesApi
 import dev.hermeskotlin.core.settings.AppSettings
 import dev.hermeskotlin.core.settings.SettingsStore
 import dev.hermeskotlin.core.voice.AudioApi
@@ -13,8 +14,10 @@ import dev.hermeskotlin.core.voice.LiveCalls
 import dev.hermeskotlin.core.voice.SpeechPlayer
 import dev.hermeskotlin.core.voice.VoiceKeepAlive
 import dev.hermeskotlin.core.voice.VoiceRecorder
+import dev.hermeskotlin.core.wear.CallOrigin
 import dev.hermeskotlin.core.wear.CallChat
 import dev.hermeskotlin.core.wear.WatchRelay
+import dev.hermeskotlin.ui.voice.IncomingVoiceRequest
 import dev.hermeskotlin.ui.voice.VoiceChatState
 import dev.hermeskotlin.ui.voice.VoiceController
 import dev.hermeskotlin.ui.voice.VoicePhase
@@ -48,6 +51,7 @@ data class PickedUpCall(
     val caller: String,
     val request: InputRequest?,
     val agent: AgentCall? = null,
+    val origin: CallOrigin? = null,
 )
 
 /**
@@ -66,8 +70,9 @@ class PhoneCallModel(
     keepAlive: VoiceKeepAlive,
     liveCalls: LiveCalls,
     deviceLock: DeviceLock,
+    profiles: ProfilesApi,
 ) : ViewModel() {
-    val voice = VoiceController(audio, recorder, player, viewModelScope, appScope, keepAlive, liveCalls = liveCalls, deviceLock = deviceLock)
+    val voice = VoiceController(audio, recorder, player, viewModelScope, appScope, keepAlive, liveCalls = liveCalls, deviceLock = deviceLock, profiles = profiles)
 
     private val _state = MutableStateFlow<PhoneCallState?>(null)
     val state: StateFlow<PhoneCallState?> = _state.asStateFlow()
@@ -86,6 +91,15 @@ class PhoneCallModel(
         if (_state.value == null) pickingUp = call
     }
 
+    fun chooseProfile(profile: String) {
+        val call = pickingUp ?: return
+        val origin = call.origin ?: return
+        if (profile.isNotBlank()) pickingUp = call.copy(origin = origin.copy(profile = profile))
+    }
+
+    fun needsProfileChoice(): Boolean = (settings.settings.value ?: AppSettings()).subscriptionVoicePreview &&
+        pickingUp?.request != null && pickingUp?.origin?.profile.isNullOrBlank()
+
     /** The call picked up goes on the line. Once; a second start is ignored. */
     fun start() {
         val call = pickingUp ?: return
@@ -98,7 +112,8 @@ class PhoneCallModel(
         counted = true
         call.storedSessionId?.let(relay::callChat)
         viewModelScope.launch {
-            val chat = when (val found = relay.chatForCall(call.storedSessionId)) {
+            val prefs = settings.settings.value ?: AppSettings()
+            val chat = when (val found = relay.chatForCall(call.storedSessionId, call.origin, requireOrigin = prefs.subscriptionVoicePreview && call.request != null, request = call.request, callId = call.id)) {
                 is CallChat.Failed -> {
                     _state.update { it?.copy(notAsked = call) }
                     call.agent?.end(CallOutcome.Declined)
@@ -112,8 +127,8 @@ class PhoneCallModel(
             }
             // On the line: the agent hears it was answered, and the voice opens with why it called.
             call.agent?.end(CallOutcome.Answered)
-            val pause = (settings.settings.value ?: AppSettings()).voicePause
-            voice.startChat(chat.session, chat.gateway, chat.profile, pause.millis, opener = call.agent?.reason)
+            val pause = if (prefs.subscriptionVoicePreview) prefs.voicePause else (settings.settings.value ?: AppSettings()).voicePause
+            voice.startChat(chat.session, chat.gateway, chat.profile, pause.millis, opener = call.agent?.reason, subscriptionPreview = prefs.subscriptionVoicePreview, incoming = if (prefs.subscriptionVoicePreview && call.request != null && call.origin != null && call.storedSessionId != null) IncomingVoiceRequest(call.origin, call.storedSessionId, call.request) else null)
             // A new chat gets its id with the first request: it's held from then on.
             if (call.storedSessionId == null) {
                 launch { relay.callChat(chat.session.state.mapNotNull { it.storedSessionId }.first()) }

@@ -1,5 +1,6 @@
 package dev.hermeskotlin.core.chat
 
+import dev.hermeskotlin.core.wear.CallOrigin
 import dev.hermeskotlin.core.bots.BotsApi
 import dev.hermeskotlin.core.connection.ConnectionState
 import dev.hermeskotlin.core.connection.GatewayConnection
@@ -45,6 +46,7 @@ data class WatchedChat(
     val title: String,
     val requests: List<InputRequest> = emptyList(),
     internal val arrivals: Map<String, Long> = emptyMap(),
+    val origins: Map<String, CallOrigin> = emptyMap(),
 )
 
 /** A watched chat's turn ended: its reply's [text], or [error] when it failed. */
@@ -210,6 +212,7 @@ class SessionWatcher(
 
     private suspend fun attach(client: JsonRpcClient, storedId: String, row: LiveSession): Attach {
         val since = clock()
+        val gateway = connection.gateway
         val known = storedId in _chats.value
         // Known before the call, so a request sent while it attaches already finds its chat. One watched on an
         // earlier socket keeps its requests until the reply says which still wait.
@@ -254,7 +257,11 @@ class SessionWatcher(
             // new; one from an earlier socket that the reply leaves out was answered while that socket was down.
             val heard = chat.requests.filter { request -> (chat.arrivals[request.id] ?: 0) >= since && open.none { it.id == request.id } }
             val requests = open + heard
-            all + (storedId to chat.copy(runtimeId = runtimeId, requests = requests, arrivals = requests.associate { it.id to (chat.arrivals[it.id] ?: now) }))
+            all + (storedId to chat.copy(runtimeId = runtimeId, requests = requests, arrivals = requests.associate { it.id to (chat.arrivals[it.id] ?: now) }, origins = requests.mapNotNull { r ->
+                val old = chat.origins[r.id]
+                val method = when (r) { is InputRequest.Approval -> "approval"; is InputRequest.Clarify -> "clarify"; else -> null }
+                (old?.takeIf { it.gateway == gateway && it.runtimeId == runtimeId && it.method == method && chat.requests.any { previous -> previous == r } } ?: gateway?.let { g -> method?.let { CallOrigin(g, null, runtimeId, r.id, it) } })?.let { r.id to it }
+            }.toMap()))
         }
         val running = result.boolean("running") == true
         attention.watched(runtimeId, storedId, running, open)
@@ -276,7 +283,7 @@ class SessionWatcher(
         _chats.update { all ->
             val chat = all.values.firstOrNull { it.runtimeId == runtimeId } ?: return@update all
             if (chat.requests.any { it.id == parsed.id }) return@update all
-            all + (chat.storedId to chat.copy(requests = chat.requests + parsed, arrivals = chat.arrivals + (parsed.id to now)))
+            all + (chat.storedId to chat.copy(requests = chat.requests + parsed, arrivals = chat.arrivals + (parsed.id to now), origins = connection.gateway?.let { chat.origins + (parsed.id to CallOrigin(it, null, runtimeId, request.id, request.method)) } ?: chat.origins))
         }
     }
 
@@ -292,7 +299,7 @@ class SessionWatcher(
             "message.start" -> _turnStarts.emit(chat.storedId)
             "message.complete" -> {
                 // Nothing can still wait once the turn is over.
-                _chats.update { all -> all[chat.storedId]?.let { all + (chat.storedId to it.copy(requests = emptyList(), arrivals = emptyMap())) } ?: all }
+                _chats.update { all -> all[chat.storedId]?.let { all + (chat.storedId to it.copy(requests = emptyList(), arrivals = emptyMap(), origins = emptyMap())) } ?: all }
                 val outcome = when (payload.string("status")) {
                     "error" -> TurnOutcome.Error
                     "interrupted" -> TurnOutcome.Interrupted
@@ -313,13 +320,13 @@ class SessionWatcher(
         all.mapValues { (storedId, chat) ->
             if (live.rows[storedId]?.status == LiveStatus.Waiting) return@mapValues chat
             val gone = chat.requests.filter { (chat.arrivals[it.id] ?: Long.MAX_VALUE) < live.askedAtMillis }.mapTo(HashSet()) { it.id }
-            if (gone.isEmpty()) chat else chat.copy(requests = chat.requests.filterNot { it.id in gone }, arrivals = chat.arrivals - gone)
+            if (gone.isEmpty()) chat else chat.copy(requests = chat.requests.filterNot { it.id in gone }, arrivals = chat.arrivals - gone, origins = chat.origins - gone)
         }
     }
 
     private fun drop(requestId: String) = _chats.update { all ->
         all.mapValues { (_, chat) ->
-            if (chat.requests.none { it.id == requestId }) chat else chat.copy(requests = chat.requests.filterNot { it.id == requestId }, arrivals = chat.arrivals - requestId)
+            if (chat.requests.none { it.id == requestId }) chat else chat.copy(requests = chat.requests.filterNot { it.id == requestId }, arrivals = chat.arrivals - requestId, origins = chat.origins - requestId)
         }
     }
 

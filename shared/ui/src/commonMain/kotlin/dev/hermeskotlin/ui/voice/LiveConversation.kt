@@ -12,6 +12,7 @@ import dev.hermeskotlin.core.voice.LiveCommands
 import dev.hermeskotlin.core.voice.LiveEvent
 import dev.hermeskotlin.core.voice.LiveFragment
 import dev.hermeskotlin.core.voice.LiveHistoryMessage
+import dev.hermeskotlin.core.voice.SubscriptionLiveProtocol
 import dev.hermeskotlin.core.voice.VoiceAnswers
 import dev.hermeskotlin.core.voice.DeviceLock
 import kotlinx.coroutines.currentCoroutineContext
@@ -35,6 +36,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
 import dev.hermeskotlin.ui.resources.*
 import org.jetbrains.compose.resources.getString
@@ -46,6 +48,8 @@ import org.jetbrains.compose.resources.getString
  *
  * A newer request stops a turn still running, so what the voice says answers what was asked last.
  */
+data class IncomingVoiceRequest(val origin: dev.hermeskotlin.core.wear.CallOrigin, val storedId: String, val request: InputRequest)
+
 internal class LiveConversation(
     private val call: LiveCall,
     private val session: ChatSession,
@@ -56,7 +60,10 @@ internal class LiveConversation(
     private val opener: String? = null,
     /** The session has answered or failed; finishing transport setup alone is not a result. */
     private val onConnectionResult: suspend () -> Unit = {},
+    private val subscriptionProtocol: SubscriptionLiveProtocol? = null,
+    private val incoming: IncomingVoiceRequest? = null,
 ) {
+    private var incomingPending = incoming != null
     private val transcript = ArrayList<LiveFragment>()
     private var eventSeq = 0
     private var delegation: Job? = null
@@ -71,6 +78,14 @@ internal class LiveConversation(
     private val heard = ArrayList<Pair<LiveFragment, Long>>()
     /** Each piece the person says, counted: their answer is taken once they stop. */
     private var userPieces = 0
+    private var subscriptionPartial = false
+    private var subscriptionTurnRequest: String? = null
+    private var subscriptionTurnPresented = false
+    private var subscriptionFinalReady = false
+    private var subscriptionDelegation: String? = null
+    private var subscriptionFinalAvailable = false
+    private var subscriptionRequestTurn = false
+    private var subscriptionAnsweredFinal: String? = null
     /** The request an answer is going out for: another handover meanwhile isn't a second answer. */
     private var answering: String? = null
     /** Taking what the person said as the answer, the voice not having handed it over (yet). */
@@ -92,8 +107,8 @@ internal class LiveConversation(
     private var steered = false
 
     /** The chat so far, for the voice to open with. */
-    fun history(): List<LiveHistoryMessage> = liveHistory(
-        session.state.value.messages.mapNotNull { message ->
+    fun history(chat: ChatState = session.state.value): List<LiveHistoryMessage> = liveHistory(
+        chat.messages.mapNotNull { message ->
             when (message) {
                 is ChatMessage.User -> LiveFragment.Speaker.User to message.text
                 is ChatMessage.Assistant -> LiveFragment.Speaker.Assistant to speakableText(message.text)
@@ -140,16 +155,31 @@ internal class LiveConversation(
         val reader = launch {
             var utterance = StringBuilder()
             var settle: Job? = null
-            for (raw in call.events) {
-                when (val event = parseLiveEvent(raw)) {
+            frames@ for (raw in call.events) {
+                val events = subscriptionProtocol?.receive(raw) ?: listOfNotNull(parseLiveEvent(raw))
+                for (event in events) {
+                when (event) {
                     is LiveEvent.Transcript -> {
                         if (event.fragment.speaker == LiveFragment.Speaker.Assistant) onConnectionResult()
-                        transcript += event.fragment
+                        if (subscriptionProtocol == null || event.fragment.speaker != LiveFragment.Speaker.User) transcript += event.fragment
                         if (transcript.size > MAX_FRAGMENTS) transcript.subList(0, transcript.size - KEPT_FRAGMENTS).clear()
                         caption(event.fragment)
                         val fragment = event.fragment
-                        if (asking != null) heard += fragment to (if (timed(fragment)) fragment.startMs else heard.lastOrNull()?.second ?: 0)
+                        if (asking != null && (subscriptionProtocol == null || fragment.speaker != LiveFragment.Speaker.User))
+                            heard += fragment to (if (timed(fragment)) fragment.startMs else heard.lastOrNull()?.second ?: 0)
                         if (fragment.speaker != LiveFragment.Speaker.User) continue
+                        if (subscriptionProtocol != null) {
+                            if (!subscriptionPartial) {
+                                subscriptionRequestTurn = false
+                                subscriptionTurnRequest = asking?.id
+                                subscriptionTurnPresented = asking != null && askedThem(heard.map { it.first })
+                            }
+                            userPieces++ // A correction invalidates an in-flight final before enqueue.
+                            subscriptionPartial = true
+                            subscriptionFinalReady = false
+                            subscriptionFinalAvailable = false
+                            continue // Partial user text is caption-only, never a command or context.
+                        }
                         userPieces++
                         // New words, said after the answer; without times to tell, any that come now.
                         val upTo = answeredUpTo
@@ -171,12 +201,80 @@ internal class LiveConversation(
                             // The voice may well talk on instead of handing the answer over: a clear one is taken
                             // as it is.
                             val asked = asking ?: return@launch
-                            if (!judging.isLocked && answering != asked.id && VoiceAnswers.takesAsAnswer(asked, lastWords(putToThem = true))) {
+                            if ((subscriptionProtocol == null || subscriptionFinalReady) && !judging.isLocked && answering != asked.id && VoiceAnswers.takesAsAnswer(asked, lastWords(putToThem = true))) {
                                 taking = this@coroutineScope.launch { answerAsked(null, asked) }
                             }
                         }
                     }
+                    is LiveEvent.UserFinal -> {
+                        userPieces++
+                        // A repeated final has no turn identity. Do not turn the answer into a new prompt.
+                        if (!subscriptionPartial && asking == null && event.text != null && event.text == subscriptionAnsweredFinal) continue
+                        if (subscriptionPartial || event.text != subscriptionAnsweredFinal) subscriptionAnsweredFinal = null
+                        // Event ordering is the strongest available signal, not proof of audio start:
+                        // a delayed final for an earlier utterance can still be mistaken for an answer.
+                        val eligible = asking != null && (!subscriptionPartial ||
+                            (subscriptionTurnRequest == asking?.id && subscriptionTurnPresented)) &&
+                            askedThem(heard.map { it.first })
+                        val hadPartial = subscriptionPartial
+                        subscriptionRequestTurn = asking != null || subscriptionTurnRequest != null || session.state.value.inputRequests.isNotEmpty()
+                        subscriptionPartial = false
+                        subscriptionTurnRequest = null
+                        subscriptionFinalAvailable = !subscriptionRequestTurn && !event.text.isNullOrBlank()
+                        if (!event.text.isNullOrBlank()) {
+                            val final = LiveFragment(LiveFragment.Speaker.User, event.text!!, 0, 0)
+                            if (!subscriptionRequestTurn) transcript += final
+                            if (hadPartial) state.update { it.copy(caption = null) }
+                            caption(final)
+                            if (isVoiceStopCommand(event.text!!)) ended.complete(null)
+                        }
+                        val pending = subscriptionDelegation
+                        subscriptionDelegation = null
+                        if (pending != null && asking == null && session.state.value.inputRequests.isEmpty() && subscriptionFinalAvailable) {
+                            val ask = delegationPrompt(contextWindow())
+                            subscriptionFinalAvailable = false
+                            delegate(pending, ask.prompt, ask.context)
+                        } else if (pending != null) {
+                            send(LiveCommands.commentary(nextId("say"), pending, "Please repeat your request or answer in the open chat."))
+                        }
+                        subscriptionFinalReady = eligible && !event.text.isNullOrBlank()
+                        // Never let a prior final answer stand in for a missing or newer final.
+                        if (asking != null) {
+                            val lastVoice = heard.indexOfLast { it.first.speaker == LiveFragment.Speaker.Assistant }
+                            if (lastVoice >= 0) heard.subList(lastVoice + 1, heard.size).clear() else heard.clear()
+                            if (subscriptionFinalReady) {
+                                val fragment = LiveFragment(LiveFragment.Speaker.User, event.text!!, 0, 0)
+                                heard += fragment to (heard.lastOrNull()?.second ?: 0)
+                                val asked = asking!!
+                                settle?.cancel()
+                                settle = launch {
+                                    delay(UTTERANCE_SETTLE_MS)
+                                    if (subscriptionFinalReady && !judging.isLocked && answering != asked.id && VoiceAnswers.takesAsAnswer(asked, lastWords(putToThem = true)))
+                                        taking = this@coroutineScope.launch { answerAsked(null, asked) }
+                                }
+                            }
+                        }
+                    }
                     is LiveEvent.Delegation -> {
+                        if (subscriptionProtocol != null) {
+                            if (asking != null) {
+                                val asked = asking!!
+                                if (subscriptionFinalReady) launch { answerAsked(event.id, asked) }
+                                else send(LiveCommands.commentary(nextId("say"), event.id, "Please say your answer after the question."))
+                            } else if (session.state.value.inputRequests.isNotEmpty()) {
+                                send(LiveCommands.commentary(nextId("say"), event.id, "Please answer the question in the open chat."))
+                            } else if (subscriptionRequestTurn && !subscriptionPartial) {
+                                send(LiveCommands.commentary(nextId("say"), event.id, ALREADY_ANSWERED))
+                            } else if (subscriptionPartial || !subscriptionFinalAvailable) {
+                                subscriptionDelegation?.let { send(LiveCommands.commentary(nextId("say"), it, "Please repeat your request.")) }
+                                subscriptionDelegation = event.id
+                            } else {
+                                val finalAsk = delegationPrompt(contextWindow())
+                                subscriptionFinalAvailable = false
+                                if (finalAsk.prompt.isNotEmpty()) delegate(event.id, finalAsk.prompt, finalAsk.context)
+                            }
+                            continue
+                        }
                         val ask = delegationPrompt(contextWindow())
                         val asked = asking
                         when {
@@ -217,13 +315,13 @@ internal class LiveConversation(
                                 getString(Res.string.voice_error_live_ended_because, event.reason)
                             },
                         )
-                        break
+                        break@frames
                     }
                     LiveEvent.Started -> {
                         onConnectionResult()
                         started.complete(Unit)
                     }
-                    null -> Unit
+                }
                 }
             }
             ended.complete(getString(Res.string.voice_error_live_dropped))
@@ -242,6 +340,20 @@ internal class LiveConversation(
         val asker = launch {
             started.await()
             while (isActive) {
+                // The response removes the request before judgeAnswer clears incomingPending.
+                // Serialize the check with that transition; a successful answer must not look stale.
+                val rejected = judging.withLock {
+                    if (incomingPending && incoming != null) {
+                        val checks = session.callRequestChecks(incoming.origin, incoming.storedId, incoming.request)
+                        if (!checks.valid) {
+                            true
+                        } else false
+                    } else false
+                }
+                if (rejected) {
+                    ended.complete("The incoming question is no longer verified. Open its chat instead.")
+                    break
+                }
                 val chat = session.state.value
                 asking?.let { if (!waiting(it)) asking = null }
                 if (asking == null) askNext(chat)
@@ -263,7 +375,7 @@ internal class LiveConversation(
 
     fun setMuted(muted: Boolean) {
         call.setMuted(muted)
-        call.send(LiveCommands.mute(nextId(if (muted) "mute" else "unmute"), muted))
+        send(LiveCommands.mute(nextId(if (muted) "mute" else "unmute"), muted))
     }
 
     /** Shows [fragment] as captions: the speaker's words so far, or theirs anew once the other one spoke. */
@@ -344,7 +456,8 @@ internal class LiveConversation(
             if (running != tool) {
                 tool = running
                 state.update { it.copy(working = running) }
-                if (running != null) send(LiveCommands.thinking(nextId("think"), id, "Hermes is working: $running. Not done yet."))
+                // Subscription voice may speak every progress update; keep it in the UI only.
+                if (running != null && subscriptionProtocol == null) send(LiveCommands.thinking(nextId("think"), id, "Hermes is working: $running. Not done yet."))
             }
             replies.forEachIndexed { i, reply ->
                 val before = spoken.getOrNull(i).orEmpty()
@@ -361,7 +474,10 @@ internal class LiveConversation(
 
     /** Hands the voice the next question or approval [chat] waits on to ask, or says why it can't. */
     private fun askNext(chat: ChatState) {
-        val request = chat.inputRequests.firstOrNull { VoiceAnswers.canAsk(it) && it.id !in announced } ?: return
+        val request = (if (incomingPending) chat.inputRequests.singleOrNull { it == incoming?.request } else chat.inputRequests.firstOrNull { VoiceAnswers.canAsk(it) && it.id !in announced })
+            ?: return
+        if (!VoiceAnswers.canAsk(request) || request.id in announced) return
+
         // From a locked phone an approval isn't taken; it's asked once the phone is unlocked.
         if (request is InputRequest.Approval && lock.locked()) {
             if (request.id !in heldBack) speakAside("Hermes needs your approval. Unlock the phone, and I'll ask you for it.")
@@ -375,7 +491,10 @@ internal class LiveConversation(
         steered = true
         heard.clear()
         asking = request
-        speakAside("Hermes needs an answer before it goes on. $prompt")
+        subscriptionFinalReady = false
+        // Ensure the literal subscription prompt satisfies the existing question-presentation check.
+        val question = if (subscriptionProtocol == null) "" else if (request is InputRequest.Approval) " Do you approve?" else " What is your answer?"
+        speakAside("Hermes needs an answer before it goes on. $prompt$question")
     }
 
     /**
@@ -403,6 +522,18 @@ internal class LiveConversation(
     private fun askedThem(said: List<LiveFragment>): Boolean {
         val voice = said.filter { it.speaker != LiveFragment.Speaker.User }.joinToString("") { it.text }
         if ('?' !in voice) return false
+        if (subscriptionProtocol != null) {
+            // The protocol does not bind output to our commentary. Require the request's actual
+            // identifying words; a generic question or a paraphrase that omits them fails closed.
+            val identity = when (val request = asking) {
+                is InputRequest.Approval -> request.description.ifBlank { request.command }
+                is InputRequest.Clarify -> request.questions.singleOrNull()?.question.orEmpty()
+                else -> ""
+            }.lowercase().split(NOT_A_WORD).filter { it.isNotBlank() }
+            val spoken = voice.lowercase().split(NOT_A_WORD).filter { it.isNotBlank() }
+            if (identity.isEmpty() || identity.size > spoken.size ||
+                spoken.windowed(identity.size).none { it == identity }) return false
+        }
         if (asking !is InputRequest.Approval) return true
         val words = voice.lowercase().split(NOT_A_WORD).toSet()
         return APPROVAL_CUES.any { it in words }
@@ -414,7 +545,7 @@ internal class LiveConversation(
     private fun lastWords(putToThem: Boolean = false): String = lastWordsSaid(putToThem).joinToString("") { it.text }
 
     /** Whether [request] still waits on an answer. */
-    private fun waiting(request: InputRequest) = session.state.value.inputRequests.any { it.id == request.id }
+    private fun waiting(request: InputRequest) = session.state.value.inputRequests.any { it == request }
 
     /**
      * Takes the request the voice handed over as the answer to [request], the one it was given to ask, in the
@@ -440,6 +571,7 @@ internal class LiveConversation(
 
     /** [answerAsked] while it judges; [sent] once the answer is in, or isn't going. */
     private suspend fun judgeAnswer(id: String?, request: InputRequest, sent: () -> Unit) {
+
         fun alreadyAnswered() {
             if (id != null) send(LiveCommands.commentary(nextId("say"), id, ALREADY_ANSWERED))
         }
@@ -453,6 +585,10 @@ internal class LiveConversation(
             } while (userPieces != pieces)
         }
         if (asking?.id != request.id || !waiting(request) || answering == request.id) return alreadyAnswered()
+        if (subscriptionProtocol != null && !subscriptionFinalReady) {
+            if (id != null) send(LiveCommands.commentary(nextId("say"), id, "Please say your answer again after the question."))
+            return
+        }
         if (request is InputRequest.Approval && lock.locked()) {
             return send(LiveCommands.commentary(nextId("say"), id, "The phone locked. Ask the user to unlock it, then to say it again."))
         }
@@ -477,19 +613,31 @@ internal class LiveConversation(
             messages.drop(from + 1).filterIsInstance<ChatMessage.Assistant>().map { it.text }
         }
         answering = request.id
+        val answerPieces = userPieces
+        val canSend = {
+            (request !is InputRequest.Approval || !lock.locked()) &&
+                (subscriptionProtocol == null || (subscriptionFinalReady && userPieces == answerPieces))
+        }
         val answered = try {
-            session.answer(request, answer)
+            if (incomingPending && incoming != null) session.answerVerifiedCall(incoming.origin, incoming.storedId, request, answer, canSend) else session.answer(request, answer, canSend)
         } finally {
             answering = null
         }
         if (answered) {
+            incomingPending = false
             asking = null
+            if (subscriptionProtocol != null) subscriptionAnsweredFinal = said
             answeredUpTo = words.maxOf { it.endMs }
         } else {
             // A handover of the same words, waiting meanwhile, tries them again.
             heard.addAll(0, wasHeard)
         }
         sent()
+        if (!answered && incomingPending) {
+            state.update { it.copy(error = "The incoming question could not be reverified. Open its chat instead.") }
+            call.close()
+            return
+        }
         if (!answered) {
             // Still asking: what's said next is another go at the answer, not a request that stops the turn.
             send(LiveCommands.commentary(nextId("say"), id, "The answer couldn't reach Hermes. Ask the user to say it again."))
@@ -530,7 +678,8 @@ internal class LiveConversation(
     }
 
     private fun send(event: String) {
-        call.send(event)
+        val messages = subscriptionProtocol?.send(event) ?: listOf(event)
+        messages.forEach { call.send(it) }
     }
 
     private fun nextId(prefix: String) = "${prefix}_${++eventSeq}"

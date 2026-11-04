@@ -6,6 +6,7 @@ import dev.hermeskotlin.core.storage.InMemoryKeyValueStore
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -206,6 +207,22 @@ class SettingsStoreTest {
         reopened.update { it.copy(showLinkPreviews = false) }
         advanceUntilIdle()
         assertEquals(false, SettingsStore(disk, backgroundScope).settings.filterNotNull().first().showLinkPreviews)
+    }
+
+    @Test
+    fun removedVoiceDiagnosticsDoesNotResetOtherStoredSettings() = runTest {
+        val disk = InMemoryKeyValueStore().apply {
+            put("settings.v1", """{"theme":"Dark","subscriptionVoicePreview":true,"subscriptionVoiceDiagnostics":true}""")
+        }
+        val store = SettingsStore(disk, backgroundScope)
+        val restored = store.settings.filterNotNull().first()
+        assertEquals(ThemeMode.Dark, restored.theme)
+        assertEquals(true, restored.subscriptionVoicePreview)
+        store.update { it.copy(pureBlack = true) }
+        runCurrent()
+        val saved = disk.get("settings.v1")!!
+        assertEquals(false, saved.contains("subscriptionVoiceDiagnostics"))
+        assertEquals(true, SettingsStore(disk, backgroundScope).settings.filterNotNull().first().subscriptionVoicePreview)
     }
 
     @Test

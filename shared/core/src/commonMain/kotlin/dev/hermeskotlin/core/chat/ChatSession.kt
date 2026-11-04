@@ -61,7 +61,7 @@ import kotlinx.serialization.json.put
  * create, resume and REST calls carry it; the gateway scopes the rest by the runtime session.
  */
 class ChatSession(
-    private val gateway: GatewayUrl,
+    val gateway: GatewayUrl,
     initialStoredId: String?,
     initialTitle: String?,
     private val connection: GatewayConnection,
@@ -1704,14 +1704,58 @@ class ChatSession(
      * Sends [result] as the answer to [request] (see [InputAnswers]). The request leaves the state
      * once the answer is out; another client may have answered first, which the gateway ignores.
      */
-    suspend fun answer(request: InputRequest, result: JsonObject): Boolean {
+    /** Revalidate the exact incoming ring on the same connection used to answer it. */
+    suspend fun answerVerifiedCall(origin: dev.hermeskotlin.core.wear.CallOrigin, storedId: String, request: InputRequest, result: JsonObject, canSend: () -> Boolean = { true }): Boolean {
+        val client = connectedClient() ?: return false
+        fun valid() = connection.gateway == gateway && gateway == origin.gateway && profile == origin.profile &&
+            connectedClient() === client && state.value.storedSessionId == storedId &&
+            state.value.runtimeSessionId == origin.runtimeId && state.value.inputRequests.count { it == request } == 1
+        if (!valid()) return false
+        val reply = try {
+            client.request("session.resume", buildJsonObject {
+                put("session_id", storedId)
+                put("profile", origin.profile ?: return false)
+                put("omit_messages", true)
+            }) as? JsonObject
+        } catch (e: CancellationException) { throw e } catch (e: Exception) { return false }
+        if (!valid() || !dev.hermeskotlin.core.wear.verifyCallRequest(origin, gateway, storedId, request.id, request, reply)) return false
+        return try {
+            if (!client.respond(request.id, result) { valid() && canSend() }) return false
+            _state.update { it.copy(inputRequests = it.inputRequests.filterNot { pending -> pending == request }) }
+            true
+        } catch (e: CancellationException) { throw e } catch (e: Exception) { false }
+    }
+
+    /** A single state snapshot supplies both the decision and opt-in, content-free diagnostics. */
+    fun callRequestChecks(origin: dev.hermeskotlin.core.wear.CallOrigin, storedId: String, request: InputRequest): CallRequestChecks {
+        val chat = state.value
+        return CallRequestChecks(
+            connectionGatewayMatches = connection.gateway == gateway,
+            originGatewayMatches = gateway == origin.gateway,
+            profileMatches = profile == origin.profile,
+            connected = connectedClient() != null,
+            storedMatches = chat.storedSessionId == storedId,
+            runtimeMatches = chat.runtimeSessionId == origin.runtimeId,
+            requestExactlyOnce = chat.inputRequests.count { it == request } == 1,
+        )
+    }
+
+    fun validCallRequest(origin: dev.hermeskotlin.core.wear.CallOrigin, storedId: String, request: InputRequest): Boolean =
+        callRequestChecks(origin, storedId, request).valid
+
+    suspend fun answer(request: InputRequest, result: JsonObject, canSend: (() -> Boolean)? = null): Boolean {
         val client = connectedClient() ?: run {
             _state.update { it.copy(error = "Not connected to the gateway. Answer again once it reconnects.") }
             return false
         }
+        val snapshot = state.value
+        fun valid() = connectedClient() === client && connection.gateway == gateway &&
+            state.value.runtimeSessionId == snapshot.runtimeSessionId && state.value.storedSessionId == snapshot.storedSessionId &&
+            state.value.inputRequests.count { it == request } == 1
         return try {
-            client.respond(request.id, result)
-            _state.update { state -> state.copy(inputRequests = state.inputRequests.filterNot { it.id == request.id }) }
+            val guard = canSend?.let { check -> { valid() && check() } }
+            if (!client.respond(request.id, result, guard)) return false
+            _state.update { state -> state.copy(inputRequests = state.inputRequests.filterNot { it == request }) }
             true
         } catch (e: CancellationException) {
             throw e

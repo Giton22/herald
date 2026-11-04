@@ -38,6 +38,9 @@ import dev.hermeskotlin.wearlink.WatchBot
 import dev.hermeskotlin.wearlink.WearJson
 import dev.hermeskotlin.wearlink.WearPaths
 import dev.hermeskotlin.wearlink.clipForWatch
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -301,7 +304,13 @@ class WatchRelay(
      * The watch's chat [chatId] (null: a new one) for a live call from the watch, once the gateway is connected and
      * its history loaded (the call opens with it); else what went wrong, for the watch to say.
      */
-    suspend fun chatForCall(chatId: String?, botProfile: String? = null, defaultRequestId: String? = null, node: String? = null, scope: WatchScope? = null): CallChat {
+    suspend fun chatForCall(chatId: String?, botProfile: String? = null, defaultRequestId: String? = null, node: String? = null, scope: WatchScope? = null): CallChat =
+        chatForCallInternal(chatId, botProfile, defaultRequestId, node, scope, null, false, null, null)
+
+    suspend fun chatForCall(chatId: String?, origin: CallOrigin?, requireOrigin: Boolean = false, request: dev.hermeskotlin.core.chat.InputRequest? = null, callId: String? = null): CallChat =
+        chatForCallInternal(chatId, null, null, null, null, origin, requireOrigin, request, callId)
+
+    private suspend fun chatForCallInternal(chatId: String?, botProfile: String?, defaultRequestId: String?, node: String?, scope: WatchScope?, origin: CallOrigin?, requireOrigin: Boolean, request: dev.hermeskotlin.core.chat.InputRequest?, callId: String?): CallChat {
         val saved = gateways.current()
         if (saved == null || !auth.hasStoredSession(saved.gatewayUrl) || connection.state.value is ConnectionState.SessionExpired) {
             return CallChat.Failed(SIGNED_OUT)
@@ -318,11 +327,31 @@ class WatchRelay(
                 scope != null && scope != default.resolved.scope)) {
             return CallChat.Failed("Default Call Target changed. Tap Call again.")
         }
-        val profile = if (default != null) default.profile else if (scope != null) scope.profile else botProfile ?: profiles.get(gateway)
+        if (requireOrigin && (origin == null || origin.gateway != gateway || origin.profile.isNullOrBlank())) {
+            return CallChat.Failed("Cannot identify this call’s gateway and explicit profile. Open the question in its chat instead.")
+        }
+        val profile = if (requireOrigin) origin!!.profile else if (default != null) default.profile else if (scope != null) scope.profile else botProfile ?: profiles.get(gateway)
         connection.start(gateway)
         if (withTimeoutOrNull(CONNECT_MS) { connection.state.first { it is ConnectionState.Connected } } == null) {
             connection.retry()
             return CallChat.Failed("Kyllene can't reach your gateway right now.")
+        }
+        if (requireOrigin && request != null) {
+            val client = (connection.state.value as? ConnectionState.Connected)?.client
+                ?: return CallChat.Failed("Gateway disconnected before verification.")
+            val reply = try {
+                client.request("session.resume", buildJsonObject {
+                    put("session_id", chatId ?: "")
+                    put("profile", profile!!)
+                    put("omit_messages", true)
+                }) as? JsonObject
+            } catch (e: CancellationException) { throw e } catch (e: Exception) { null }
+            if (!verifyCallRequest(origin!!, gateway, chatId, callId, request, reply) ||
+                (connection.state.value as? ConnectionState.Connected)?.client !== client || connection.gateway != gateway) {
+                return CallChat.Failed("This question could not be verified in that profile. Open its chat instead.")
+            }
+        } else if (requireOrigin && request == null) {
+            return CallChat.Failed("This call has no verifiable question. Open its chat instead.")
         }
         val session = turnLock.withLock {
             // Another call on, from the phone or the watch: one chat is held at a time, and taking it would cut that
@@ -681,6 +710,9 @@ class WatchRelay(
 }
 
 /** The watch's chat for a live call: [Ready] with what the call runs in, or [Failed] with why not. */
+/** Origin captured from the actual chat that received a request, not current selection. */
+data class CallOrigin(val gateway: GatewayUrl, val profile: String?, val runtimeId: String? = null, val requestId: String? = null, val method: String? = null)
+
 sealed interface CallChat {
     data class Ready(val session: ChatSession, val gateway: GatewayUrl, val profile: String?) : CallChat
     data class Failed(val message: String) : CallChat
