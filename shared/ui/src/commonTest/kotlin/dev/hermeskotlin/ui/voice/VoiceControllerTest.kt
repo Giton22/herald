@@ -742,4 +742,72 @@ class VoiceControllerTest {
         assertEquals(VoicePhase.Off, one.chat.value.phase)
         assertEquals(VoicePhase.Off, two.chat.value.phase)
     }
+
+    /** The first listen holds on until cancelled and takes [stopMs] to let go; every one after it fails at once. */
+    private class SlowThenBrokenRecorder(private val stopMs: Long) : VoiceRecorder {
+        val listening = CompletableDeferred<Unit>()
+        private var recordings = 0
+        override suspend fun record(activity: VoiceActivity, onLevel: (Float) -> Unit, onSpeech: () -> Unit): Recording {
+            if (recordings++ > 0) error("No microphone.")
+            listening.complete(Unit)
+            try {
+                awaitCancellation()
+            } finally {
+                withContext(NonCancellable) { delay(stopMs) }
+            }
+        }
+
+        override fun finish() = Unit
+    }
+
+    /**
+     * End, then Start again on the same screen while the first chat is slow to let go: the second one ending on its
+     * own lets the call service go, as nothing is on any more, and the first one's end later doesn't change that.
+     */
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    @Test
+    fun aChatStartedAgainThatEndsFirstStillLetsTheCallServiceGo() = runTest {
+        val keeper = SharedKeeper()
+        val recorder = SlowThenBrokenRecorder(stopMs = 10_000)
+        val voice = VoiceController(audio("unused", Requests()), recorder, FakePlayer(), backgroundScope, backgroundScope, keepAlive = keeper)
+
+        voice.startChat(offlineSession(), gateway, null)
+        recorder.listening.await()
+        voice.stopChat()
+        voice.startChat(offlineSession(), gateway, null)
+        assertTrue(keeper.holding)
+        // Past the wait, its microphone fails and it ends, well before the first one lets go.
+        testScheduler.advanceTimeBy(3_000)
+        testScheduler.runCurrent()
+        assertEquals(VoicePhase.Off, voice.chat.value.phase)
+        assertFalse(keeper.holding)
+
+        testScheduler.advanceTimeBy(8_000)
+        testScheduler.runCurrent()
+        assertFalse(keeper.holding)
+    }
+
+    /** A chat stuck in ending doesn't keep dictation from starting once nothing is on. */
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    @Test
+    fun aChatStuckEndingDoesntHoldDictationUp() = runTest {
+        val slow = SlowToStopRecorder(stopMs = 60_000)
+        val call = VoiceController(audio("unused", Requests()), slow, FakePlayer(), backgroundScope, backgroundScope)
+        val recorder = FakeRecorder()
+        val voice = VoiceController(audio("deploy the site", Requests()), recorder, FakePlayer(), backgroundScope, backgroundScope)
+
+        call.startChat(offlineSession(), gateway, null)
+        slow.listening.await()
+        call.stopChat()
+        testScheduler.runCurrent()
+        val text = CompletableDeferred<String>()
+        voice.startDictation(gateway, "work") { text.complete(it) }
+
+        assertEquals("deploy the site", text.await())
+        assertEquals(1, recorder.recordings)
+        // Let it end, so it isn't left over for the next test.
+        testScheduler.advanceTimeBy(60_000)
+        testScheduler.runCurrent()
+        assertEquals(VoicePhase.Off, call.chat.value.phase)
+    }
 }

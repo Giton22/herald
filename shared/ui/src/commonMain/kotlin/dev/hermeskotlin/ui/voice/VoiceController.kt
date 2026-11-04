@@ -259,11 +259,10 @@ class VoiceController(
         VoiceChats.started(job, this, ::stopChat)
         job.invokeOnCompletion {
             VoiceChats.ended(job)
-            // A newer chat may already hold it again, here or on another screen (the call service is one for all).
-            if (chatJob === job || chatJob == null) {
-                held = false
-                if (!VoiceChats.any) keepAlive?.release()
-            }
+            if (chatJob === job || chatJob == null) held = false
+            // The call service is one for all: up while a chat is on, here or on another screen, and let go once none
+            // is, by whichever ends last, whether or not it's still this screen's newest.
+            if (!VoiceChats.on) keepAlive?.release()
         }
     }
 
@@ -1088,7 +1087,7 @@ class VoiceController(
         if (dictationJob?.isActive == true || chatJob?.isActive == true) return
         // Another screen's chat has the microphone. Why is shown once its words are looked up, unless something else
         // changed the dictation meanwhile.
-        if (VoiceChats.any) {
+        if (VoiceChats.on) {
             val before = _dictation.value
             scope.launch {
                 val why = getString(Res.string.voice_error_call_on)
@@ -1179,7 +1178,10 @@ class VoiceController(
 
     private companion object {
         const val MAX_FAILURES = 3
-        /** How long a new chat waits for earlier ones to let their route go; past it, it goes on regardless. */
+        /**
+         * How long a new chat waits for earlier ones to let their route go. Past it, it goes on regardless: the
+         * microphone lets go within a frame of the cancel, so what's still slow then is a socket closing.
+         */
         const val WIND_DOWN_MS = 2_000L
         /** Times a question is asked before it's left for the screen. */
         const val MAX_ASKS = 3
@@ -1207,7 +1209,8 @@ internal object VoiceChats {
 
     fun ended(job: Job) = running.update { chats -> chats.filterNot { it.job === job } }
 
-    val any: Boolean get() = running.value.isNotEmpty()
+    /** A chat is on somewhere. One winding down isn't, so one slow or stuck in ending holds nothing up for good. */
+    val on: Boolean get() = running.value.any { it.job.isActive }
 
     /**
      * Ends every chat [owner] doesn't run ([stop]), and hands back the jobs of all still running or winding down,
