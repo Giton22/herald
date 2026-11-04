@@ -141,7 +141,8 @@ internal class LinuxGlobalShortcut(
                 if (it.path == PATH && it.session.path == binding.session && it.id == ID) binding.pressed.set(false)
             }
             subscriptions += bus.addSigHandler(ShortcutsPortal.ShortcutsChanged::class.java, binding.owner) { changed ->
-                if (changed.path == PATH && changed.session.path == binding.session && binding.bound && binding.valid.get()) {
+                // Not after a revocation: the worker is about to report Declined, and this must not overwrite it.
+                if (changed.path == PATH && changed.session.path == binding.session && binding.bound && binding.valid.get() && !binding.revoked) {
                     changed.shortcuts.singleOrNull { it.id == ID }?.let { shortcut -> runCatching { trigger(shortcut.options) }.onSuccess(::report) }
                 }
             }

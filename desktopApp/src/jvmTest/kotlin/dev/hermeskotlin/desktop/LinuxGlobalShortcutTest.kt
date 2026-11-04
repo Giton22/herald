@@ -271,6 +271,46 @@ class LinuxGlobalShortcutTest {
         }
     }
 
+    @Test fun aPortalThatCannotBeStartedYetBindsOnceItAppears() {
+        // At login the portal may not be up; a failed start used to end the worker for good.
+        ShortcutPortalFixture(claim = false).use { fixture ->
+            val states = LinkedBlockingQueue<LinuxGlobalShortcut.State>()
+            LinuxGlobalShortcut({}, { state, _ -> states.add(state) }, fixture.address).use {
+                await { states.contains(LinuxGlobalShortcut.State.Unavailable) }
+                fixture.claimName()
+                states.bound()
+            }
+        }
+    }
+
+    @Test fun closingWhileThePortalIsAbsentEndsTheWorker() {
+        ShortcutPortalFixture(claim = false).use { fixture ->
+            fun workers() = Thread.getAllStackTraces().keys.count { it.name == "kyllene-shortcut-portal" && it.isAlive }
+            val before = workers()
+            val states = LinkedBlockingQueue<LinuxGlobalShortcut.State>()
+            val shortcut = LinuxGlobalShortcut({}, { state, _ -> states.add(state) }, fixture.address)
+            await { states.contains(LinuxGlobalShortcut.State.Unavailable) }
+            assertEquals(before + 1, workers())
+            shortcut.close()
+            await { workers() == before }
+        }
+    }
+
+    @Test fun aKeyChangeRightAfterRevocationDoesNotOverwriteDeclined() {
+        ShortcutPortalFixture().use { fixture ->
+            val states = LinkedBlockingQueue<LinuxGlobalShortcut.State>()
+            LinuxGlobalShortcut({}, { state, _ -> states.add(state) }, fixture.address).use {
+                states.bound()
+                states.clear()
+                fixture.bus.sendMessage(ShortcutsPortal.Session.Closed(fixture.service.session, emptyMap()))
+                fixture.service.rebind("Ctrl+Alt+K")
+                await { states.contains(LinuxGlobalShortcut.State.Declined) }
+                Thread.sleep(200)
+                assertEquals(LinuxGlobalShortcut.State.Declined, states.last())
+            }
+        }
+    }
+
     @Test fun aRuntimeWithoutAuthenticationClassesReportsUnavailable() =
         runtime("java.base,java.logging", LinuxGlobalShortcut.State.Unavailable)
 

@@ -18,7 +18,8 @@ import org.freedesktop.dbus.types.Variant
 import org.junit.Assume.assumeTrue
 import kotlin.test.assertTrue
 
-internal class ShortcutPortalFixture : AutoCloseable {
+/** A private bus with a fake portal; with [claim] false the portal isn't running until [claimName]. */
+internal class ShortcutPortalFixture(claim: Boolean = true) : AutoCloseable {
     private val config = run {
         assumeTrue("Shortcut portal integration requires Linux and dbus-daemon", System.getProperty("os.name") == "Linux" && java.io.File("/usr/bin/dbus-daemon").canExecute())
         Files.createTempFile("kyllene-shortcut-bus-", ".conf")
@@ -36,9 +37,9 @@ internal class ShortcutPortalFixture : AutoCloseable {
             address = CompletableFuture.supplyAsync { daemon.inputStream.bufferedReader().readLine() }.get(3, TimeUnit.SECONDS)
             bus = connect().also { connected = it }
             assertTrue(bus.getRemoteObject("org.freedesktop.DBus", "/org/freedesktop/DBus", DBus::class.java).ListActivatableNames().all { it == "org.freedesktop.DBus" })
-            bus.requestBusName(NAME)
             service = Service(bus)
             bus.exportObject(service)
+            if (claim) bus.requestBusName(NAME)
         } catch (failure: Throwable) {
             runCatching { connected?.close() }
             daemon.destroyForcibly(); daemon.waitFor(3, TimeUnit.SECONDS); Files.deleteIfExists(config)
@@ -46,6 +47,7 @@ internal class ShortcutPortalFixture : AutoCloseable {
         }
     }
     fun connect() = DBusConnectionBuilder.forAddress(address).withShared(false).build()
+    fun claimName() = bus.requestBusName(NAME)
     override fun close() {
         try { bus.close() } finally {
             daemon.destroy()
