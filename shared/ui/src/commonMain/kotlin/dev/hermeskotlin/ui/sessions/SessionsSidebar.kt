@@ -30,6 +30,9 @@ import com.composables.icons.lucide.House
 import com.composeunstyled.AnchorAlignment
 import dev.hermeskotlin.designsystem.components.DropdownMenu
 import dev.hermeskotlin.designsystem.components.MenuChoice
+import dev.hermeskotlin.designsystem.components.MenuAction
+import dev.hermeskotlin.designsystem.components.MenuSeparator
+import com.composables.icons.lucide.CircleUserRound
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
@@ -56,7 +59,6 @@ import dev.hermeskotlin.designsystem.surface2
 import dev.hermeskotlin.designsystem.surface3
 import dev.hermeskotlin.designsystem.textMuted
 import dev.hermeskotlin.designsystem.warningSoft
-import dev.hermeskotlin.ui.chat.AppMark
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import dev.hermeskotlin.designsystem.components.Chip
@@ -121,7 +123,11 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
+import dev.hermeskotlin.core.settings.AppSettings
+import androidx.compose.ui.unit.Dp
 import dev.hermeskotlin.core.settings.SettingsStore
+import dev.hermeskotlin.core.settings.showsSidebarPage
+import dev.hermeskotlin.core.settings.sidebarMode
 import org.koin.compose.koinInject
 import dev.hermeskotlin.designsystem.components.LocalOpenModals
 import androidx.compose.runtime.mutableIntStateOf
@@ -154,6 +160,7 @@ import com.composables.icons.lucide.ArchiveRestore
 import com.composables.icons.lucide.ArrowLeft
 import com.composables.icons.lucide.ArrowLeftRight
 import com.composables.icons.lucide.Bot
+import com.composables.icons.lucide.MessagesSquare
 import com.composables.icons.lucide.CalendarClock
 import com.composables.icons.lucide.ChartColumn
 import com.composables.icons.lucide.Check
@@ -209,6 +216,7 @@ import dev.hermeskotlin.ui.bots.BotsViewModel
 import dev.hermeskotlin.core.gateway.SavedGateway
 import dev.hermeskotlin.core.models.displayModelName
 import dev.hermeskotlin.core.profiles.Profile
+import dev.hermeskotlin.core.profiles.ProfileRoster
 import dev.hermeskotlin.core.projects.Project
 import dev.hermeskotlin.core.projects.ProjectIndex
 import dev.hermeskotlin.core.sessions.SessionListFilter
@@ -314,8 +322,8 @@ fun SessionsSidebar(
     visible: Boolean,
     /** Opens a chat, with how far it had been read when it has new messages since (null otherwise). */
     onOpenSession: (session: SessionSummary, readUpTo: Double?) -> Unit,
-    /** A new chat; [cwd] is the folder of the project the list shows, when one is picked. */
-    onNewChat: (cwd: String?) -> Unit,
+    /** A new chat, in the project the list shows when one is picked (Home among them); null when none is. */
+    onNewChat: (project: Project?) -> Unit,
     onDeleted: (SessionSummary) -> Unit,
     onSessionExpired: () -> Unit,
     onSignOut: () -> Unit,
@@ -352,7 +360,7 @@ fun SessionsSidebar(
     rooms: RoomsViewModel = koinViewModel(),
 ) {
     val state = viewModel.state.collectAsStateWithLifecycle().value
-    val mode by bots.mode.collectAsStateWithLifecycle()
+    val pickedMode by bots.mode.collectAsStateWithLifecycle()
     val botsState by bots.state.collectAsStateWithLifecycle()
     val avatars by bots.avatars.collectAsStateWithLifecycle()
     val troubles by bots.troubles.collectAsStateWithLifecycle()
@@ -380,6 +388,23 @@ fun SessionsSidebar(
     val pinnedCollapsed = settings?.pinnedCollapsed ?: false
     val threadsCollapsed = settings?.threadsCollapsed ?: false
     val projectsAsDropdown = settings?.projectsAsDropdown ?: false
+    // Without its switch, the sidebar shows the view picked in Settings, whatever was last picked on this gateway.
+    val modeSwitch = settings?.sidebarModeSwitch ?: true
+    val mode = settings?.sidebarMode(pickedMode) ?: pickedMode
+    // The bots' side is read from the gateway only while it shows, so the view model shows it too; not kept as
+    // the gateway's pick, which stays for when the switch is back.
+    LaunchedEffect(modeSwitch, mode, pickedMode) {
+        if (!modeSwitch && pickedMode != mode) bots.setMode(mode, remember = false)
+    }
+    // The switch back: the side last picked with it, not the one Settings held the sidebar on.
+    // With the switch every pick is remembered, so this changes nothing then; it's done whenever the switch shows,
+    // not only on a change seen here, which a sidebar drawn afresh with the switch back would miss.
+    LaunchedEffect(modeSwitch) {
+        if (modeSwitch) bots.showRemembered()
+    }
+    /** A side picked by the switch, or for search or a page; without the switch the view stays where Settings put it. */
+    val pickMode: (SidebarMode) -> Unit = { if (modeSwitch) bots.setMode(it) }
+    val navPages = remember(settings?.sidebarNav, settings?.sidebarNavHidden) { shownNavPages(settings, isDesktop) }
     var profilesOpen by remember { mutableStateOf(false) }
 
     var searchOpen by remember { mutableStateOf(false) }
@@ -555,7 +580,7 @@ fun SessionsSidebar(
         when (shortcut) {
             // Left to the app too, which shows the sidebar if it's put away.
             Shortcut.SearchChats -> false.also {
-                if (mode != SidebarMode.Chats) bots.setMode(SidebarMode.Chats)
+                if (mode != SidebarMode.Chats) pickMode(SidebarMode.Chats)
                 searchOpen = true
                 searchFocusAsks++
             }
@@ -577,12 +602,12 @@ fun SessionsSidebar(
                 insightsOpen = false
                 if (state.filter != SessionListFilter.Recent) viewModel.setFilter(SessionListFilter.Recent)
                 when (shortcut.page) {
-                    SidebarPage.Chats -> bots.setMode(SidebarMode.Chats)
-                    SidebarPage.Bots -> bots.setMode(SidebarMode.Bots)
+                    SidebarPage.Chats -> pickMode(SidebarMode.Chats)
+                    SidebarPage.Bots -> pickMode(SidebarMode.Bots)
                     SidebarPage.Inbox -> inboxOpen = true
                     SidebarPage.Scheduled -> scheduledOpen = true
                     SidebarPage.Archived -> {
-                        bots.setMode(SidebarMode.Chats)
+                        pickMode(SidebarMode.Chats)
                         viewModel.setFilter(SessionListFilter.Archived)
                     }
                     SidebarPage.Capabilities -> capabilitiesOpen = true
@@ -685,6 +710,30 @@ fun SessionsSidebar(
             )
         }
     }
+    // The page buttons left on in Settings › Sidebar pages, over the chats; over the bots too while the switch is
+    // hidden, since the Chats side, where they'd otherwise be, can't be reached then. [inset] lines them up with the list.
+    val navGrid: @Composable (inset: Dp) -> Unit = { inset ->
+        if (navPages.isNotEmpty()) NavGrid(
+            navPages.mapNotNull { page ->
+                val icon = navIcon(page)
+                val label = stringResource(navLabel(page))
+                when (page) {
+                    SidebarPage.Inbox -> NavLink(icon, label, badge = inboxUnread) { inboxOpen = true }
+                    SidebarPage.Scheduled -> NavLink(icon, label, selected = pageInMain && scheduledOpen) { closePages(); scheduledOpen = true }
+                    SidebarPage.Insights -> NavLink(icon, label, selected = pageInMain && insightsOpen) { closePages(); insightsOpen = true }
+                    SidebarPage.Capabilities -> NavLink(icon, label, selected = pageInMain && capabilitiesOpen) { closePages(); capabilitiesOpen = true }
+                    SidebarPage.Plugins -> NavLink(icon, label, selected = pageInMain && pluginsOpen) { closePages(); pluginsOpen = true }
+                    SidebarPage.Config -> NavLink(icon, label, selected = pageInMain && configOpen) { closePages(); configOpen = true }
+                    SidebarPage.Archived -> NavLink(icon, label, selected = isDesktop && state.filter == SessionListFilter.Archived) {
+                        viewModel.setFilter(SessionListFilter.Archived)
+                    }
+                    // The two sides are the switch's, not pages with a button here.
+                    SidebarPage.Chats, SidebarPage.Bots -> null
+                }
+            },
+            inset = inset,
+        )
+    }
     if (pageInMain && mainPage != null) {
         val latest by rememberUpdatedState(pageView)
         DisposableEffect(pageKey) {
@@ -727,26 +776,35 @@ fun SessionsSidebar(
                         openAccount()
                     },
                     onSettings = onOpenSettings,
-                    onSearch = { searchOpen = true }.takeIf { mode == SidebarMode.Chats },
+                    // Without the switch, search is the Bots side's only way to the chats, so it keeps the pill.
+                    onSearch = { searchOpen = true }.takeIf { mode == SidebarMode.Chats || !modeSwitch },
+                    profiles = roster?.profiles.orEmpty(),
+                    activeProfile = roster?.active(profile)?.name,
+                    // Profiles made or removed on the host since show up, as the account sheet's do.
+                    onOpenMenu = viewModel::refreshProfiles,
+                    onProfile = { picked -> onSwitchProfile(profileToStore(picked, roster)) },
+                    onOpenGateways = onOpenGateways,
                 )
             }
             if (!searchOpen && state.filter == SessionListFilter.Recent) {
-                val modeNames = sidebarModeNames()
-                SegmentedControl(
-                    options = SidebarMode.entries,
-                    selected = mode,
-                    onSelect = bots::setMode,
-                    // How many bots need the user, readable from the Chats side too.
-                    optionLabel = { modeLabel(it, modeNames, needsYou.size) },
-                    modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 8.dp),
-                )
+                if (modeSwitch) {
+                    val modeNames = sidebarModeNames()
+                    SegmentedControl(
+                        options = SidebarMode.entries,
+                        selected = mode,
+                        onSelect = pickMode,
+                        // How many bots need the user, readable from the Chats side too.
+                        optionLabel = { modeLabel(it, modeNames, needsYou.size) },
+                        modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 8.dp),
+                    )
+                }
                 RenameBanner(Modifier.padding(start = 12.dp, end = 12.dp, bottom = 8.dp))
                 UpdateBanner(Modifier.padding(start = 12.dp, end = 12.dp, bottom = 8.dp))
                 // A desktop starts a chat from the top of its sidebar, as desktop chat apps do; the footer
                 // keeps the account. A phone keeps the pill under the thumb.
                 if (isDesktop) {
                     NavTile(
-                        NavLink(Lucide.SquarePen, stringResource(Res.string.sessions_new_chat), keys = "Ctrl+N") { onNewChat(state.project?.path) },
+                        NavLink(Lucide.SquarePen, stringResource(Res.string.sessions_new_chat), keys = "Ctrl+N") { onNewChat(state.project) },
                         // In line with the pages listed under it, which sit in the list's own 8dp margin.
                         Modifier.fillMaxWidth().padding(horizontal = 14.dp),
                     )
@@ -786,6 +844,10 @@ fun SessionsSidebar(
                             },
                             onRetry = bots::refresh,
                             onDismissNotice = bots::dismissNotice,
+                            // The roster's own 14dp margin already lines the buttons up with its cards. Empty while
+                            // the switch shows, not left out: the list holds on to the first row it shows, so buttons
+                            // the switch going away brings in would otherwise come in above it, out of sight.
+                            top = { if (!modeSwitch) navGrid(0.dp) },
                             troubles = troubles,
                             failingRoutines = failingRoutines,
                             needsYou = needsYou,
@@ -917,7 +979,9 @@ fun SessionsSidebar(
                                 }
                             }
                             when {
-                                state.loading -> item(key = "loading") { ListSpinner() }
+                                // Stand-in rows rather than a spinner: switching profile keeps the sidebar open, and
+                                // the list then fills in where it will be.
+                                state.loading -> item(key = "loading") { ListSkeleton() }
                                 state.error != null -> item(key = "error") {
                                     ListNotice(
                                         stringResource(Res.string.sessions_load_failed_detail, state.error.orEmpty()),
@@ -925,7 +989,7 @@ fun SessionsSidebar(
                                         onAction = viewModel::refresh,
                                     )
                                 }
-                                state.project != null && state.projectSessions == null -> item(key = "project-loading") { ListSpinner() }
+                                state.project != null && state.projectSessions == null -> item(key = "project-loading") { ListSkeleton() }
                                 state.listed.isEmpty() -> item(key = "empty") {
                                     ListNotice(
                                         stringResource(if (state.project != null) Res.string.sessions_empty_project else Res.string.sessions_empty),
@@ -939,23 +1003,10 @@ fun SessionsSidebar(
                             }
                         },
                     ) {
-                        item(key = "nav") {
-                            NavGrid(
-                                // The Inbox goes by a phone's push registration (Notifications anywhere), which
-                                // a desktop has none of, so it would only ever say it can't load.
-                                listOfNotNull(
-                                    NavLink(Lucide.Inbox, stringResource(Res.string.sessions_nav_inbox), badge = inboxUnread) { inboxOpen = true }.takeIf { !isDesktop },
-                                    NavLink(Lucide.CalendarClock, stringResource(Res.string.sessions_nav_scheduled), selected = pageInMain && scheduledOpen) { closePages(); scheduledOpen = true },
-                                    NavLink(Lucide.ChartColumn, stringResource(Res.string.sessions_nav_insights), selected = pageInMain && insightsOpen) { closePages(); insightsOpen = true },
-                                    NavLink(Lucide.Blocks, stringResource(Res.string.sessions_nav_capabilities), selected = pageInMain && capabilitiesOpen) { closePages(); capabilitiesOpen = true },
-                                    NavLink(Lucide.Puzzle, stringResource(Res.string.sessions_nav_plugins), selected = pageInMain && pluginsOpen) { closePages(); pluginsOpen = true },
-                                    NavLink(Lucide.SlidersHorizontal, stringResource(Res.string.sessions_nav_config), selected = pageInMain && configOpen) { closePages(); configOpen = true },
-                                    NavLink(Lucide.Archive, stringResource(Res.string.sessions_nav_archived), selected = isDesktop && state.filter == SessionListFilter.Archived) {
-                                        viewModel.setFilter(SessionListFilter.Archived)
-                                    },
-                                ),
-                            )
-                        }
+                        // The pages left on in Settings › Sidebar pages; with none, no room is kept for them. The item
+                        // stays when it's empty: the list holds on to the first row it shows, so pages turned back on
+                        // would otherwise come in above it, out of sight.
+                        item(key = "nav") { navGrid(6.dp) }
                     }
                     state.loading -> ListSkeleton()
                     state.error != null -> EmptyState(Lucide.CloudOff, stringResource(Res.string.sessions_load_failed), state.error, error = true) {
@@ -990,7 +1041,7 @@ fun SessionsSidebar(
             onDismissMessage = viewModel::dismissMessage,
             onNewChat = {
                 if (searchOpen) closeSearch()
-                onNewChat(state.project?.path.takeIf { state.filter == SessionListFilter.Recent })
+                onNewChat(state.project.takeIf { state.filter == SessionListFilter.Recent })
             },
             onAccount = {
                 accountAnchor = accountRow[0]
@@ -1076,7 +1127,7 @@ fun SessionsSidebar(
         },
     )
     // The picked profile, else the one the gateway runs as.
-    val activeProfile = roster?.let { r -> r.profiles.find { it.name == (profile ?: r.launch) } }
+    val activeProfile = roster?.active(profile)
     AccountSheet(
         visible = accountOpen,
         anchor = accountAnchor.takeIf { isDesktop },
@@ -1100,11 +1151,16 @@ fun SessionsSidebar(
         onDismiss = { profilesOpen = false },
         onSelect = { picked ->
             profilesOpen = false
-            // The launch profile is stored as "none picked", so calls stay exactly as before profiles.
-            onSwitchProfile(picked.name.takeIf { it != roster?.launch })
+            onSwitchProfile(profileToStore(picked, roster))
         },
     )
 }
+
+/** The launch profile is stored as "none picked", so calls stay exactly as before profiles. */
+internal fun profileToStore(picked: Profile, roster: ProfileRoster?): String? = picked.name.takeIf { it != roster?.launch }
+
+/** The profile in use: the stored one, or the launch profile when none is stored; null if the gateway no longer has it. */
+internal fun ProfileRoster.active(stored: String?): Profile? = profiles.find { it.name == (stored ?: launch) }
 
 /**
  * The sidebar's main page drawn from [sessions] alone, for previews: the same header, sections and
@@ -1126,6 +1182,10 @@ internal fun SessionsSidebarSample(
     projectsAsDropdown: Boolean = false,
     /** The Threads section's threads, whose chats are among [sessions]. */
     threads: List<ChatThread> = emptyList(),
+    /** The gateway's profiles, the first in use; with more than one the header names it. */
+    profiles: List<Profile> = emptyList(),
+    /** The header's profile menu drawn open. */
+    profileMenuOpen: Boolean = false,
 ) {
     // Folds for real in the gallery, kept only while the preview shows.
     var pinnedCollapsed by remember { mutableStateOf(false) }
@@ -1137,7 +1197,16 @@ internal fun SessionsSidebarSample(
             .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Vertical + WindowInsetsSides.Start)),
     ) {
         Column(Modifier.fillMaxSize()) {
-            MainHeader(gatewayLabel = "homelab", connection = null, onAccount = {}, onSettings = {}, onSearch = {})
+            MainHeader(
+                gatewayLabel = "homelab",
+                connection = null,
+                onAccount = {},
+                onSettings = {},
+                onSearch = {},
+                profiles = profiles,
+                activeProfile = profiles.firstOrNull()?.name,
+                menuInitiallyOpen = profileMenuOpen,
+            )
             RenameBanner(Modifier.padding(start = 12.dp, end = 12.dp, bottom = 8.dp))
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 val index = remember(projects) { ProjectIndex(projects) }
@@ -1253,7 +1322,7 @@ internal fun BotsSidebarSample(
     }
 }
 
-private object PreviewBotActions : BotActions {
+internal object PreviewBotActions : BotActions {
     override fun open(bot: Bot) = Unit
     override fun setPinned(bot: Bot, pinned: Boolean) = Unit
     override fun setHidden(bot: Bot, hidden: Boolean) = Unit
@@ -1292,31 +1361,61 @@ private fun modeLabel(mode: SidebarMode, names: Map<SidebarMode, String>, needsY
 }
 
 /**
- * The app's mark and name over the gateway in use, its dot showing the connection, and Settings; then the
- * search pill. The name and gateway open the account sheet.
+ * The app's name over the gateway in use, its dot showing the connection, and Settings; then the
+ * search pill. With more than one profile, the name and gateway open a menu of them; otherwise the account sheet.
  */
 @Composable
-private fun MainHeader(
+internal fun MainHeader(
     gatewayLabel: String,
     /** Null in previews, which have no connection to report. */
     connection: ConnectionState?,
     onAccount: () -> Unit,
     onSettings: () -> Unit,
     onSearch: (() -> Unit)?,
+    /** The gateway's profiles; with more than one, the header names the active one and opens them in a menu. */
+    profiles: List<Profile> = emptyList(),
+    /** The active profile's name, the launch profile's included. */
+    activeProfile: String? = null,
+    onProfile: (Profile) -> Unit = {},
+    onOpenGateways: () -> Unit = {},
+    /** The profile menu is opening. */
+    onOpenMenu: () -> Unit = {},
+    /** For previews: the profile menu drawn open. */
+    menuInitiallyOpen: Boolean = false,
 ) {
     val accountLabel = stringResource(Res.string.sessions_account_and_gateways)
     val connectionText = stringResource(connectionWord(connection))
+    val switching = profiles.size > 1
+    val active = profiles.firstOrNull { it.name == activeProfile }
+    var menuOpen by remember { mutableStateOf(menuInitiallyOpen) }
     Column {
         Row(
             Modifier.fillMaxWidth().clearOfWindowControls().padding(start = 18.dp, end = 6.dp, top = 6.dp, bottom = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(if (isDesktop) 4.dp else 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            AppMark(30.dp, glow = false)
             // On the desktop this strip is the window's title bar: only the name and gateway are a button, as wide
             // as they are, and the rest of the strip drags the window (a double-click maximises it). The Box takes
             // what Settings leaves, so a long gateway name can't push Settings off the strip.
             Box(Modifier.weight(1f)) {
+                // With profiles to switch between, they come first in a menu here, one tap from the list; the account
+                // sheet is the menu's last row. With one, a tap opens the account sheet as before.
+                DropdownMenu(
+                    expanded = menuOpen,
+                    onExpandedChange = { menuOpen = it },
+                    alignment = AnchorAlignment.Start,
+                    maxHeight = PROJECT_MENU_MAX_HEIGHT,
+                    items = {
+                        profiles.forEach { profile ->
+                            val picked = profile.name == activeProfile
+                            // A bot, as the account sheet's Profile row: the account row below is the person.
+                            MenuChoice(profile.label, Lucide.Bot, selected = picked, onClick = { if (!picked) onProfile(profile) })
+                        }
+                        MenuSeparator()
+                        MenuAction(stringResource(Res.string.sessions_switch_gateway), Lucide.ArrowLeftRight, onClick = onOpenGateways)
+                        MenuAction(accountLabel, Lucide.CircleUserRound, onClick = onAccount)
+                    },
+                ) {
                 Column(
                     Modifier
                         .then(if (isDesktop) Modifier.widthIn(max = 200.dp) else Modifier.fillMaxWidth())
@@ -1324,11 +1423,20 @@ private fun MainHeader(
                         .clip(RoundedCornerShape(Theme[radii][radiusSmall]))
                         .handCursor()
                         .clickable(
-                            onClickLabel = accountLabel,
-                            role = Role.Button,
+                            onClickLabel = if (switching) stringResource(Res.string.sessions_switch_profile) else accountLabel,
+                            role = if (switching) Role.DropdownList else Role.Button,
                             interactionSource = null,
                             indication = if (isDesktop) rememberHoverIndication(Theme[colors][text]) else LocalIndication.current,
-                            onClick = onAccount,
+                            onClick = {
+                                when {
+                                    !switching -> onAccount()
+                                    menuOpen -> menuOpen = false
+                                    else -> {
+                                        menuOpen = true
+                                        onOpenMenu()
+                                    }
+                                }
+                            },
                         )
                         .then(if (isDesktop) Modifier.padding(horizontal = 6.dp) else Modifier)
                         .semantics(mergeDescendants = true) { stateDescription = connectionText },
@@ -1336,7 +1444,8 @@ private fun MainHeader(
                 ) {
                     Text(
                         "Kyllene",
-                        style = Theme[typography][heading].copy(fontSize = 17.sp, lineHeight = 21.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-0.02).em),
+                        // The name alone, without the mark beside it, so it carries the header.
+                        style = Theme[typography][heading].copy(fontSize = 22.sp, lineHeight = 27.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-0.02).em),
                         color = Theme[colors][text],
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -1351,8 +1460,26 @@ private fun MainHeader(
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f, fill = false),
                         )
-                        UnstyledIcon(Lucide.ChevronDown, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(12.dp))
+                        // The profile takes what it needs up to a cap, and the gateway the rest: a long name of
+                        // either is cut short and the chevron always shows.
+                        if (switching && active != null) {
+                            Text(
+                                "· ${active.label}",
+                                style = Theme[typography][caption].copy(fontSize = 12.sp),
+                                color = Theme[colors][textSecondary],
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.widthIn(max = PROFILE_NAME_MAX_WIDTH),
+                            )
+                        }
+                        UnstyledIcon(
+                            if (menuOpen) Lucide.ChevronUp else Lucide.ChevronDown,
+                            contentDescription = null,
+                            tint = Theme[colors][textTertiary],
+                            modifier = Modifier.size(12.dp),
+                        )
                     }
+                }
                 }
             }
             val settingsWord = stringResource(Res.string.common_settings)
@@ -1384,6 +1511,9 @@ internal fun connectionWord(connection: ConnectionState?): StringResource = when
     is ConnectionState.Reconnecting -> Res.string.sessions_connection_reconnecting
     is ConnectionState.Connecting, ConnectionState.Idle -> Res.string.sessions_connection_connecting
 }
+
+/** The most the header's profile name takes, so the gateway's keeps some room beside it. */
+private val PROFILE_NAME_MAX_WIDTH = 120.dp
 
 /** How tall the search pill is drawn; the touch target around it can be taller. */
 private val SEARCH_PILL_HEIGHT = 40.dp
@@ -1562,16 +1692,63 @@ internal class NavLink(
     val onClick: () -> Unit,
 )
 
+/** The sidebar's pages that have a button above the chats, in the order they're shown. */
+internal val NAV_PAGES = listOf(
+    SidebarPage.Inbox,
+    SidebarPage.Scheduled,
+    SidebarPage.Insights,
+    SidebarPage.Capabilities,
+    SidebarPage.Plugins,
+    SidebarPage.Config,
+    SidebarPage.Archived,
+)
+
+/**
+ * The pages that can have a button in the sidebar on [desktop] or a phone. The Inbox goes by a phone's push
+ * registration (Notifications anywhere), which a desktop has none of, so it would only ever say it can't load.
+ */
+internal fun navPages(desktop: Boolean): List<SidebarPage> = NAV_PAGES.filter { !(desktop && it == SidebarPage.Inbox) }
+
+/** The page buttons the sidebar shows, in order, as [settings] leave them; all of them before the settings are read. */
+internal fun shownNavPages(settings: AppSettings?, desktop: Boolean): List<SidebarPage> =
+    navPages(desktop).filter { settings?.showsSidebarPage(it.name) ?: true }
+
+/** A sidebar page's icon, on its button and in Settings › Sidebar pages. */
+internal fun navIcon(page: SidebarPage): ImageVector = when (page) {
+    SidebarPage.Chats -> Lucide.MessagesSquare
+    SidebarPage.Bots -> Lucide.Bot
+    SidebarPage.Inbox -> Lucide.Inbox
+    SidebarPage.Scheduled -> Lucide.CalendarClock
+    SidebarPage.Insights -> Lucide.ChartColumn
+    SidebarPage.Capabilities -> Lucide.Blocks
+    SidebarPage.Plugins -> Lucide.Puzzle
+    SidebarPage.Config -> Lucide.SlidersHorizontal
+    SidebarPage.Archived -> Lucide.Archive
+}
+
+/** A sidebar page's name on its button and in Settings › Sidebar pages. */
+internal fun navLabel(page: SidebarPage): StringResource = when (page) {
+    SidebarPage.Chats -> Res.string.sessions_mode_chats
+    SidebarPage.Bots -> Res.string.sessions_mode_bots
+    SidebarPage.Inbox -> Res.string.sessions_nav_inbox
+    SidebarPage.Scheduled -> Res.string.sessions_nav_scheduled
+    SidebarPage.Insights -> Res.string.sessions_nav_insights
+    SidebarPage.Capabilities -> Res.string.sessions_nav_capabilities
+    SidebarPage.Plugins -> Res.string.sessions_nav_plugins
+    SidebarPage.Config -> Res.string.sessions_nav_config
+    SidebarPage.Archived -> Res.string.sessions_nav_archived
+}
+
 /** The sidebar's pages as tiles, two to a row; on the desktop one under another, as a desktop sidebar lists its places. */
 @Composable
-private fun NavGrid(links: List<NavLink>) {
+private fun NavGrid(links: List<NavLink>, inset: Dp = 6.dp) {
     if (isDesktop) {
-        Column(Modifier.padding(start = 6.dp, end = 6.dp, bottom = 10.dp)) {
+        Column(Modifier.padding(start = inset, end = inset, bottom = 10.dp)) {
             links.forEach { NavTile(it, Modifier.fillMaxWidth()) }
         }
         return
     }
-    Column(Modifier.padding(start = 6.dp, end = 6.dp, bottom = 10.dp)) {
+    Column(Modifier.padding(start = inset, end = inset, bottom = 10.dp)) {
         links.chunked(2).forEach { pair ->
             // A tile whose label wraps keeps its neighbour the same height.
             Row(Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -2844,7 +3021,7 @@ private fun Project.hasOptions(canMake: Boolean): Boolean = !isNoProject && (isU
  * Tallest the projects menu gets before it scrolls, so many projects are a menu, not a wall: the 4dp top padding
  * and 8½ rows of 48dp, so the last row shows cut in half and the menu reads as one that goes on.
  */
-private val PROJECT_MENU_MAX_HEIGHT = 412.dp
+internal val PROJECT_MENU_MAX_HEIGHT = 412.dp
 
 /**
  * The gateway's projects behind one button, as Desktop's sidebar groups chats: the button names the picked
@@ -2955,7 +3132,7 @@ private fun RowScope.ProjectMenuButton(projects: List<Project>, selected: Projec
 }
 
 /** A project's icon in the projects menu and on its button: Home a house, all projects a stack, the rest a folder. */
-private fun projectIcon(project: Project?): ImageVector = when {
+internal fun projectIcon(project: Project?): ImageVector = when {
     project == null -> Lucide.Folders
     project.isNoProject -> Lucide.House
     else -> Lucide.Folder

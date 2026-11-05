@@ -20,7 +20,7 @@ import dev.hermeskotlin.designsystem.components.verticalScrollWithBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -81,7 +81,8 @@ internal fun ToolRow(tool: ToolActivity, messageKey: String? = null) {
         CommentSource(it, "the $part of your ${tool.name} tool call$what", code = true)
     }
     val hasDetails = tool.input != null || tool.output != null || tool.diff != null || tool.risk != null
-    var expanded by remember(tool.id) { mutableStateOf(false) }
+    // Saved: what was opened stays open when the activity is made again, as on unfolding a foldable.
+    var expanded by rememberSaveable(tool.id) { mutableStateOf(false) }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(
             Modifier

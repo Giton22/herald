@@ -54,8 +54,8 @@ private data class FolderEntry(
 private data class UploadReply(val path: String = "")
 
 /**
- * Puts a file too large for one WebSocket message on the gateway over HTTP, for `file.attach` or
- * `pdf.attach` to take by its path (`POST /api/files/upload-stream`, hermes_cli/web_routers/files.py,
+ * Puts a file too large for one WebSocket message on the gateway over HTTP, for `file.attach` to take
+ * by its path (`POST /api/files/upload-stream`, hermes_cli/web_routers/files.py,
  * on every gateway since v2026.7.1, up to 100 MiB). It goes in a folder of its own under the managed
  * files' default folder (`GET /api/files`: the gateway user's home, or the locked root), under its own
  * name, which is the name `file.attach` gives its copy; [discard] removes the folder once it's attached.

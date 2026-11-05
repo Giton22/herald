@@ -184,6 +184,8 @@ fun BotsRoster(
     actions: BotActions,
     onRetry: () -> Unit,
     onDismissNotice: () -> Unit,
+    /** Drawn above everything else in the list, scrolling with it: the sidebar's page buttons when it has no switch. */
+    top: (@Composable () -> Unit)? = null,
     /** Bots that can't work until something is fixed, by profile. */
     troubles: Map<String, BotTrouble> = emptyMap(),
     /** Each bot's routine whose last run went wrong, by profile. */
@@ -265,6 +267,7 @@ fun BotsRoster(
             // Room to scroll the last cards out from under the floating footer.
             contentPadding = PaddingValues(start = 14.dp, end = 14.dp, top = 4.dp, bottom = 96.dp),
         ) {
+            if (top != null) item(key = "top") { top() }
             // Row keys carry a ':', which no profile name has, so a bot named like a key can't collide.
             items(needsYou, key = { "needs:${it.bot.name}" }) { item ->
                 NeedsYouCard(
