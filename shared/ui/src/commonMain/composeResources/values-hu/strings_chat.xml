@@ -416,6 +416,10 @@
     <string name="chat_greeting_place_default">Hermes itt: %1$s · alapprofil</string>
     <string name="chat_greeting_profile">Hermes · %1$s profil</string>
     <string name="chat_greeting_default">Hermes · alapprofil</string>
+    <string name="chat_greeting_question_in">Mit fogunk építeni\nitt: %1$s?</string>
+    <string name="chat_greeting_home">Kezdőlap</string>
+    <string name="chat_greeting_choose_project">Projekt kiválasztása</string>
+    <string name="chat_greeting_choose_place">Profil vagy gateway kiválasztása</string>
     <string name="chat_attach">Csatolás</string>
     <string name="chat_voice_chat">Hangalapú csevegés</string>
     <string name="chat_dictate">Diktálás</string>

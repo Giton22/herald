@@ -88,10 +88,20 @@ private const val TITLE = "Kyllene"
 /** ⌘ stands where Ctrl does elsewhere. */
 private val mac = System.getProperty("os.name").orEmpty().startsWith("Mac")
 
+/**
+ * macOS's own dialogs (+ attach, Export's Save) stay light Aqua unless told otherwise, whatever the screens show:
+ * they follow the system's appearance instead. AWT reads this once as it starts, so it's set before anything else.
+ * Kyllene's own theme can't be read that early: it's in storage that may first ask to be unlocked, with a dialog.
+ */
+internal fun followSystemAppearance(osName: String?) {
+    if (osName.orEmpty().startsWith("Mac")) System.setProperty("apple.awt.application.appearance", "system")
+}
+
 /** A chat in a window of its own; [raise] goes up when it's asked for again. */
 private data class PoppedChat(val target: ChatTarget, val key: Int, val raise: Int = 0)
 
 fun main(args: Array<String>) {
+    followSystemAppearance(System.getProperty("os.name"))
     // An error that ends the app ends the process too: Compose exits only when the app closes normally, and the
     // gateway's socket would otherwise keep Herald running with no window, its tray icon and the one-Herald lock
     // still held, so the next launch could only ask it to come forward. What went wrong goes to crash.log.
@@ -230,12 +240,19 @@ fun main(args: Array<String>) {
             }
         }
         LaunchedEffect(Unit) { DesktopNotifier(koin.get(), settingsStore, focused, post).start(this) }
-        // Ctrl+Shift+Space from any app, while the setting is on.
+        // The global shortcut from any app, while the setting is on.
         DisposableEffect(settings.quickEntry) {
-            val hotkey = if (settings.quickEntry) GlobalHotkey.register { SwingUtilities.invokeLater { quickOpen = true } } else null
+            var disposed = false
+            // Turning it on starts a request at once, so the row says so rather than "when this is on" next to an on switch.
+            QuickEntryHotkey.status = if (System.getProperty("os.name") == "Linux") {
+                QuickEntryHotkey.Status(if (settings.quickEntry) QuickEntryHotkey.State.Binding else QuickEntryHotkey.State.Off)
+            } else null
+            val hotkey = if (settings.quickEntry) GlobalHotkey.register(onStatus = { status ->
+                SwingUtilities.invokeLater { if (!disposed) QuickEntryHotkey.status = status }
+            }) { SwingUtilities.invokeLater { if (!disposed) quickOpen = true } } else null
             // Off where Windows has none for us (another platform) is no news; held by another app, Settings says so.
             QuickEntryHotkey.taken = settings.quickEntry && hotkey == null && System.getProperty("os.name").orEmpty().startsWith("Windows")
-            onDispose { hotkey?.unregister() }
+            onDispose { disposed = true; hotkey?.unregister() }
         }
 
         Tray(
@@ -327,6 +344,8 @@ fun main(args: Array<String>) {
                             releasesRepo = System.getProperty("herald.releasesRepo"),
                             onDarkTheme = { titleBar?.dark(it) },
                             titleBar = titleBar?.forScreens(),
+                            // Signed out of a gateway, or left for another: its chats' windows close, calls and all.
+                            onSessionEnded = { url -> chatWindows.removeAll { it.target.gateway.url == url } },
                         )
                     }
                 }

@@ -1,6 +1,7 @@
 package dev.hermeskotlin.ui.chat
 
 import dev.hermeskotlin.ui.fullScreenDialogProperties
+import dev.hermeskotlin.ui.clearOfWindowControls
 import dev.hermeskotlin.ui.isDesktop
 import dev.hermeskotlin.ui.resources.*
 import org.jetbrains.compose.resources.getString
@@ -336,6 +337,7 @@ internal fun ImageViewer(image: ViewerImage, onDismiss: () -> Unit) {
                 Modifier
                     .fillMaxWidth()
                     .background(Color.Black.copy(alpha = 0.55f))
+                    .clearOfWindowControls()
                     .windowInsetsPadding(WindowInsets.safeDrawing)
                     .padding(horizontal = 8.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
