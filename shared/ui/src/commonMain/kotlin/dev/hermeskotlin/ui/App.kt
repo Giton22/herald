@@ -864,6 +864,7 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
         items = if (!paletteOpen) emptyList() else paletteItems(
             chats = listedChats,
             bots = roster.all,
+            modeSwitch = settings.sidebarModeSwitch,
             commands = HomeCommands(
                 newChat = {
                     app.newChat()
