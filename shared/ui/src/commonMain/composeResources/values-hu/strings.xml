@@ -257,4 +257,20 @@
         <item quantity="one">%2$d közül %1$d látható.</item>
         <item quantity="other">%2$d közül %1$d látható.</item>
     </plurals>
+    <string name="managed_update_available">Frissítés érhető el az alkalmazás szoftverforrásából.</string>
+    <string name="managed_update_ready">Egy frissítés telepítve van. Indítsd újra, amikor készen állsz.</string>
+    <string name="managed_update_empty">Nem volt telepíthető frissítés.</string>
+    <string name="managed_update_cancelled">A frissítési kérés megszakítva. Lehet, hogy már befejeződött; ellenőrizd a rendszer frissítési eszközeivel.</string>
+    <string name="managed_update_progress">Frissítés… %1$d%</string>
+    <string name="managed_update_working">Folyamatban…</string>
+    <string name="managed_update_denied">A rendszer nem engedélyezte ezt a frissítést. Engedélyezd az adatvédelmi beállításokban, vagy használd a rendszer frissítési eszközeit.</string>
+    <string name="managed_update_system">A rendszer frissítési eszközeivel ellenőrizd és telepítsd a frissítést, beleértve az engedélyek változásait is.</string>
+    <string name="managed_update_uncertain">A frissítés eredménye ismeretlen. Újabb próbálkozás előtt ellenőrizd a rendszer frissítési eszközeivel.</string>
+    <string name="managed_update_restart_failed">Az újraindítás nem igazolható. Fejezd be a munkád, lépj ki a Kyllene alkalmazásból, majd nyisd meg újra.</string>
+    <string name="managed_update_unavailable">Az alkalmazásfrissítés itt nem érhető el. Használd a rendszer frissítési eszközeit.</string>
+    <string name="managed_update_failed">A frissítés sikertelen. Próbáld újra, vagy használd a rendszer frissítési eszközeit.</string>
+    <string name="managed_update_restart">Újraindítás</string>
+    <string name="managed_update_restart_title">Újraindítod a Kyllene alkalmazást?</string>
+    <string name="managed_update_restart_warning">Fejezd be a hívásokat és mentsd a munkád. Az újraindítás minden ablakot bezár; a nem mentett változások és mellékletek elveszhetnek.</string>
+    <string name="managed_update_restart_now">Újraindítás most</string>
 </resources>

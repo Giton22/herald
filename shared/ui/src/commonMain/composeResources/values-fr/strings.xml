@@ -257,4 +257,20 @@
         <item quantity="one">%1$d sur %2$d affichée.</item>
         <item quantity="other">%1$d sur %2$d affichées.</item>
     </plurals>
+    <string name="managed_update_available">Une mise à jour est disponible depuis la source logicielle de cette application.</string>
+    <string name="managed_update_ready">Une mise à jour est installée. Redémarrez quand vous le souhaitez.</string>
+    <string name="managed_update_empty">Aucune mise à jour n’était à installer.</string>
+    <string name="managed_update_cancelled">La demande de mise à jour a été annulée. Elle est peut-être déjà terminée ; vérifiez avec les outils de mise à jour du système.</string>
+    <string name="managed_update_progress">Mise à jour… %1$d %</string>
+    <string name="managed_update_working">Traitement en cours…</string>
+    <string name="managed_update_denied">Le système n’a pas autorisé cette mise à jour. Autorisez-la dans les paramètres de confidentialité ou utilisez les outils du système.</string>
+    <string name="managed_update_system">Utilisez les outils de mise à jour du système pour vérifier et installer cette mise à jour, y compris les changements d’autorisations.</string>
+    <string name="managed_update_uncertain">Le résultat de la mise à jour est inconnu. Vérifiez-le avec les outils du système avant de réessayer.</string>
+    <string name="managed_update_restart_failed">Le redémarrage n’a pas pu être confirmé. Terminez votre travail, quittez Kyllene et rouvrez-le.</string>
+    <string name="managed_update_unavailable">Les mises à jour de l’application sont indisponibles ici. Utilisez les outils de mise à jour du système.</string>
+    <string name="managed_update_failed">La mise à jour a échoué. Réessayez ou utilisez les outils de mise à jour du système.</string>
+    <string name="managed_update_restart">Redémarrer</string>
+    <string name="managed_update_restart_title">Redémarrer Kyllene ?</string>
+    <string name="managed_update_restart_warning">Terminez les appels et enregistrez votre travail. Le redémarrage ferme toutes les fenêtres ; les modifications et pièces jointes non enregistrées risquent d’être perdues.</string>
+    <string name="managed_update_restart_now">Redémarrer maintenant</string>
 </resources>
