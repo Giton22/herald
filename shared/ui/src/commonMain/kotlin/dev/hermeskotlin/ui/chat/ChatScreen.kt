@@ -505,7 +505,12 @@ fun ChatScreen(
         // Preserve the actual reading position and remember a turn still running while away.
         viewModel.markLooked()
     }
-    LifecycleEventEffect(Lifecycle.Event.ON_START) { viewModel.onScreen(true) }
+    LifecycleEventEffect(Lifecycle.Event.ON_START) {
+        viewModel.onScreen(true)
+        // The way back in sight is the only moment a chat that missed live events asks again: a socket that
+        // never reported a drop leaves the connection Connected, so no attach catches up on its own.
+        viewModel.resync()
+    }
     // A room replacing the chat takes it off screen without a stop; a reply read aloud stops with it, but not
     // with a turn of the phone.
     DisposableEffect(viewModel) {
