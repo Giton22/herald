@@ -265,11 +265,12 @@ fun readAloudText(reply: String): String =
  * to the gateway's voice, and a piece is made while the one before it plays, so it has to be ready before that
  * one ends: growing from the real length, not the limit, keeps a short first sentence from being followed by a
  * piece too long to make in time. A 1,750-char reply of ordinary sentences is 4 pieces (6 at a flat 400).
+ * [maxChars] keeps the longest piece at about 80 s of speech, inside the 120 s a speak request is given.
  *
  * A sentence longer than the piece it would go in (a list without full stops, say) is cut at its spaces, so it
  * neither delays the first words nor passes [maxChars]; only a single word longer than the limit stays whole.
  */
-fun speechChunks(text: String, maxChars: Int = 2000, firstChars: Int = 160, growth: Double = 3.0): List<String> {
+fun speechChunks(text: String, maxChars: Int = 1200, firstChars: Int = 160, growth: Double = 3.0): List<String> {
     val sentences = Regex("""[^.!?]+(?:[.!?]+["')\]]*|$)\s*""").findAll(text).map { it.value.trim() }.filter { it.isNotEmpty() }.toList()
     val chunks = mutableListOf<String>()
     val current = StringBuilder()

@@ -80,7 +80,7 @@ class SpeechTest {
     fun piecesNeverPassTheCap() {
         val text = "Opener. " + "Every one of these sentences is the same length. ".repeat(200)
         val chunks = speechChunks(text)
-        assertTrue(chunks.drop(3).isNotEmpty() && chunks.all { it.length <= 2000 })
+        assertTrue(chunks.drop(3).isNotEmpty() && chunks.all { it.length <= 1200 })
         assertEquals(text.trim(), chunks.joinToString(" "))
     }
 
@@ -90,7 +90,7 @@ class SpeechTest {
         val list = (1..400).joinToString("\n") { "- item number $it on the list" }
         val chunks = speechChunks(list)
         assertTrue(chunks.first().length <= 160, "first piece ${chunks.first().length}")
-        assertTrue(chunks.all { it.length <= 2000 })
+        assertTrue(chunks.all { it.length <= 1200 })
         chunks.zipWithNext { before, piece -> assertTrue(piece.length <= maxOf(160, before.length * 3), "${before.length} then ${piece.length}") }
         assertEquals(list.split(Regex("""\s+""")).joinToString(" "), chunks.joinToString(" "))
 
