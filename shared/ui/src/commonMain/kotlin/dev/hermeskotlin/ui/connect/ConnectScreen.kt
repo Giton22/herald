@@ -24,6 +24,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -164,11 +165,14 @@ internal fun ConnectView(
 ) {
     val result = state.result
     val parsed = GatewayUrl.parseOrNull(url.text.toString())
-    val requested = url.text.toString()
-    val picker = key(requested) {
-        val host = parsed?.takeIf { !isDesktop || it.value.startsWith("https://") }?.host
-        rememberClientCertPicker(host, parsed?.port ?: -1, onPicked = { alias ->
-            if (alias != null && url.text.toString() == requested) cert.onPick(alias)
+    // A certificate is picked for a host: typing a path or fixing a typo elsewhere keeps the picker (and an import
+    // under way), and a pick that finishes after the host changed isn't applied to the new one.
+    val host = parsed?.takeIf { !isDesktop || it.value.startsWith("https://") }?.host
+    val port = parsed?.port ?: -1
+    val currentTarget by rememberUpdatedState(host to port)
+    val picker = key(host, port) {
+        rememberClientCertPicker(host, port, onPicked = { alias ->
+            if (alias != null && currentTarget == (host to port)) cert.onPick(alias)
         })
     }
     ScreenScaffold {
