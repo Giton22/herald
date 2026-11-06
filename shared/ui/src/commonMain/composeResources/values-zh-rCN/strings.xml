@@ -72,6 +72,17 @@
     <string name="wallpaper_strong">浓</string>
     <string name="settings_projects_as_list">项目以列表显示</string>
     <string name="settings_projects_as_list_detail">将对话列表中的项目显示为一个打开列表的按钮，而不是一排横向滚动的标签。</string>
+    <string name="settings_sidebar_switch">对话/机器人切换</string>
+    <string name="settings_sidebar_switch_detail">侧边栏顶部的切换。关闭后，侧边栏只显示你选择的视图。</string>
+    <string name="settings_sidebar_view">侧边栏显示</string>
+    <string name="settings_sidebar_view_detail">切换隐藏时，侧边栏始终显示此视图。</string>
+    <string name="settings_sidebar_pages">侧边栏页面</string>
+    <string name="settings_sidebar_pages_intro">侧边栏中对话上方的按钮，例如定时任务和已归档。隐藏某个页面只会移除它的按钮。</string>
+    <string name="settings_sidebar_pages_show">显示页面按钮</string>
+    <string name="settings_sidebar_pages_show_detail">关闭后，侧边栏不显示任何页面按钮，直接从你的对话开始。</string>
+    <string name="settings_sidebar_pages_each">页面</string>
+    <string name="settings_sidebar_pages_off">已隐藏。</string>
+    <string name="settings_sidebar_pages_all">全部显示。</string>
     <string name="settings_running_send">回复进行中时，发送…</string>
     <string name="settings_running_send_detail">%1$s。长按发送可为单条消息换一种方式。</string>
     <string name="running_send_steer">加入正在进行的回复</string>
@@ -82,6 +93,8 @@
     <string name="running_send_stop_and_send_label">停止并发送</string>
     <string name="settings_start_instruction">开场指令</string>
     <string name="settings_start_instruction_none">无。先告诉每个新对话一些事，比如回复要简短。</string>
+    <string name="settings_use_last_project">使用上次的项目</string>
+    <string name="settings_use_last_project_detail">新对话在你上次在此开始的对话所在的项目中开始，按网关和配置分别记住。</string>
     <string name="settings_show_reasoning">显示推理过程</string>
     <string name="settings_show_reasoning_detail">模型的思考过程，折叠在每条回复上方。</string>
     <string name="settings_show_tool_activity">显示工具活动</string>
@@ -201,6 +214,14 @@
     <string name="settings_quick_entry">快速输入</string>
     <string name="settings_quick_entry_detail">在任何应用中按 %1$s 都会打开一个小输入框向 Hermes 提问，可在新对话或当前对话中。目前仅支持 Windows。</string>
     <string name="settings_quick_entry_taken">另一个应用正在使用这些按键，所以无法打开。</string>
+    <string name="settings_quick_entry_detail_portal">在任何应用中按桌面快捷键都会打开一个小输入框向 Hermes 提问，可在新对话或当前对话中。</string>
+    <string name="settings_quick_entry_off">开启后，桌面会询问要使用哪个快捷键。</string>
+    <string name="settings_quick_entry_binding">请在桌面的权限对话框中选择一个快捷键。</string>
+    <string name="settings_quick_entry_bound">桌面快捷键：%1$s。</string>
+    <string name="settings_quick_entry_desktop_choice">由桌面选择</string>
+    <string name="settings_quick_entry_unassigned">桌面没有为它分配按键。请在桌面的快捷键设置中选择一个。</string>
+    <string name="settings_quick_entry_declined">桌面未授予快捷键。关闭再开启快速输入即可重试。</string>
+    <string name="settings_quick_entry_unavailable">此桌面的全局快捷键门户不可用。</string>
     <string name="settings_zoom">缩放</string>
     <string name="settings_zoom_detail">%1$d%。%2$s 和 %3$s 可在任何地方调整；%4$s 恢复到 100%。</string>
     <string name="settings_zoom_smaller">缩小</string>
@@ -230,5 +251,8 @@
     <string name="update_downloading">正在下载…</string>
     <plurals name="settings_phone_tools_count">
         <item quantity="other">已开启 %1$d 个工具。</item>
+    </plurals>
+    <plurals name="settings_sidebar_pages_count">
+        <item quantity="other">显示 %1$d 个，共 %2$d 个。</item>
     </plurals>
 </resources>

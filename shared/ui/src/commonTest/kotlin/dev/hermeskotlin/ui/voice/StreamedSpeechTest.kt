@@ -156,6 +156,11 @@ class StreamedSpeechTest {
 
     /** [canHold]: the voice holds when someone seems to cut in; [holds] is each hold and letting go. */
     private class Player(val fails: Boolean = false, val canHold: Boolean = false) : SpeechPlayer {
+        var audioOpen = false
+        override fun chainedChatAudio(): () -> Unit {
+            audioOpen = true
+            return { audioOpen = false }
+        }
         val holds = mutableListOf<Boolean>()
         override fun hold(on: Boolean): Boolean {
             holds += on
@@ -258,6 +263,39 @@ class StreamedSpeechTest {
         voice.startChat(session, gateway, "rin")
         socket.submits.first { it.isNotEmpty() }
         return Setup(socket, voice, player, spoken)
+    }
+
+    @Test
+    fun chainedAudioIsOpenBeforeTheReplyAndClosedOnEnd() = runTest {
+        val player = Player()
+        val setup = chat(Stream(), player)
+        assertTrue(player.audioOpen)
+        setup.voice.stopChat()
+        assertFalse(player.audioOpen)
+        yield()
+        assertFalse(player.audioOpen)
+    }
+
+    /** Ended without End: saying "stop" lets the route go too. */
+    @Test
+    fun chainedAudioIsClosedWhenTheChatEndsItself() = runTest {
+        val recorder = CutsIn()
+        val stream = Stream()
+        val player = Player()
+        val setup = chat(player = player, recorder = recorder, transcripts = listOf("How was your day?", "stop")) { stream }
+        assertTrue(player.audioOpen)
+
+        setup.socket.event("message.start")
+        setup.socket.event("message.delta", """{"text":"It was a long day. "}""")
+        stream.appended.first { it.isNotEmpty() }
+        stream.gateway.send(SpeechStreamEvent.Start(sampleRate = 24_000))
+        stream.gateway.send(SpeechStreamEvent.Audio(byteArrayOf(1, 0, 2, 0)))
+        setup.voice.chat.first { it.phase == VoicePhase.Speaking }
+        recorder.listening.first { it >= 1 }
+        recorder.cut.complete(Unit)
+
+        setup.voice.chat.first { it.phase == VoicePhase.Off }
+        assertFalse(player.audioOpen)
     }
 
     @Test

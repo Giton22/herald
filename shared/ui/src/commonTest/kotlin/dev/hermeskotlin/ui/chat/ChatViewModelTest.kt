@@ -105,7 +105,7 @@ class ChatViewModelTest {
     }
 
     /** A gateway socket that says it's ready and answers every call with an empty result. */
-    private class ReadyGateway : RpcTransport {
+    private class ReadyGateway(private val sent: MutableList<String>) : RpcTransport {
         private val inbound = Channel<String>(Channel.UNLIMITED).apply {
             trySend("""{"jsonrpc":"2.0","method":"event","params":{"type":"gateway.ready","payload":{}}}""")
         }
@@ -113,6 +113,7 @@ class ChatViewModelTest {
         override val incoming: Flow<String> = inbound.receiveAsFlow()
 
         override suspend fun send(text: String) {
+            sent += text
             val id = Json.parseToJsonElement(text).jsonObject["id"] ?: return
             inbound.send("""{"jsonrpc":"2.0","id":$id,"result":{}}""")
         }
@@ -124,6 +125,9 @@ class ChatViewModelTest {
 
     /** The connection of the last [viewModel]; [GatewayConnection.start] connects it to a [ReadyGateway]. */
     private lateinit var connection: GatewayConnection
+
+    /** Every frame the app sent on the gateway socket. */
+    private val sent = mutableListOf<String>()
 
     private fun viewModel(drafts: DraftStore = DraftStore(InMemoryKeyValueStore()), fileReads: MutableList<Pair<String, String?>>? = null,
         seenStore: SeenStore? = null,
@@ -143,7 +147,7 @@ class ChatViewModelTest {
             else respond("{}", HttpStatusCode.OK, json)
         }
         val client = createHttpClient(MockEngine(engine), cookies)
-        connection = GatewayConnection(AuthApi(client, cookies), { _, _ -> ReadyGateway() }, scope)
+        connection = GatewayConnection(AuthApi(client, cookies), { _, _ -> ReadyGateway(sent) }, scope)
         val sessions = SessionsApi(client)
         val chatHost = ChatHost(connection, sessions, scope)
         val vm = ChatViewModel(
@@ -271,6 +275,28 @@ class ChatViewModelTest {
         vm.open(ChatTarget(gateway, null, null, nonce = 2, draft = ComposeDraft(attachments = listOf(attachment("p")))))
 
         assertEquals(listOf("p"), vm.attachments.value.map { it.id })
+    }
+
+    @Test
+    fun pickingAProjectKeepsTheNewChatAndStartsItThere() = runTest(dispatcher) {
+        val (vm, host) = viewModel()
+        connection.start(gateway.gatewayUrl)
+        vm.connectionState.first { it is ConnectionState.Connected }
+        val fresh = ChatTarget(gateway, null, null, nonce = 1)
+        vm.open(fresh)
+        val chat = assertNotNull(host.session.value)
+        vm.composer.setTextAndPlaceCursorAtEnd("half typed")
+        vm.addAttachments(listOf(attachment("a")))
+
+        // The greeting's project menu moves the chat before anything was sent in it.
+        vm.open(fresh.copy(cwd = "/srv/site"))
+
+        assertSame(chat, host.session.value)
+        assertEquals("half typed", vm.composer.text.toString())
+        assertEquals(listOf("a"), vm.attachments.value.map { it.id })
+        vm.send(null)
+        val create = sent.map { Json.parseToJsonElement(it).jsonObject }.first { it["method"]?.toString() == "\"session.create\"" }
+        assertEquals("\"/srv/site\"", create["params"]?.jsonObject?.get("cwd")?.toString())
     }
 
     private val scribe = BotIdentity("scribe", "Scribe")

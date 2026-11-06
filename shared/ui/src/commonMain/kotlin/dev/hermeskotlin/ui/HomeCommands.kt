@@ -76,7 +76,13 @@ internal class HomeCommands(
  * keywords stay English: they're never shown, and only widen what a search finds beside the labels.
  */
 @Composable
-internal fun paletteItems(chats: List<SessionSummary>, bots: List<Bot>, commands: HomeCommands): List<PaletteItem> {
+internal fun paletteItems(
+    chats: List<SessionSummary>,
+    bots: List<Bot>,
+    commands: HomeCommands,
+    /** The sidebar has its Chats / Bots switch; without it, it shows only the view picked in Settings. */
+    modeSwitch: Boolean = true,
+): List<PaletteItem> {
     val go = stringResource(Res.string.app_palette_go_to)
     val chat = stringResource(Res.string.app_palette_this_chat)
     val pinnedGroup = stringResource(Res.string.app_palette_pinned)
@@ -106,6 +112,8 @@ internal fun paletteItems(chats: List<SessionSummary>, bots: List<Bot>, commands
         for ((page, icon, label) in pages) {
             // The Inbox goes by a phone's push registration, which a desktop has none of.
             if (page == SidebarPage.Inbox && isDesktop) continue
+            // Without the switch the sidebar stays on the view picked in Settings, so neither side is a place to go.
+            if (!modeSwitch && (page == SidebarPage.Chats || page == SidebarPage.Bots)) continue
             add(PaletteItem(go, label, icon, keywords = "sidebar page") { commands.fire(Shortcut.Go(page)) })
         }
         add(PaletteItem(go, settings, Lucide.Settings, keysLabel("Ctrl+,"), "preferences options", commands.settings))
