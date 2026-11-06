@@ -45,6 +45,8 @@
     <string name="voice_error_nothing_heard">Didn’t catch anything.</string>
     <string name="voice_error_voice_reply">Couldn’t voice the reply.</string>
     <string name="voice_error_play_reply">Couldn’t play the reply.</string>
+    <string name="voice_error_call_on">A call is on.</string>
+    <string name="voice_error_ended_elsewhere">Ended for a voice chat started on another screen.</string>
     <string name="voice_error_live_start">Couldn’t start the live call.</string>
     <string name="voice_error_live_vendor">GPT-Live couldn’t start: %1$s</string>
     <string name="voice_error_live_no_answer">GPT-Live sent no answer.</string>

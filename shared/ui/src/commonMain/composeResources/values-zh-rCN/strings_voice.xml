@@ -40,6 +40,8 @@
     <string name="voice_error_nothing_heard">没有听到声音。</string>
     <string name="voice_error_voice_reply">无法为回复配音。</string>
     <string name="voice_error_play_reply">无法播放回复。</string>
+    <string name="voice_error_call_on">正在通话中。</string>
+    <string name="voice_error_ended_elsewhere">已结束：另一个界面开始了语音对话。</string>
     <string name="voice_error_live_start">无法开始实时通话。</string>
     <string name="voice_error_live_vendor">GPT-Live 无法启动：%1$s</string>
     <string name="voice_error_live_no_answer">GPT-Live 没有发送回答。</string>

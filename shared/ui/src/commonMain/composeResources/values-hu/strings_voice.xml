@@ -40,6 +40,8 @@
     <string name="voice_error_nothing_heard">Nem hallatszott semmi.</string>
     <string name="voice_error_voice_reply">Nem sikerült felolvasni a választ.</string>
     <string name="voice_error_play_reply">Nem sikerült lejátszani a választ.</string>
+    <string name="voice_error_call_on">Hívás van folyamatban.</string>
+    <string name="voice_error_ended_elsewhere">Véget ért, mert egy másik képernyőn hangcsevegés indult.</string>
     <string name="voice_error_live_start">Nem sikerült elindítani az élő hívást.</string>
     <string name="voice_error_live_vendor">A GPT-Live nem tudott elindulni: %1$s</string>
     <string name="voice_error_live_no_answer">A GPT-Live nem küldött választ.</string>
