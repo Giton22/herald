@@ -108,6 +108,9 @@ class DesktopPdfTest {
         assertIs<PdfOpen.Ready>(openDesktopPdf(bytes)).pages.use {
             val pixels = assertNotNull(it.render(0, 612, 792)).toPixelMap()
             assertTrue((50..220).any { x -> (70..100).any { y -> pixels[x, y] != Color.White } })
+            // A page with no fill of its own is white paper, not the renderer's black clear colour.
+            assertEquals(Color.White, pixels[300, 500])
+            assertEquals(Color.White, pixels[5, 5])
         }
     }
 

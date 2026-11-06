@@ -59,6 +59,8 @@ internal object PdfWorker {
                     try {
                         graphics.color = Color.WHITE
                         graphics.fillRect(0, 0, width, height)
+                        // PDFBox clears the page with the background colour first, which is black by default.
+                        graphics.background = Color.WHITE
                         renderer.renderPageToGraphics(index, graphics, width / page.width(), height / page.height())
                     } finally {
                         graphics.dispose()
