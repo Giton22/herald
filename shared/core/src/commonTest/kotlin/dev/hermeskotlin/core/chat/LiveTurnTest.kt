@@ -141,6 +141,86 @@ class LiveTurnTest {
     }
 
     @Test
+    fun onlyTheLastFourToolsAreOnTheCardOldestFirst() {
+        val live = running(
+            ToolActivity("1", "read_file", running = false),
+            ToolActivity("2", "terminal", running = false),
+            ToolActivity("3", "patch", running = false),
+            ToolActivity("4", "web_extract", running = true),
+            ToolActivity("5", "browser", running = false, failed = true),
+            ToolActivity("6", "write_file", running = false),
+        ).liveTurn()!!
+        assertEquals(6, live.tools)
+        assertEquals(listOf("patch", "web_extract", "browser", "write_file"), live.recent.map { it.name })
+        assertEquals(
+            listOf(LiveToolState.Done, LiveToolState.Running, LiveToolState.Failed, LiveToolState.Done),
+            live.recent.map { it.state },
+        )
+    }
+
+    @Test
+    fun aFailedToolIsMarkedFailed() {
+        val live = running(ToolActivity("1", "web_extract", detail = "timed out", running = false, failed = true)).liveTurn()!!
+        assertEquals(LiveToolState.Failed, live.recent.single().state)
+        assertEquals("timed out", live.recent.single().line)
+    }
+
+    @Test
+    fun theToolLinesComeFromTheDetailAndThenANonJsonInput() {
+        val live = running(
+            ToolActivity("1", "read_file", detail = "LiveTurn.kt", running = false),
+            ToolActivity("2", "terminal", input = "  ./gradlew test\n./gradlew check", running = true),
+        ).liveTurn()!!
+        assertEquals(listOf("read_file", "terminal"), live.recent.map { it.name })
+        assertEquals(listOf("LiveTurn.kt", "./gradlew test"), live.recent.map { it.line })
+        assertEquals(listOf(LiveToolState.Done, LiveToolState.Running), live.recent.map { it.state })
+    }
+
+    @Test
+    fun theToolLinesSpanAMidTurnCorrection() {
+        val first = ChatMessage.Assistant(
+            key = "first",
+            tools = listOf(ToolActivity("1", "read_file", detail = "LiveTurn.kt", running = false)),
+            streaming = false,
+        )
+        val state = ChatState(
+            running = true,
+            messages = listOf(
+                ChatMessage.User(key = "prompt", text = "Fix it"),
+                first,
+                ChatMessage.Notice(key = "notice", text = "Correction received"),
+                reply(ToolActivity("2", "terminal", detail = "gradlew assembleDebug", running = true)),
+            ),
+        )
+        val live = state.liveTurn()!!
+        assertEquals(listOf("read_file", "terminal"), live.recent.map { it.name })
+        assertEquals(listOf("LiveTurn.kt", "gradlew assembleDebug"), live.recent.map { it.line })
+    }
+
+    @Test
+    fun theToolLinesSpanACorrectionAppendedAsAPrompt() {
+        val sealed = ChatMessage.Assistant(
+            key = "sealed",
+            tools = listOf(ToolActivity("1", "read_file", detail = "LiveTurn.kt", running = false)),
+            streaming = false,
+        )
+        val state = ChatState(
+            running = true,
+            messages = listOf(
+                ChatMessage.User(key = "prompt", text = "Fix it"),
+                sealed,
+                ChatMessage.User(key = "steer", text = "Also update the test"),
+                reply(ToolActivity("2", "terminal", detail = "gradlew assembleDebug", running = true)),
+            ),
+            correctedReplyKey = "sealed",
+        )
+        val live = state.liveTurn()!!
+        assertEquals(2, live.tools)
+        assertEquals(listOf("read_file", "terminal"), live.recent.map { it.name })
+        assertEquals(listOf("LiveTurn.kt", "gradlew assembleDebug"), live.recent.map { it.line })
+    }
+
+    @Test
     fun theCountSpansAMidTurnCorrection() {
         val first = ChatMessage.Assistant(
             key = "first",
