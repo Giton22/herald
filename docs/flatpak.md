@@ -200,9 +200,12 @@ not isolate selections: gateways sharing a hostname cannot independently choose
 different certificates. Both REST requests and WebSocket upgrades use this lookup;
 another hostname, redirects and embedded browsers do not receive the identity.
 Normal server trust and hostname checks remain enabled. The Linux client uses HTTP/1.1
-without idle connection reuse so subsequent requests cannot inherit an old
-selection; this trades connection reuse for selection isolation. Existing requests
-and WebSockets retain their original identity until they close or reconnect.
+and pools idle connections. Changing a selection drops the idle ones and the cached
+identity, so the next request handshakes with the new selection. As on Android, a
+request already running keeps its connection, which may be reused once afterwards;
+existing WebSockets retain their original identity until they close or reconnect.
+An imported identity is decrypted once per hostname and reopened after its
+certificate expires.
 
 Clearing a gateway's selection removes its alias; another pending or saved alias
 for the same hostname may still apply. It does not delete imported encrypted keys,
