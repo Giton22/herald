@@ -335,11 +335,14 @@ class SessionWatcherTest {
         watcher.chats.first { "a" in it }
         sockets.last().push(event("message.complete", "rt-a", """{"text":"Done.","status":"complete"}"""))
         runCurrent()
+        // A watched chat stops counting as working when its turn ends, for the card of other chats.
+        watcher.chats.first { it["a"]?.running == false }
 
         val start = async { watcher.turnStarts.first() }
         runCurrent()
         sockets.last().push(event("message.start", "rt-a"))
         assertEquals("a", start.await())
+        watcher.chats.first { it["a"]?.running == true }
     }
 
     @Test
