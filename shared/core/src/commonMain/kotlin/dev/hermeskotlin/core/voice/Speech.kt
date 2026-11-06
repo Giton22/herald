@@ -259,21 +259,49 @@ fun readAloudText(reply: String): String =
     speakableText(extractReplyMedia(reply).first).takeIf { text -> text.any { it.isLetterOrDigit() } }.orEmpty()
 
 /**
- * Cuts [text] into pieces of at most about [maxChars], at sentence ends where possible, so the first
- * piece can be spoken while the rest are still being synthesized. The first piece is kept short.
+ * Cuts [text] into pieces at sentence ends where possible, so the first piece can be spoken while the rest
+ * are still being synthesized. The first piece is kept short; each one after may be [growth] times the length
+ * of the piece actually made before it (never under [firstChars]), up to [maxChars]. Every piece is one request
+ * to the gateway's voice, and a piece is made while the one before it plays, so it has to be ready before that
+ * one ends: growing from the real length, not the limit, keeps a short first sentence from being followed by a
+ * piece too long to make in time. A 1,750-char reply of ordinary sentences is 4 pieces (6 at a flat 400).
+ * [maxChars] keeps the longest piece at about 80 s of speech, inside the 120 s a speak request is given.
+ *
+ * A sentence longer than the piece it would go in (a list without full stops, say) is cut at its spaces, so it
+ * neither delays the first words nor passes [maxChars]; only a single word longer than the limit stays whole.
  */
-fun speechChunks(text: String, maxChars: Int = 400, firstChars: Int = 160): List<String> {
+fun speechChunks(text: String, maxChars: Int = 1200, firstChars: Int = 160, growth: Double = 3.0): List<String> {
     val sentences = Regex("""[^.!?]+(?:[.!?]+["')\]]*|$)\s*""").findAll(text).map { it.value.trim() }.filter { it.isNotEmpty() }.toList()
     val chunks = mutableListOf<String>()
     val current = StringBuilder()
-    for (sentence in sentences) {
-        val limit = if (chunks.isEmpty()) firstChars else maxChars
-        if (current.isNotEmpty() && current.length + sentence.length + 1 > limit) {
-            chunks += current.toString()
-            current.clear()
-        }
+    var limit = minOf(firstChars, maxChars)
+    // The limit of the piece after this one: it grows from the piece actually made.
+    fun nextLimit() = minOf(maxChars, maxOf(firstChars, (current.length * growth).toInt()))
+    fun flush() {
+        chunks += current.toString()
+        limit = nextLimit()
+        current.clear()
+    }
+    fun append(part: String) {
         if (current.isNotEmpty()) current.append(' ')
-        current.append(sentence)
+        current.append(part)
+    }
+    for (sentence in sentences) {
+        if (current.length + (if (current.isEmpty()) 0 else 1) + sentence.length <= limit) {
+            append(sentence)
+            continue
+        }
+        // Too long for this piece: one that fits the next piece starts it; a longer one fills this piece word by
+        // word and goes on in the next.
+        if (current.isNotEmpty() && sentence.length <= nextLimit()) {
+            flush()
+            append(sentence)
+            continue
+        }
+        for (word in sentence.split(WHITESPACE)) {
+            if (current.isNotEmpty() && current.length + word.length + 1 > limit) flush()
+            append(word)
+        }
     }
     if (current.isNotEmpty()) chunks += current.toString()
     return chunks

@@ -54,6 +54,62 @@ class SpeechTest {
         assertEquals(text.trim(), chunks.joinToString(" "))
     }
 
+    @Test
+    fun laterPiecesGrowSoALongReplyTakesFewerRequests() {
+        val text = "Short opener here. " + "This sentence carries about fifty characters, yes. ".repeat(34)
+        val chunks = speechChunks(text)
+        assertTrue(chunks[0].length <= 160)
+        chunks.zipWithNext { before, piece -> assertTrue(piece.length <= maxOf(160, before.length * 3), "${before.length} then ${piece.length}") }
+        assertEquals(4, chunks.size, "a ${text.length}-char reply")
+        assertEquals(text.trim(), chunks.joinToString(" "))
+    }
+
+    @Test
+    fun aShortFirstPieceKeepsTheSecondOneShort() {
+        // A first sentence just under 100 chars makes a short first piece. The second piece grows from it, not from the
+        // 160 limit, so it's ready by the time the first one has been said.
+        val text = "The backup started on time and finished cleanly, with every folder copied and nothing skipped. " +
+            "Each folder was checked twice, and the logs showed no warnings at any point in the run. ".repeat(20)
+        val chunks = speechChunks(text)
+        assertTrue(chunks[0].length < 100)
+        assertTrue(chunks[1].length <= chunks[0].length * 3, "second piece ${chunks[1].length}")
+        assertEquals(text.trim(), chunks.joinToString(" "))
+    }
+
+    @Test
+    fun piecesNeverPassTheCap() {
+        val text = "Opener. " + "Every one of these sentences is the same length. ".repeat(200)
+        val chunks = speechChunks(text)
+        assertTrue(chunks.drop(3).isNotEmpty() && chunks.all { it.length <= 1200 })
+        assertEquals(text.trim(), chunks.joinToString(" "))
+    }
+
+    /** A list with no full stops is one long "sentence": it's cut at its spaces, so speech still starts soon. */
+    @Test
+    fun aLongSentenceIsCutAtItsSpaces() {
+        val list = (1..400).joinToString("\n") { "- item number $it on the list" }
+        val chunks = speechChunks(list)
+        assertTrue(chunks.first().length <= 160, "first piece ${chunks.first().length}")
+        assertTrue(chunks.all { it.length <= 1200 })
+        chunks.zipWithNext { before, piece -> assertTrue(piece.length <= maxOf(160, before.length * 3), "${before.length} then ${piece.length}") }
+        assertEquals(list.split(Regex("""\s+""")).joinToString(" "), chunks.joinToString(" "))
+
+        // A short opener and then a long sentence: the long one doesn't make the second piece too long to be ready.
+        val opened = speechChunks("Hi. " + "word ".repeat(180).trim())
+        assertTrue(opened.first().startsWith("Hi. word") && opened.first().length <= 160, opened.map { it.length }.toString())
+        assertTrue(opened[1].length <= opened[0].length * 3, opened.map { it.length }.toString())
+
+        // A long sentence that ends a short piece is judged against the next piece's limit, not the old one's.
+        val text = "a ".repeat(74) + "a. " + "b ".repeat(49) + "b. " + "c ".repeat(199) + "c."
+        val grown = speechChunks(text)
+        grown.zipWithNext { before, piece -> assertTrue(piece.length <= maxOf(160, before.length * 3), grown.map { it.length }.toString()) }
+        assertEquals(text, grown.joinToString(" "))
+
+        // Only a single word longer than the limit stays whole.
+        val word = "x".repeat(2500)
+        assertEquals(listOf("Read", word), speechChunks("Read $word", maxChars = 2000, firstChars = 4))
+    }
+
     /** Feeds [levels] as 20 ms frames; the time the recording would end, or null if it wouldn't. */
     private fun endsAt(levels: List<Float>, activity: VoiceActivity = VoiceActivity()): Long? {
         val detector = EndOfSpeech(activity)
