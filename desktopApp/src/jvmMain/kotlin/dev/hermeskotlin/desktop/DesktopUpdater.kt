@@ -32,7 +32,7 @@ internal object DesktopUpdater : UpdateInstaller {
     private val launcher: String? = System.getProperty("jpackage.app-path")?.takeIf { File(it).isFile }
 
     override suspend fun install(update: AppUpdate): Boolean {
-        if (System.getProperty("os.name") == "Linux" && File("/.flatpak-info").isFile) return false
+        if (inFlatpak) return false
         val url = update.downloadUrl ?: return false
         if (launcher == null) return false
         val file = try {

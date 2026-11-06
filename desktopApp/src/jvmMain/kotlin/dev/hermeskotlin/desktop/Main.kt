@@ -117,7 +117,7 @@ fun main(args: Array<String>) {
     // A `herald://` link Windows started this launch with: a notification's, or one from a browser.
     val launchLink = args.firstOrNull { it.startsWith("${AppLink.DESKTOP_SCHEME}:", ignoreCase = true) }
     // A second launch brings the running Herald forward, with its link, instead of opening another.
-    val flatpak = System.getProperty("os.name") == "Linux" && File("/.flatpak-info").isFile
+    val flatpak = inFlatpak
     val restartWait = if (flatpak && args.contentEquals(arrayOf("--restart"))) 30_000L else 0L
     val instance = SingleInstance.claim(appDataDir, launchLink, restartWait) ?: exitProcess(if (restartWait > 0) 1 else 0)
     val koin = startKoin {
