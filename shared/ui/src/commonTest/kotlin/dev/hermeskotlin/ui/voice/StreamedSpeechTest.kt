@@ -31,13 +31,16 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.ReceiveChannel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.transformWhile
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.updateAndGet
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.yield
 import kotlinx.serialization.json.Json
@@ -65,11 +68,17 @@ class StreamedSpeechTest {
         val calls = MutableStateFlow<List<String>>(emptyList())
         /** Prompts are taken but never answered, as on a gateway that's slow to. */
         var holdPrompts = false
+        /** Answers to the gateway's own requests (a question), in order. */
+        val answers = MutableStateFlow<List<JsonObject>>(emptyList())
         override val incoming: Flow<String> = inbound.receiveAsFlow()
 
         override suspend fun send(text: String) {
             val message = Json.parseToJsonElement(text).jsonObject
             val id = message["id"] ?: return
+            if (message["method"] == null) {
+                answers.update { it + message }
+                return
+            }
             message["method"]?.jsonPrimitive?.contentOrNull?.let { method -> calls.update { it + method } }
             if (holdPrompts && message["method"]?.jsonPrimitive?.contentOrNull == "prompt.submit") {
                 submits.update { it + message }
@@ -87,6 +96,11 @@ class StreamedSpeechTest {
 
         fun event(type: String, payload: String = "{}") {
             inbound.trySend("""{"jsonrpc":"2.0","method":"event","params":{"type":"$type","session_id":"rt9","payload":$payload}}""")
+        }
+
+        /** A request of the gateway's own, as a question is. */
+        fun push(raw: String) {
+            inbound.trySend(raw)
         }
     }
 
@@ -154,6 +168,72 @@ class StreamedSpeechTest {
         }
     }
 
+    /**
+     * A speaker turned right up: each listen over the voice trips at once on its echo, up to [times] listens. Hears
+     * [requests] requests (or answers) before that.
+     */
+    private class Echoes(val times: Int, val requests: Int = 1) : VoiceRecorder {
+        var recordings = 0
+        val listening = MutableStateFlow(0)
+        override suspend fun record(activity: VoiceActivity, onLevel: (Float) -> Unit, onSpeech: () -> Unit): Recording {
+            if (recordings++ >= requests) awaitCancellation()
+            onSpeech()
+            return Recording(byteArrayOf(1, 2, 3), "audio/wav", heardSpeech = true)
+        }
+
+        override fun finish() = Unit
+
+        override suspend fun listenOver(
+            bargeIn: BargeIn,
+            playing: () -> Boolean,
+            onTrip: () -> Unit,
+            onLevel: (Float) -> Unit,
+            onListening: () -> Unit,
+        ): Recording? {
+            val n = listening.updateAndGet { it + 1 }
+            onListening()
+            if (n > times) awaitCancellation()
+            // An echo comes only once the voice sounds.
+            while (!playing()) delay(10)
+            onTrip()
+            return Recording(byteArrayOf(4, 5, 6), "audio/wav", heardSpeech = false)
+        }
+    }
+
+    /**
+     * Over the voice: an echo first, then a trip still being heard when the test mutes, then, once [cut], someone who
+     * goes on talking.
+     */
+    private class EchoThenMuted : VoiceRecorder {
+        var recordings = 0
+        val listening = MutableStateFlow(0)
+        val cut = CompletableDeferred<Unit>()
+        override suspend fun record(activity: VoiceActivity, onLevel: (Float) -> Unit, onSpeech: () -> Unit): Recording {
+            if (recordings++ >= 1) awaitCancellation()
+            onSpeech()
+            return Recording(byteArrayOf(1, 2, 3), "audio/wav", heardSpeech = true)
+        }
+
+        override fun finish() = Unit
+
+        override suspend fun listenOver(
+            bargeIn: BargeIn,
+            playing: () -> Boolean,
+            onTrip: () -> Unit,
+            onLevel: (Float) -> Unit,
+            onListening: () -> Unit,
+        ): Recording? {
+            val n = listening.updateAndGet { it + 1 }
+            onListening()
+            if (n > 3) awaitCancellation()
+            while (!playing()) delay(10)
+            if (n == 3) cut.await()
+            onTrip()
+            if (n == 2) awaitCancellation()
+            return Recording(byteArrayOf(4, 5, 6), "audio/wav", heardSpeech = n == 3)
+        }
+    }
+
     /** [canHold]: the voice holds when someone seems to cut in; [holds] is each hold and letting go. */
     private class Player(val fails: Boolean = false, val canHold: Boolean = false) : SpeechPlayer {
         var audioOpen = false
@@ -210,7 +290,7 @@ class StreamedSpeechTest {
         }
     }
 
-    private class Setup(val socket: Socket, val voice: VoiceController, val player: Player, val spoken: MutableList<String>)
+    private class Setup(val socket: Socket, val voice: VoiceController, val player: Player, val spoken: MutableList<String>, val session: ChatSession)
 
     /** A chained voice chat on a chat whose gateway voices replies through [stream], or can't when it's null. */
     private suspend fun TestScope.chat(stream: Stream?, player: Player = Player()): Setup =
@@ -262,7 +342,7 @@ class StreamedSpeechTest {
         val voice = VoiceController(AudioApi(client), recorder, player, backgroundScope, backgroundScope, speechStreams = { _, _ -> streams() })
         voice.startChat(session, gateway, "rin")
         socket.submits.first { it.isNotEmpty() }
-        return Setup(socket, voice, player, spoken)
+        return Setup(socket, voice, player, spoken, session)
     }
 
     @Test
@@ -548,6 +628,198 @@ class StreamedSpeechTest {
         assertFalse(stream.closed)
         assertEquals(1, setup.socket.submits.value.size)
         assertTrue(setup.socket.calls.value.none { "session.interrupt" in it })
+        setup.voice.stopChat()
+    }
+
+    /**
+     * A speaker loud enough that its echo trips the microphone again and again (#264): after two holds nobody
+     * talked through, the rest of the reply plays through without listening over it, so it stops stuttering.
+     */
+    @Test
+    fun aVoiceThatKeepsTrippingOnItsOwnEchoPlaysTheRestThrough() = runTest {
+        val recorder = Echoes(times = 3)
+        val stream = Stream()
+        val player = Player(canHold = true)
+        val setup = chat(player = player, recorder = recorder, transcripts = listOf("How was your day?", "")) { stream }
+
+        setup.socket.event("message.start")
+        setup.socket.event("message.delta", """{"text":"It was a long day. First the meeting ran over. "}""")
+        stream.appended.first { it.isNotEmpty() }
+        stream.gateway.send(SpeechStreamEvent.Start(sampleRate = 24_000))
+        stream.gateway.send(SpeechStreamEvent.Audio(byteArrayOf(1, 0, 2, 0)))
+        setup.voice.chat.first { it.phase == VoicePhase.Speaking }
+        recorder.listening.first { it >= 2 }
+        // Room for a third listen to start and trip, were the microphone still asked.
+        advanceTimeBy(1_000)
+
+        assertEquals(2, recorder.listening.value)
+        assertEquals(listOf(true, false, true, false), player.holds)
+        assertFalse(setup.voice.chat.value.bargeIn)
+        assertEquals(VoicePhase.Speaking, setup.voice.chat.value.phase)
+        assertFalse(stream.closed)
+        assertEquals(1, setup.socket.submits.value.size)
+        setup.voice.stopChat()
+    }
+
+    /**
+     * Two echo holds while the reply was streamed, then the socket dropped and the finished reply is read out: still
+     * the same reply, so the read-out plays through without the microphone, not starting the count over.
+     */
+    @Test
+    fun theEchoCountLastsTheWholeReplyWhenItMovesToBeingReadOut() = runTest {
+        val recorder = Echoes(times = 3)
+        val stream = Stream()
+        val player = Player(canHold = true)
+        val setup = chat(player = player, recorder = recorder, transcripts = listOf("How was your day?", "")) { stream }
+
+        setup.socket.event("message.start")
+        setup.socket.event("message.delta", """{"text":"It was a long day. "}""")
+        stream.appended.first { it.isNotEmpty() }
+        stream.gateway.send(SpeechStreamEvent.Start(sampleRate = 24_000))
+        stream.gateway.send(SpeechStreamEvent.Audio(byteArrayOf(1, 0, 2, 0)))
+        recorder.listening.first { it >= 2 }
+        advanceTimeBy(1_000)
+        assertEquals(2, recorder.listening.value)
+        // The socket drops; the rest is read out once the reply is done.
+        stream.gateway.close()
+        setup.socket.event("message.delta", """{"text":"First the meeting ran over."}""")
+        setup.socket.event("message.complete", """{"text":"It was a long day. First the meeting ran over.","status":"complete"}""")
+
+        setup.voice.chat.first { it.phase == VoicePhase.Listening && setup.spoken.isNotEmpty() }
+        assertEquals(2, recorder.listening.value)
+        setup.voice.stopChat()
+    }
+
+    /** Mute cutting off what tripped the microphone isn't an echo: it isn't counted, and someone can cut in after. */
+    @Test
+    fun aTripCutOffByMuteIsntCountedAsAnEcho() = runTest {
+        val recorder = EchoThenMuted()
+        val stream = Stream()
+        val setup = chat(
+            player = Player(canHold = true),
+            recorder = recorder,
+            transcripts = listOf("How was your day?", "", "Never mind that, check the weather"),
+        ) { stream }
+
+        setup.socket.event("message.start")
+        setup.socket.event("message.delta", """{"text":"It was a long day. First the meeting ran over. "}""")
+        stream.appended.first { it.isNotEmpty() }
+        stream.gateway.send(SpeechStreamEvent.Start(sampleRate = 24_000))
+        stream.gateway.send(SpeechStreamEvent.Audio(byteArrayOf(1, 0, 2, 0)))
+        recorder.listening.first { it >= 2 }
+        setup.voice.chat.first { it.hearing }
+        setup.voice.toggleMute()
+        setup.voice.chat.first { it.muted && !it.hearing }
+        setup.voice.toggleMute()
+        advanceTimeBy(1_000)
+
+        // One echo so far, not two: the microphone listens over the rest of the reply.
+        assertEquals(3, recorder.listening.value)
+        recorder.cut.complete(Unit)
+        setup.socket.submits.first { it.size == 2 }
+        setup.voice.stopChat()
+    }
+
+    /** A new turn's reply is listened over again, however many echo holds the last one had. */
+    @Test
+    fun aNewTurnListensOverItsReplyAgain() = runTest {
+        val recorder = Echoes(times = 2, requests = 2)
+        val stream = Stream()
+        val setup = chat(
+            player = Player(canHold = true),
+            recorder = recorder,
+            transcripts = listOf("How was your day?", "", "", "And tomorrow?"),
+        ) { stream.takeUnless { it.closed } }
+
+        setup.socket.event("message.start")
+        setup.socket.event("message.delta", """{"text":"It was a long day. "}""")
+        stream.appended.first { it.isNotEmpty() }
+        stream.gateway.send(SpeechStreamEvent.Start(sampleRate = 24_000))
+        stream.gateway.send(SpeechStreamEvent.Audio(byteArrayOf(1, 0, 2, 0)))
+        recorder.listening.first { it >= 2 }
+        advanceTimeBy(1_000)
+        assertEquals(2, recorder.listening.value)
+        stream.gateway.close()
+        setup.socket.event("message.complete", """{"text":"It was a long day.","status":"complete"}""")
+        setup.socket.submits.first { it.size == 2 }
+
+        setup.socket.event("message.start")
+        setup.socket.event("message.complete", """{"text":"Sunny all day.","status":"complete"}""")
+        advanceTimeBy(1_000)
+        assertEquals(3, recorder.listening.value)
+        setup.voice.stopChat()
+    }
+
+    /**
+     * Two echo holds over the voice, then the agent asks a question and goes back to work: nothing plays while it
+     * works, so there's no echo to avoid, and the microphone listens over it again for someone cutting in.
+     */
+    @Test
+    fun theAgentAtWorkAfterEchoHoldsIsStillListenedOver() = runTest {
+        val recorder = Echoes(times = 2, requests = 2)
+        val stream = Stream()
+        val setup = chat(
+            player = Player(canHold = true),
+            recorder = recorder,
+            transcripts = listOf("Tidy the repo", "", "", "build"),
+        ) { stream }
+
+        setup.socket.event("message.start")
+        setup.socket.event("message.delta", """{"text":"Looking at the folders now. "}""")
+        stream.appended.first { it.isNotEmpty() }
+        stream.gateway.send(SpeechStreamEvent.Start(sampleRate = 24_000))
+        stream.gateway.send(SpeechStreamEvent.Audio(byteArrayOf(1, 0, 2, 0)))
+        recorder.listening.first { it >= 2 }
+        advanceTimeBy(1_000)
+        assertEquals(2, recorder.listening.value)
+
+        setup.socket.push("""{"jsonrpc":"2.0","id":"srq-2","method":"clarify","params":{"session_id":"rt9","question":"Which folder?","choices":["src","build"]}}""")
+        setup.session.state.first { it.inputRequests.isNotEmpty() }
+        // What was written so far is voiced; the question is asked once it's done.
+        stream.gateway.close()
+        setup.socket.answers.first { it.isNotEmpty() }
+        advanceTimeBy(1_000)
+
+        assertTrue(recorder.listening.value > 2, "nobody could cut in while the agent worked")
+        setup.voice.stopChat()
+    }
+
+    /**
+     * A chat started again on a question already asked: no new prompt starts a turn, yet the reply after the answer is
+     * listened over afresh, not with the last chat's echo holds.
+     */
+    @Test
+    fun aNewChatOnAQuestionAlreadyAskedListensAfresh() = runTest {
+        val recorder = Echoes(times = 2, requests = 2)
+        val stream = Stream()
+        val setup = chat(
+            player = Player(canHold = true),
+            recorder = recorder,
+            transcripts = listOf("Tidy the repo", "", "", "build"),
+        ) { stream.takeUnless { it.closed } }
+
+        setup.socket.event("message.start")
+        setup.socket.event("message.delta", """{"text":"Looking at the folders now. "}""")
+        stream.appended.first { it.isNotEmpty() }
+        stream.gateway.send(SpeechStreamEvent.Start(sampleRate = 24_000))
+        stream.gateway.send(SpeechStreamEvent.Audio(byteArrayOf(1, 0, 2, 0)))
+        recorder.listening.first { it >= 2 }
+        advanceTimeBy(1_000)
+        assertEquals(2, recorder.listening.value)
+        setup.voice.stopChat()
+        setup.voice.chat.first { it.phase == VoicePhase.Off }
+
+        setup.socket.push("""{"jsonrpc":"2.0","id":"srq-2","method":"clarify","params":{"session_id":"rt9","question":"Which folder?","choices":["src","build"]}}""")
+        setup.session.state.first { it.inputRequests.isNotEmpty() }
+        setup.voice.startChat(setup.session, gateway, "rin")
+        setup.socket.answers.first { it.isNotEmpty() }
+        assertEquals(1, setup.socket.submits.value.size)
+        advanceTimeBy(1_000)
+        val beforeTheReply = recorder.listening.value
+        setup.socket.event("message.complete", """{"text":"Tidied build.","status":"complete"}""")
+        advanceTimeBy(1_000)
+
+        assertTrue(recorder.listening.value > beforeTheReply)
         setup.voice.stopChat()
     }
 
