@@ -10,7 +10,10 @@ import okhttp3.Protocol
 import java.net.InetAddress
 import java.net.Socket
 import java.security.KeyStore
+import java.security.cert.X509Certificate
+import java.util.Date
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicLong
 import javax.net.ssl.KeyManagerFactory
 import javax.net.ssl.SSLContext
 import javax.net.ssl.SSLSocketFactory
@@ -33,28 +36,38 @@ internal fun desktopMtlsEngine(
         init(managers ?: emptyArray(), arrayOf(trust), null)
     }
     val ordinary = context().socketFactory
-    // The decrypted identity's context per alias and host, until a selection changes: opening it reads the encrypted
-    // store and checks the key, too much for every connection. A store that can't answer yet isn't remembered.
-    val selected = ConcurrentHashMap<Pair<String, String>, SSLSocketFactory>()
+    // The decrypted identity's context per alias and host, until a selection changes or its certificate expires:
+    // opening it reads the encrypted store and checks the key, too much for every connection. A store that can't
+    // answer yet isn't remembered.
+    class Selected(val factory: SSLSocketFactory, val expires: Date)
+    val selected = ConcurrentHashMap<Pair<String, String>, Selected>()
+    val changes = AtomicLong()
     val pool = ConnectionPool()
     certs.onChanged {
         // A new context cannot resume a TLS session authenticated with a previous selection, and no idle
         // connection made with one is reused. Done before the change returns, so the next request already sees it.
+        changes.incrementAndGet()
         selected.clear()
         pool.evictAll()
     }
     val sockets = ClientSocketFactory(ordinary) { host, port ->
         val alias = clientCertAliasFor(host, certs, gateways.list.value.gateways) ?: return@ClientSocketFactory ordinary
         val key = alias to accessHostKey(host)
-        selected[key] ?: runBlocking(Dispatchers.IO) { identities.material(alias, host, port) }
-            ?.let { context(it).socketFactory.also { factory -> selected[key] = factory } }
-            ?: ordinary
+        selected[key]?.takeIf { it.expires.after(Date()) }?.let { return@ClientSocketFactory it.factory }
+        val opened = changes.get()
+        val keys = runBlocking(Dispatchers.IO) { identities.material(alias, host, port) } ?: return@ClientSocketFactory ordinary
+        val factory = context(keys).socketFactory
+        // A handshake that overlapped a change doesn't bring back what the change cleared.
+        val expires = keys.aliases().asSequence().filter(keys::isKeyEntry).mapNotNull { keys.getCertificate(it) as? X509Certificate }.firstOrNull()?.notAfter
+        if (expires != null && changes.get() == opened) selected[key] = Selected(factory, expires)
+        factory
     }
     return OkHttp.create {
         config {
             sslSocketFactory(sockets, trust)
-            // Idle connections are pooled and dropped when a selection changes. HTTP/1.1 only: a busy connection
-            // is never shared, so a request after a change can't ride one authenticated with the old selection.
+            // Idle connections are pooled and dropped when a selection changes. As on Android, a connection busy at
+            // that moment finishes its request and may be pooled afterwards; requests from then on handshake with
+            // the new selection only once it's gone. HTTP/1.1 only, so a busy connection is never shared meanwhile.
             connectionPool(pool)
             protocols(listOf(Protocol.HTTP_1_1))
             followRedirects(false)
