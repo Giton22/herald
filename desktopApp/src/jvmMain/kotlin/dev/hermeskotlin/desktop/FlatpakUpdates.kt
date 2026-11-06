@@ -60,6 +60,8 @@ internal class FlatpakUpdateController(
     private var confirmedRestart = false
     private var info: FlatpakUpdateInfo? = null
     private var dismissed: FlatpakUpdateInfo? = null
+    /** The release the banner was last offered for; [info] may be newer while an outcome stays on screen. */
+    private var shown: FlatpakUpdateInfo? = null
 
     // Actions and the supplied scope belong to the UI thread; wire callbacks are marshalled onto that scope.
     fun setEnabled(value: Boolean) {
@@ -69,6 +71,7 @@ internal class FlatpakUpdateController(
         confirmedRestart = false
         info = null
         dismissed = null
+        shown = null
         mutableState.value = ManagedUpdateState()
         if (value) {
             val owner = generation
@@ -137,8 +140,11 @@ internal class FlatpakUpdateController(
 
     fun dismiss() {
         if (state.value.phase in listOf(ManagedUpdatePhase.Updating, ManagedUpdatePhase.Restarting)) return
-        dismissed = info
-        mutableState.value = ManagedUpdateState()
+        // Not now covers the release on screen. One that arrived while an outcome was shown is offered next.
+        dismissed = shown ?: info
+        val waiting = info?.takeIf { it != dismissed }
+        shown = waiting
+        mutableState.value = waiting?.offer()?.let { it.copy(canRestart = it.canRestart || confirmedRestart) } ?: ManagedUpdateState()
     }
 
     override fun close() {
@@ -177,6 +183,11 @@ internal class FlatpakUpdateController(
             runCatching { created?.close() }
             return null
         }
+        // Restart can open one while a quiet reopen is still on its way: the first to arrive is kept, never both.
+        monitor?.let { existing ->
+            runCatching { created?.close() }
+            return existing
+        }
         monitor = created
         if (created == null && unavailable != null) fail(unavailable)
         return created
@@ -192,6 +203,7 @@ internal class FlatpakUpdateController(
                         ManagedUpdatePhase.Failed, ManagedUpdatePhase.Cancelled)) {
                     mutableState.value = state.value.copy(canRestart = state.value.canRestart || facts.canRestart)
                 } else if (event.info != dismissed) {
+                    shown = event.info
                     mutableState.value = facts.copy(canRestart = facts.canRestart || confirmedRestart)
                 }
             }

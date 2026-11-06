@@ -258,7 +258,32 @@ class FlatpakUpdateControllerTest {
     }
 
     @Test
-    fun anUnreachablePortalIsNotReopenedInALoop() = Fixture(supported = false).use { f ->
+    fun restartDuringTheQuietReopenKeepsOneMonitor() = Fixture().use { f ->
+        f.startUpdate()
+        f.latest.emit(FlatpakUpdateEvent.Info(FlatpakUpdateInfo("A", "B", "B")))
+        val gate = CompletableDeferred<Unit>().also { f.openGate = it }
+        f.controller.cancel()
+        f.controller.restart()
+        gate.complete(Unit)
+        assertEquals(1, f.restarts)
+        assertEquals(1, f.monitors.count { !it.closed })
+    }
+
+    @Test
+    fun notNowOnAnOutcomeOffersAReleaseThatArrivedMeanwhile() = Fixture().use { f ->
+        f.startUpdate()
+        f.controller.cancel()
+        f.latest.emit(FlatpakUpdateEvent.Info(FlatpakUpdateInfo("A", "A", "C")))
+        assertEquals(ManagedUpdatePhase.Cancelled, f.phase)
+        f.controller.dismiss()
+        assertEquals(ManagedUpdatePhase.Available, f.phase)
+        f.controller.dismiss()
+        f.latest.emit(FlatpakUpdateEvent.Info(FlatpakUpdateInfo("A", "A", "C")))
+        assertEquals(ManagedUpdatePhase.Idle, f.phase)
+    }
+
+    @Test
+    fun anUnreachablePortalIsNotReopenedInALoop()= Fixture(supported = false).use { f ->
         f.controller.setEnabled(true)
         assertEquals(ManagedUpdateFailure.Unavailable, f.controller.state.value.failure)
         assertEquals(1, f.opens)
