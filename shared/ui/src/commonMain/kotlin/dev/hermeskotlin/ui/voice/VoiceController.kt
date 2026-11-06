@@ -407,6 +407,8 @@ class VoiceController(
         activity: VoiceActivity,
         cutIn: String?,
     ): Turn {
+        // Each turn listens over its reply afresh, a turn that starts on a question already asked included.
+        echoHolds = 0
         // Hermes already waits on an answer (the chat opened from a call for one): that comes first, then the rest of
         // its turn, whose reply follows the last prompt.
         if (cutIn == null && session.state.value.inputRequests.any(VoiceAnswers::canAsk)) {
@@ -426,7 +428,6 @@ class VoiceController(
         voicedSoFar = ""
         voicedUntilAsked = false
         voiced = ""
-        echoHolds = 0
         val cut = coroutineScope {
             // The speech socket opens while the prompt goes out, so the first words don't wait for it.
             val opening = async { openSpeech(gateway, profile) }
@@ -486,14 +487,17 @@ class VoiceController(
         gateway: GatewayUrl,
         profile: String?,
         activity: VoiceActivity,
+        /** [work] is the reply's voice, whose echo can trip the microphone; false for the agent at work, which is silent. */
+        voice: Boolean = true,
         work: suspend () -> T,
     ): Cut<T> = coroutineScope {
         val done = async { work() }
         var cut: Cut<T>? = null
         while (cut == null) {
             // Past a few holds where nobody went on talking, it's a speaker turned right up, its echo over every bar,
-            // not a knock: the rest of this reply plays through, without the microphone (#264).
-            if (echoHolds >= MAX_ECHO_HOLDS) {
+            // not a knock: the rest of this reply plays through, without the microphone (#264). With no voice playing
+            // there's no echo, so someone can still cut in while the agent works.
+            if (voice && echoHolds >= MAX_ECHO_HOLDS) {
                 cut = Cut.Done(done.await())
                 continue
             }
@@ -512,7 +516,10 @@ class VoiceController(
             // Null when it was its own voice, or a knock: the voice went on where it held; listen again.
             cut = if (someone) {
                 echoHeld = false
-                heardOver(session, gateway, profile, done, over)?.let { Cut.Over(it) }.also { if (it == null && echoHeld) echoHolds++ }
+                heardOver(session, gateway, profile, done, over)?.let { Cut.Over(it) }.also {
+                    // Not counted for a chat that was stopped meanwhile: a new one may have started its own count.
+                    if (it == null && echoHeld && isActive) echoHolds++
+                }
             } else {
                 Cut.Done(done.await())
             }
@@ -646,7 +653,7 @@ class VoiceController(
             val chat = if (session.state.value.inputRequests.isNotEmpty()) {
                 nextStop(session, pointedAt)
             } else {
-                when (val cut = overVoice(session, gateway, profile, activity) { nextStop(session, pointedAt) }) {
+                when (val cut = overVoice(session, gateway, profile, activity, voice = false) { nextStop(session, pointedAt) }) {
                     is Cut.Over -> return cut.turn
                     is Cut.Done -> cut.value
                 }

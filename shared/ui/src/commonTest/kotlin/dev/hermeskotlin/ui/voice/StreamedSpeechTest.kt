@@ -751,6 +751,40 @@ class StreamedSpeechTest {
     }
 
     /**
+     * Two echo holds over the voice, then the agent asks a question and goes back to work: nothing plays while it
+     * works, so there's no echo to avoid, and the microphone listens over it again for someone cutting in.
+     */
+    @Test
+    fun theAgentAtWorkAfterEchoHoldsIsStillListenedOver() = runTest {
+        val recorder = Echoes(times = 2, requests = 2)
+        val stream = Stream()
+        val setup = chat(
+            player = Player(canHold = true),
+            recorder = recorder,
+            transcripts = listOf("Tidy the repo", "", "", "build"),
+        ) { stream }
+
+        setup.socket.event("message.start")
+        setup.socket.event("message.delta", """{"text":"Looking at the folders now. "}""")
+        stream.appended.first { it.isNotEmpty() }
+        stream.gateway.send(SpeechStreamEvent.Start(sampleRate = 24_000))
+        stream.gateway.send(SpeechStreamEvent.Audio(byteArrayOf(1, 0, 2, 0)))
+        recorder.listening.first { it >= 2 }
+        advanceTimeBy(1_000)
+        assertEquals(2, recorder.listening.value)
+
+        setup.socket.push("""{"jsonrpc":"2.0","id":"srq-2","method":"clarify","params":{"session_id":"rt9","question":"Which folder?","choices":["src","build"]}}""")
+        setup.session.state.first { it.inputRequests.isNotEmpty() }
+        // What was written so far is voiced; the question is asked once it's done.
+        stream.gateway.close()
+        setup.socket.answers.first { it.isNotEmpty() }
+        advanceTimeBy(1_000)
+
+        assertTrue(recorder.listening.value > 2, "nobody could cut in while the agent worked")
+        setup.voice.stopChat()
+    }
+
+    /**
      * A chat started again on a question already asked: no new prompt starts a turn, yet the reply after the answer is
      * listened over afresh, not with the last chat's echo holds.
      */
