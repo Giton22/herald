@@ -1403,6 +1403,11 @@ class ChatViewModel(
         session.value?.retry()
     }
 
+    /** Catches the chat up after the app was away; see [ChatSession.resync]. Safe while it's still attached. */
+    fun resync() {
+        session.value?.resync()
+    }
+
     /**
      * Tries the gateway again now instead of waiting out the backoff. Only while it's waiting: during an attempt
      * the wake would stay buffered and skip the wait after some later drop.

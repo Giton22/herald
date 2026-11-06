@@ -1751,6 +1751,23 @@ class ChatSession(
     }
 
     /**
+     * Catches the open chat up with the gateway after the app was away. A backgrounded phone misses live
+     * events, and a socket that never reported a drop leaves the connection on Connected: no attach fires
+     * on the way back, so the transcript stays short until an unrelated event arrives. A chat nothing has
+     * been read for yet has nothing to catch up on; the first send attaches it as usual.
+     */
+    fun resync() {
+        val state = _state.value
+        val runtimeId = state.runtimeSessionId ?: return
+        // Nothing read yet: the first send attaches the chat and loads the transcript as it always does.
+        if (!state.historyRead) return
+        scope.launch {
+            val client = connectedClient() ?: return@launch
+            catchUp(client, runtimeId)
+        }
+    }
+
+    /**
      * Applies a live event in order: one already applied (replayed, or sent twice) is skipped, and one past a gap
      * waits, with those after it, while [catchUp] fills the gap. Called under [streamMutex].
      */
