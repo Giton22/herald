@@ -132,8 +132,6 @@ import dev.hermeskotlin.ui.components.TimeWords
 import dev.hermeskotlin.ui.components.rememberTimeWords
 import dev.hermeskotlin.ui.resources.*
 import org.jetbrains.compose.resources.stringResource
-import dev.hermeskotlin.ui.voice.VoiceWords
-import dev.hermeskotlin.ui.voice.rememberVoiceWords
 
 /** The current [AppSettings], for screens that change how they draw. */
 val LocalAppSettings = compositionLocalOf { AppSettings() }
@@ -166,8 +164,6 @@ fun App(
     val settingsStore = koinInject<SettingsStore>()
     // The words dates and times are built from, in the app's language, for code that runs outside composition.
     TimeWords.current = rememberTimeWords()
-    // The same for what a live call says, and a watch call reports: plain code, outside composition.
-    VoiceWords.current = rememberVoiceWords()
     val settings = settingsStore.settings.collectAsStateWithLifecycle().value ?: return
     if (isDesktop) EndVoiceWithSession(onSessionEnded)
     val dark = isDark(settings)
