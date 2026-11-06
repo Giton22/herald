@@ -71,6 +71,26 @@ class LinuxMtlsTest {
         }
     }
 
+    @Test fun anAuthenticatedConnectionIsReusedUntilTheSelectionChanges() = runBlocking {
+        Endpoint(keepAlive = true).use { endpoint ->
+            val store = InMemoryKeyValueStore()
+            val identities = LinuxClientCertificates(store)
+            val pending = ClientCertAliases()
+            val gateways = GatewayRepository(store)
+            val alias = identities.import("localhost", endpoint.port, fixtures.bundle(), password)
+            gateways.save(SavedGateway(endpoint.url, clientCertAlias = alias))
+            val client = createHttpClient(desktopMtlsEngine(pending, gateways, identities, trust("server")))
+            try {
+                repeat(3) { assertEquals(200, client.get(endpoint.url).status.value) }
+                assertEquals(1, endpoint.accepted)
+                pending.changed("localhost")
+                assertEquals(200, client.get(endpoint.url).status.value)
+                assertEquals(2, endpoint.accepted)
+                assertEquals(List(4) { "CN=Synthetic client" }, endpoint.peers.toList())
+            } finally { client.close() }
+        }
+    }
+
     @Test fun hostnameSelectionUsesTheFirstSavedAliasAcrossPorts() = runBlocking {
         Endpoint().use { first -> Endpoint().use { second ->
             val store = InMemoryKeyValueStore()
@@ -190,6 +210,7 @@ class LinuxMtlsTest {
         val port: Int get() = server.localPort
         val url: String get() = "https://localhost:$port"
         private val sockets = ConcurrentLinkedQueue<SSLSocket>()
+        val accepted: Int get() = sockets.size
         private val sessions = ConcurrentLinkedQueue<Thread>()
         private val worker = thread(isDaemon = true, name = "synthetic-mtls") {
             while (!server.isClosed) {

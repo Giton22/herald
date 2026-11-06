@@ -10,7 +10,7 @@ import okhttp3.Protocol
 import java.net.InetAddress
 import java.net.Socket
 import java.security.KeyStore
-import java.util.concurrent.TimeUnit
+import java.util.concurrent.ConcurrentHashMap
 import javax.net.ssl.KeyManagerFactory
 import javax.net.ssl.SSLContext
 import javax.net.ssl.SSLSocketFactory
@@ -33,18 +33,29 @@ internal fun desktopMtlsEngine(
         init(managers ?: emptyArray(), arrayOf(trust), null)
     }
     val ordinary = context().socketFactory
+    // The decrypted identity's context per alias and host, until a selection changes: opening it reads the encrypted
+    // store and checks the key, too much for every connection. A store that can't answer yet isn't remembered.
+    val selected = ConcurrentHashMap<Pair<String, String>, SSLSocketFactory>()
+    val pool = ConnectionPool()
+    certs.onChanged {
+        // A new context cannot resume a TLS session authenticated with a previous selection, and no idle
+        // connection made with one is reused. Done before the change returns, so the next request already sees it.
+        selected.clear()
+        pool.evictAll()
+    }
     val sockets = ClientSocketFactory(ordinary) { host, port ->
-        val alias = clientCertAliasFor(host, certs, gateways.list.value.gateways)
-        val keys = runBlocking(Dispatchers.IO) { alias?.let { identities.material(it, host, port) } }
-        // A new context cannot resume a TLS session authenticated with a previous selection.
-        if (keys == null) ordinary else context(keys).socketFactory
+        val alias = clientCertAliasFor(host, certs, gateways.list.value.gateways) ?: return@ClientSocketFactory ordinary
+        val key = alias to accessHostKey(host)
+        selected[key] ?: runBlocking(Dispatchers.IO) { identities.material(alias, host, port) }
+            ?.let { context(it).socketFactory.also { factory -> selected[key] = factory } }
+            ?: ordinary
     }
     return OkHttp.create {
         config {
             sslSocketFactory(sockets, trust)
-            // No reused or multiplexed authenticated connection after a selection changes. In-flight
-            // requests keep their original connection; each subsequent request handshakes again.
-            connectionPool(ConnectionPool(0, 1, TimeUnit.SECONDS))
+            // Idle connections are pooled and dropped when a selection changes. HTTP/1.1 only: a busy connection
+            // is never shared, so a request after a change can't ride one authenticated with the old selection.
+            connectionPool(pool)
             protocols(listOf(Protocol.HTTP_1_1))
             followRedirects(false)
             followSslRedirects(false)
