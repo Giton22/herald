@@ -627,6 +627,97 @@ class ChatSessionResumeTest {
         assertEquals("1", transports.last().sent.value.first { it.isCall("session.events.since") }.param("last_seen"))
     }
 
+    /** A chat attached to rt1 with a turn streaming "Hel" (seqs 1-3) on a link that stays up. */
+    private suspend fun streamingHel(scope: CoroutineScope): Pair<ChatSession, FakeTransport> {
+        val base = answer
+        answer = { transport, method, params ->
+            if (method == "session.resume") """{"session_id":"rt1","running":true}""" else base(transport, method, params)
+        }
+        val (connection, transports) = connect(scope)
+        val chat = ChatSession(url, "stored-1", "Chat", connection, SessionsApi(scope.client()), scope)
+        chat.start()
+        chat.state.first { it.runtimeSessionId == "rt1" && it.historyLoaded }
+        val socket = transports.last()
+        socket.push(event("message.start", 1))
+        socket.push(delta(2, "He"))
+        socket.push(delta(3, "l"))
+        chat.state.first { it.reply()?.text == "Hel" }
+        return chat to socket
+    }
+
+    @Test
+    fun comingBackInSightPicksUpWhatWasMissedWithoutDuplicates() = runTest {
+        // Answered by hand below, after the live frames.
+        answer = { _, method, _ -> if (method == "session.events.since") null else "{}" }
+        val (chat, socket) = streamingHel(backgroundScope)
+        // The turn starting read the transcript again; that read is done before counting.
+        testScheduler.runCurrent()
+        val readsBefore = reads.size
+
+        chat.resync()
+        val ask = socket.awaitSent { it.isCall("session.events.since") }
+        // The next live frames arrive, in order, while the replay is on its way: they must not show twice.
+        socket.push(delta(4, "lo"))
+        socket.push(delta(5, " wor"))
+        testScheduler.runCurrent()
+        socket.push("""{"jsonrpc":"2.0","id":${ask["id"]},"result":${since(replayed(4, "lo"), replayed(5, " wor"), latest = 5)}}""")
+        testScheduler.runCurrent()
+        socket.push(delta(6, "ld"))
+
+        assertEquals("Hello world", chat.state.first { it.reply()?.text?.endsWith("ld") == true }.reply()?.text)
+        assertEquals("3", socket.sent.value.first { it.isCall("session.events.since") }.param("last_seen"))
+        assertEquals(readsBefore, reads.size, "the transcript was read again although the replay filled the gap")
+    }
+
+    @Test
+    fun comingBackInSightTwiceAsksOnceWhileTheFirstRuns() = runTest {
+        val (chat, socket) = streamingHel(backgroundScope)
+        // Not answered yet, so the second ask comes while the first still runs.
+        gateway.answer = { call -> if (call.method == "session.events.since") null else "{}" }
+
+        chat.resync()
+        val ask = socket.awaitSent { it.isCall("session.events.since") }
+        chat.resync()
+        testScheduler.runCurrent()
+        socket.push("""{"jsonrpc":"2.0","id":${ask["id"]},"result":${since(replayed(4, "lo"), latest = 4)}}""")
+
+        assertEquals("Hello", chat.state.first { it.reply()?.text == "Hello" }.reply()?.text)
+        assertEquals(1, socket.sent.value.count { it.isCall("session.events.since") })
+    }
+
+    @Test
+    fun comingBackInSightMidTurnOnAGatewayWithoutReplayKeepsTheReply() = runTest {
+        answer = { _, method, _ -> if (method == "session.events.since") "error:-32601" else "{}" }
+        val (chat, socket) = streamingHel(backgroundScope)
+        // The turn starting read the transcript again; that read is done before counting.
+        testScheduler.runCurrent()
+        val readsBefore = reads.size
+
+        chat.resync()
+        socket.sent.first { sent -> sent.any { it.isCall("session.events.since") } }
+        // Live events still go through once the ask failed.
+        socket.push(delta(4, "lo"))
+
+        val after = chat.state.first { it.reply()?.text == "Hello" }
+        assertTrue(after.running)
+        assertEquals(readsBefore, reads.size, "a stale turn was laid over a fresh transcript")
+    }
+
+    @Test
+    fun anIdleChatComingBackInSightReadsTheTranscriptAgain() = runTest {
+        answer = { _, method, _ -> if (method == "session.resume") """{"session_id":"rt1","running":false}""" else "{}" }
+        val (connection, _) = connect(backgroundScope)
+        val chat = ChatSession(url, "stored-1", "Chat", connection, SessionsApi(backgroundScope.client()), backgroundScope)
+        chat.start()
+        chat.state.first { it.runtimeSessionId == "rt1" && it.historyLoaded && it.messages.size == 2 }
+        // A turn ran and ended while the app was away, its events never reaching this socket.
+        transcript = rowsUpTo(4)
+
+        chat.resync()
+
+        assertEquals(listOf("row-1", "row-2", "row-3", "row-4"), chat.state.first { it.messages.size == 4 }.messages.map { it.key })
+    }
+
     @Test
     fun anIdleChatWithNothingToResumeFromReloadsTheTranscript() = runTest {
         answer = { _, method, _ -> if (method == "session.resume") """{"session_id":"rt1","running":false}""" else "{}" }

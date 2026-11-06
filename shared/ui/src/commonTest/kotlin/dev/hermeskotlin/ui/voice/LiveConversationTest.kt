@@ -444,6 +444,7 @@ class LiveConversationTest {
     }
 
     @Test
+    @JvmOnly // The unlock line comes from the catalogue, which the Android host tests don't have.
     fun anApprovalIsntTakenFromALockedPhone() = runTest {
         var locked = true
         val (socket, session, call, voice) = callWithATurn { locked }
