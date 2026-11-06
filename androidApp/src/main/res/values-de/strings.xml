@@ -75,7 +75,19 @@
     <string name="live_thinking">Denkt nach …</string>
     <string name="live_done_text">✅ Abgeschlossen</string>
     <string name="live_failed_text">Der Durchlauf ist fehlgeschlagen</string>
+    <string name="live_stopped_text">Gestoppt</string>
     <string name="live_stop">Stopp</string>
+    <string name="live_steer">Lenken</string>
+    <string name="live_steer_hint">Hermes korrigieren oder lenken</string>
+    <string name="live_approval_title">Diesen Befehl erlauben?</string>
+    <string name="live_others_title">Andere Chats</string>
+    <string name="live_others_working">läuft</string>
+    <string name="live_others_needs_you">braucht dich</string>
+    <!-- %1$d: how many more tools or chats there are -->
+    <plurals name="live_more_tools">
+        <item quantity="one">…noch %1$d</item>
+        <item quantity="other">…noch %1$d</item>
+    </plurals>
     <!-- %1$d: the step now; %2$d: how many there are -->
     <string name="live_step">Schritt %1$d von %2$d</string>
     <plurals name="live_tools">

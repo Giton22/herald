@@ -47,7 +47,9 @@ class WatchNotifier(
             // In sight with notifications for other chats on, they're attached at once: the user is there to see them.
             combine(visibility.visible, settings.settings) { visible, prefs ->
                 val wants = prefs ?: AppSettings()
-                val on = (!visible || wants.notifyOtherChatsInApp) && (wants.notifyRequests || wants.notifyReplies) && notifications.canPost
+                // Live Updates read the other chats too, for their summary card, even with reply and request notifications off.
+                val on = (!visible || wants.notifyOtherChatsInApp) &&
+                    (wants.notifyRequests || wants.notifyReplies || wants.liveUpdates) && notifications.canPost
                 on to visible
             }.transformLatest { (on, visible) ->
                 if (on && !visible) delay(FOLLOW_AFTER_MS)

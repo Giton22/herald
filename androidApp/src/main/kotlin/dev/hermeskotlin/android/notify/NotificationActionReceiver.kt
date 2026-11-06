@@ -38,6 +38,7 @@ class NotificationActionReceiver : BroadcastReceiver(), KoinComponent {
     private val watcher: SessionWatcher by inject()
     private val relay: WatchRelay by inject()
     private val inbox: InboxStore by inject()
+    private val chatNotifier: ChatNotifier by inject()
 
     override fun onReceive(context: Context, intent: Intent) {
         val pending = goAsync()
@@ -75,6 +76,60 @@ class NotificationActionReceiver : BroadcastReceiver(), KoinComponent {
                 if (session != null && session.state.value.storedSessionId == stored) {
                     withTimeoutOrNull(RECEIVER_BUDGET_MS) { session.interrupt() }
                 }
+            }
+            ACTION_STEER -> {
+                val stored = intent.getStringExtra(EXTRA_SESSION_ID) ?: return
+                if (text.isNullOrEmpty()) return
+                // Only the chat whose card it was: a late steer must not reach whichever chat is open now.
+                if (session == null || session.state.value.storedSessionId != stored) {
+                    notifications.postFailure(null, ChatNotifications.LIVE_ID, R.string.notification_chat_closed)
+                    return
+                }
+                awaitConnection()
+                // The turn may have ended while the link came back: sending now would start a new one with the
+                // correction as its prompt. Drop it then; the card is going anyway.
+                if (host.session.value !== session || session.state.value.storedSessionId != stored || !session.state.value.running) {
+                    return
+                }
+                // The send itself outlives this receiver's few seconds; only the verdict is waited for.
+                val sent = scope.async { session.send(text) }
+                if (withTimeoutOrNull(RECEIVER_BUDGET_MS) { sent.await() } == false) {
+                    val error = session.state.value.error
+                    if (error != null) {
+                        notifications.postFailure(null, ChatNotifications.LIVE_ID, error)
+                    } else {
+                        notifications.postFailure(null, ChatNotifications.LIVE_ID, R.string.notification_reply_open_app)
+                    }
+                }
+            }
+            ACTION_LIVE_DISMISSED -> {
+                val card = intent.getIntExtra(EXTRA_LIVE_CARD, -1)
+                when (card) {
+                    ChatNotifications.LIVE_APPROVAL_ID -> {
+                        val requestId = intent.getStringExtra(EXTRA_REQUEST_ID)
+                        // A late dismissal of an earlier approval must not take down a newer card.
+                        if (requestId != null && notifications.liveApprovalId == requestId) {
+                            notifications.cancelLiveApproval()
+                            // The card is ongoing, so a swipe can't take it down; but Android lets the user dismiss
+                            // or demote a promoted update, and the card was the only way to answer. Put the usual
+                            // approval back, quietly, so the agent isn't left waiting with nothing in the shade.
+                            val request = session?.state?.value?.inputRequests?.firstOrNull { it.id == requestId }
+                                ?: watcher.find(requestId)?.second
+                            if (request != null) {
+                                notifications.postRequest(
+                                    intent.getStringExtra(EXTRA_SESSION_ID),
+                                    intent.getStringExtra(EXTRA_LIVE_TITLE),
+                                    request,
+                                    ring = false,
+                                )
+                            }
+                        }
+                    }
+                    ChatNotifications.LIVE_OTHERS_ID -> notifications.cancelLiveOthers()
+                }
+                // Android keeps a dismissed live update away for that turn; the other-chats card stays away too,
+                // until fewer than two chats are working.
+                chatNotifier.liveDismissed(card, intent.getLongExtra(EXTRA_LIVE_SINCE, 0L))
             }
             ACTION_INBOX_READ -> {
                 // The run this notification showed, of the gateway that sent it: not whichever the app is on now.
@@ -175,6 +230,8 @@ class NotificationActionReceiver : BroadcastReceiver(), KoinComponent {
         const val ACTION_ROOM_CLEARED = "dev.hermeskotlin.action.ROOM_CLEARED"
         const val ACTION_DECLINE_CALL = "dev.hermeskotlin.action.DECLINE_CALL"
         const val ACTION_STOP_TURN = "dev.hermeskotlin.action.STOP_TURN"
+        const val ACTION_STEER = "dev.hermeskotlin.action.STEER"
+        const val ACTION_LIVE_DISMISSED = "dev.hermeskotlin.action.LIVE_DISMISSED"
         const val ACTION_INBOX_READ = "dev.hermeskotlin.action.INBOX_READ"
         const val EXTRA_BOT = "bot"
 
@@ -182,6 +239,13 @@ class NotificationActionReceiver : BroadcastReceiver(), KoinComponent {
         const val EXTRA_CHOICE = "choice"
         const val EXTRA_SESSION_ID = "session_id"
         const val KEY_TEXT = "text"
+
+        /** Which live card was dismissed or demoted, and which turn it showed. */
+        const val EXTRA_LIVE_CARD = "live_card"
+        const val EXTRA_LIVE_SINCE = "live_since"
+
+        /** On a dismissed approval card: what the usual approval needs to take its place. */
+        const val EXTRA_LIVE_TITLE = "live_title"
 
         private const val RECONNECT_BUDGET_MS = 5_000L
         private const val RECEIVER_BUDGET_MS = 4_000L

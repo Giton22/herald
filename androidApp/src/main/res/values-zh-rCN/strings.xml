@@ -74,7 +74,18 @@
     <string name="live_thinking">思考中…</string>
     <string name="live_done_text">✅ 已结束</string>
     <string name="live_failed_text">这一轮失败了</string>
+    <string name="live_stopped_text">已停止</string>
     <string name="live_stop">停止</string>
+    <string name="live_steer">引导</string>
+    <string name="live_steer_hint">纠正或引导 Hermes</string>
+    <string name="live_approval_title">批准此命令？</string>
+    <string name="live_others_title">其他对话</string>
+    <string name="live_others_working">进行中</string>
+    <string name="live_others_needs_you">需要你</string>
+    <!-- %1$d: how many more tools or chats there are -->
+    <plurals name="live_more_tools">
+        <item quantity="other">…还有 %1$d 项</item>
+    </plurals>
     <!-- %1$d: the step now; %2$d: how many there are -->
     <string name="live_step">第 %1$d 步，共 %2$d 步</string>
     <plurals name="live_tools">
