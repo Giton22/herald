@@ -72,6 +72,17 @@
     <string name="wallpaper_strong">Fort</string>
     <string name="settings_projects_as_list">Projets en liste</string>
     <string name="settings_projects_as_list_detail">Affiche les projets de la liste des conversations sous la forme d’un bouton qui ouvre une liste, au lieu d’une rangée de puces qui défile sur le côté.</string>
+    <string name="settings_sidebar_switch">Sélecteur Conversations et Bots</string>
+    <string name="settings_sidebar_switch_detail">Le sélecteur en haut de la barre latérale. Désactivé, la barre latérale n’affiche que la vue que vous choisissez.</string>
+    <string name="settings_sidebar_view">La barre latérale affiche</string>
+    <string name="settings_sidebar_view_detail">Quand le sélecteur est masqué, la barre latérale affiche toujours cette vue.</string>
+    <string name="settings_sidebar_pages">Pages de la barre latérale</string>
+    <string name="settings_sidebar_pages_intro">Les boutons au-dessus de vos conversations dans la barre latérale, comme Planifié et Archivées. En masquer un retire seulement son bouton.</string>
+    <string name="settings_sidebar_pages_show">Afficher les boutons des pages</string>
+    <string name="settings_sidebar_pages_show_detail">Désactivé, la barre latérale n’en a aucun et commence par vos conversations.</string>
+    <string name="settings_sidebar_pages_each">Pages</string>
+    <string name="settings_sidebar_pages_off">Masquées.</string>
+    <string name="settings_sidebar_pages_all">Toutes affichées.</string>
     <string name="settings_running_send">Pendant une réponse, Envoyer…</string>
     <string name="settings_running_send_detail">%1$s. Maintenez Envoyer pour choisir autrement pour un message.</string>
     <string name="running_send_steer">L’ajoute à la réponse en cours</string>
@@ -241,5 +252,9 @@
     <plurals name="settings_phone_tools_count">
         <item quantity="one">%1$d outil activé.</item>
         <item quantity="other">%1$d outils activés.</item>
+    </plurals>
+    <plurals name="settings_sidebar_pages_count">
+        <item quantity="one">%1$d sur %2$d affichée.</item>
+        <item quantity="other">%1$d sur %2$d affichées.</item>
     </plurals>
 </resources>

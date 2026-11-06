@@ -598,7 +598,9 @@ class WatchRelay(
         // (the turn cancelled), after the lease itself has gone out.
         val lease = scope.launch { audio.ttsLease(gateway, true, profile) }
         try {
-            val chunks = speechChunks(text)
+            // Pieces stay short here: each is made and sent over Bluetooth while the one before plays, and the watch
+            // stops waiting 20 s after a clip ends.
+            val chunks = speechChunks(text, maxChars = WATCH_SPEECH_CHARS)
             chunks.forEachIndexed { index, chunk ->
                 val clip = when (val result = audio.speak(gateway, chunk, profile)) {
                     is ApiResult.Success -> result.value
@@ -677,6 +679,9 @@ class WatchRelay(
         private const val UPDATE_EVERY_MS = 400L
         private const val RELEASE_AFTER_MS = 30_000L
         private const val LIVE_VOICE_CHECK_MS = 5 * 60_000L
+
+        /** The longest voice clip sent to the watch, as the phone read it before pieces grew. */
+        private const val WATCH_SPEECH_CHARS = 400
     }
 }
 

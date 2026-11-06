@@ -59,6 +59,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.platform.LocalFocusManager
+import kotlinx.coroutines.flow.drop
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -214,6 +217,11 @@ import dev.hermeskotlin.core.gateway.CheckStage
 import dev.hermeskotlin.core.gateway.StageResult
 import dev.hermeskotlin.ui.connect.ConnectionChecklist
 import dev.hermeskotlin.ui.sessions.SubpageHeader
+import dev.hermeskotlin.ui.sessions.navIcon
+import dev.hermeskotlin.ui.sessions.navLabel
+import dev.hermeskotlin.ui.SidebarPage
+import dev.hermeskotlin.core.bots.SidebarMode
+import com.composables.icons.lucide.LayoutList
 import dev.hermeskotlin.ui.update.UpdateBanner
 import org.koin.compose.viewmodel.koinViewModel
 import kotlin.math.roundToInt
@@ -261,6 +269,7 @@ fun SettingsScreen(
     var callTargetOpen by remember { mutableStateOf(false) }
     var appIconOpen by remember { mutableStateOf(false) }
     var startInstructionOpen by remember { mutableStateOf(false) }
+    var sidebarPagesOpen by remember { mutableStateOf(false) }
     // Saveable, and open again after a pick redraws the screens, so a new language shows on the page it was picked on.
     var languageOpen by rememberSaveable { mutableStateOf(LanguagePageReturn.take()) }
     // Read again when the App icon page closes, so its row names the icon just applied.
@@ -268,7 +277,11 @@ fun SettingsScreen(
     val language = rememberLanguageChoice()
     val suggestions by viewModel.suggestions.collectAsStateWithLifecycle()
     LaunchedEffect(gateway, profile) { viewModel.bind(gateway, profile) }
-    PlatformBackHandler(enabled = !checkOpen && !phoneToolsOpen && !appIconOpen && !startInstructionOpen && !callTargetOpen && !languageOpen, onBack = onBack)
+    PlatformBackHandler(enabled = !checkOpen && !phoneToolsOpen && !appIconOpen && !startInstructionOpen && !callTargetOpen && !languageOpen && !sidebarPagesOpen, onBack = onBack)
+    // A page opened over Settings takes the keyboard from the search, so nothing typed there lands in a hidden query.
+    val focus = LocalFocusManager.current
+    val pageOver = phoneToolsOpen || appIconOpen || startInstructionOpen || callTargetOpen || languageOpen || sidebarPagesOpen
+    LaunchedEffect(pageOver) { if (pageOver) focus.clearFocus() }
     // The desktop lists the sections beside the page; they say here where they start.
     val anchors = remember { mutableStateMapOf<String, Int>() }
     CompositionLocalProvider(LocalSectionAnchors provides anchors.takeIf { isDesktop }) { SettingsView(
@@ -299,6 +312,7 @@ fun SettingsScreen(
         language = appLanguage(language.picked),
         onOpenLanguage = { languageOpen = true },
         onOpenStartInstruction = { startInstructionOpen = true },
+        onOpenSidebarPages = { sidebarPagesOpen = true },
         suggestions = suggestions,
         onInstallSuggestions = viewModel::installSuggestions,
         onCheckSuggestions = viewModel::checkSuggestions,
@@ -316,6 +330,7 @@ fun SettingsScreen(
         )
     }
     if (appIconOpen) AppIconScreen(onBack = { appIconOpen = false })
+    if (sidebarPagesOpen) SidebarPagesScreen(settings, viewModel::update, onBack = { sidebarPagesOpen = false })
     if (languageOpen) LanguageScreen(onBack = { languageOpen = false })
     ConnectionCheckSheet(
         visible = checkOpen,
@@ -402,6 +417,7 @@ internal fun SettingsView(
     language: AppLanguage? = null,
     onOpenLanguage: () -> Unit = {},
     onOpenStartInstruction: () -> Unit = {},
+    onOpenSidebarPages: () -> Unit = {},
     /** Where the Next Prompt plugin behind Suggested replies stands on the gateway. */
     suggestions: SuggestionsPlugin = SuggestionsPlugin.Checking,
     onInstallSuggestions: () -> Unit = {},
@@ -416,21 +432,24 @@ internal fun SettingsView(
         contentAlignment = Alignment.TopCenter,
     ) {
         val scroll = rememberScrollState()
-        // The desktop's settings are many and a pointer away; a search over their names finds one quicker than scrolling.
+        // The settings are many; a search over their names finds one quicker than scrolling, on the phone too.
         val search = rememberTextFieldState()
-        val query = if (isDesktop) search.text.toString() else ""
+        val query = search.text.toString()
+        // New words show their matches from the top, not part way down where the page was scrolled to.
+        LaunchedEffect(search, scroll) { snapshotFlow { search.text.toString() }.drop(1).collect { scroll.scrollTo(0) } }
+        val focus = LocalFocusManager.current
         Column(Modifier.widthIn(max = 640.dp).fillMaxSize()) {
             SubpageHeader(stringResource(Res.string.common_settings), onBack = onBack)
-            if (isDesktop) {
-                TextField(
-                    state = search,
-                    placeholder = stringResource(Res.string.settings_search_placeholder),
-                    leadingIcon = Lucide.Search,
-                    clearable = true,
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                    modifier = Modifier.padding(start = 14.dp, end = 14.dp, bottom = 12.dp),
-                )
-            }
+            TextField(
+                state = search,
+                placeholder = stringResource(Res.string.settings_search_placeholder),
+                leadingIcon = Lucide.Search,
+                clearable = true,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                // The list already shows the matches; the keyboard's Search key puts the keyboard away to see them.
+                onKeyboardAction = { focus.clearFocus() },
+                modifier = Modifier.padding(start = 14.dp, end = 14.dp, bottom = 12.dp),
+            )
             Column(
                 Modifier.fillMaxSize().verticalScroll(scroll).padding(start = 14.dp, end = 14.dp, bottom = 32.dp),
                 verticalArrangement = Arrangement.spacedBy(if (query.isBlank()) 22.dp else 0.dp),
@@ -536,6 +555,35 @@ internal fun SettingsView(
                         detail = stringResource(Res.string.settings_projects_as_list_detail),
                         checked = settings.projectsAsDropdown,
                         onCheckedChange = { on -> onUpdate { it.copy(projectsAsDropdown = on) } },
+                    )
+                    Divider()
+                    SwitchRow(
+                        title = stringResource(Res.string.settings_sidebar_switch),
+                        detail = stringResource(Res.string.settings_sidebar_switch_detail),
+                        checked = settings.sidebarModeSwitch,
+                        onCheckedChange = { on -> onUpdate { it.copy(sidebarModeSwitch = on) } },
+                    )
+                    // Without the switch, which side the sidebar shows is picked here.
+                    if (!settings.sidebarModeSwitch) {
+                        Divider()
+                        Field(stringResource(Res.string.settings_sidebar_view), detail = stringResource(Res.string.settings_sidebar_view_detail)) {
+                            // The control takes its labels as a plain lambda, so the words are resolved first.
+                            val viewLabels = SidebarMode.entries.associateWith { stringResource(navLabel(it.page)) }
+                            SegmentedControl(
+                                options = SidebarMode.entries,
+                                selected = settings.sidebarView,
+                                onSelect = { view -> onUpdate { it.copy(sidebarView = view) } },
+                                optionLabel = { viewLabels.getValue(it) },
+                                optionIcon = { navIcon(it.page) },
+                            )
+                        }
+                    }
+                    Divider()
+                    NavRow(
+                        title = stringResource(Res.string.settings_sidebar_pages),
+                        detail = sidebarPagesSummary(settings),
+                        icon = Lucide.LayoutList,
+                        onClick = onOpenSidebarPages,
                     )
                 }
 
@@ -923,6 +971,13 @@ internal fun SettingsView(
 /** The Kyllene community server; the invite never expires. */
 private const val DISCORD_INVITE = "https://discord.gg/wCtyvQ3KcM"
 
+/** The sidebar page each side of the Chats / Bots switch is, for its name and icon. */
+private val SidebarMode.page: SidebarPage
+    get() = when (this) {
+        SidebarMode.Chats -> SidebarPage.Chats
+        SidebarMode.Bots -> SidebarPage.Bots
+    }
+
 /** The Phone tools row's line: off, or how many tools the agent may use. */
 @Composable
 private fun phoneToolsSummary(settings: AppSettings): String {
@@ -1084,8 +1139,8 @@ internal val LocalSectionAnchors = staticCompositionLocalOf<SnapshotStateMap<Str
 private const val UNPLACED_SECTION = Int.MIN_VALUE / 2
 
 /**
- * The desktop's settings search: what's typed in it, which each row checks its title and detail against. Empty, all
- * rows show.
+ * The settings search: what's typed in it, which each row checks its title and detail against. Empty, all rows
+ * show.
  */
 internal val LocalSettingsQuery = compositionLocalOf { "" }
 
@@ -1094,10 +1149,13 @@ private val LocalSectionsShown = staticCompositionLocalOf<SnapshotStateMap<Strin
 
 /** True when a row saying [texts] is one the settings search keeps. */
 @Composable
-internal fun settingShown(vararg texts: String?): Boolean {
+internal fun settingShown(vararg texts: String?): Boolean = settingMatches(LocalSettingsQuery.current, *texts)
+
+/** True when [query] is empty, or one of [texts] has it in, whatever the case and the apostrophe. */
+internal fun settingMatches(query: String, vararg texts: String?): Boolean {
     // The catalogue writes ’ where a search box gets ', so both count as the same apostrophe.
-    val query = LocalSettingsQuery.current.trim().replace('’', '\'')
-    return query.isEmpty() || texts.any { it?.replace('’', '\'')?.contains(query, ignoreCase = true) == true }
+    val words = query.trim().replace('’', '\'')
+    return words.isEmpty() || texts.any { it?.replace('’', '\'')?.contains(words, ignoreCase = true) == true }
 }
 
 @Composable
@@ -1107,7 +1165,7 @@ internal fun Section(title: String, content: @Composable ColumnScope.() -> Unit)
     val searching = query.isNotEmpty()
     // Searching, a section whose name matches shows whole; any other shows only its rows that match, and none of
     // itself when none do. Its rows are still laid out then, unseen, so it knows when one comes to match.
-    val whole = !searching || title.contains(query, ignoreCase = true)
+    val whole = !searching || settingMatches(query, title)
     var empty by remember { mutableStateOf(false) }
     val hidden = searching && empty
     val shown = LocalSectionsShown.current
@@ -1142,7 +1200,7 @@ internal fun Section(title: String, content: @Composable ColumnScope.() -> Unit)
     }
 }
 
-/** The page's list of settings with the desktop's search over it, and a word when the search finds none. */
+/** The page's list of settings with the search over it, and a word when the search finds none. */
 @Composable
 private fun SearchableSettings(query: String, content: @Composable () -> Unit) {
     val shown = remember { mutableStateMapOf<String, Boolean>() }
@@ -1226,15 +1284,19 @@ internal fun Divider() {
 @Composable
 private fun CallTargetRow(target: CallTarget, faces: BotFaces, onClick: () -> Unit) {
     val bot = target.profile?.let { name -> faces.bots.firstOrNull { it.name == name } ?: Bot(name = name, displayName = target.label) }
+    val title = stringResource(Res.string.settings_call_target)
+    val label = bot?.label ?: target.label
+    val detail = stringResource(Res.string.settings_call_target_detail)
+    if (!settingShown(title, label, detail)) return
     Row(Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = onClick).padding(horizontal = 14.dp, vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
         if (bot != null) BotAvatar(bot, faces.picture(bot), size = 32.dp)
         else Box(Modifier.size(32.dp).background(Theme[colors][accent], RoundedCornerShape(Theme[radii][radiusSmall])), contentAlignment = Alignment.Center) {
             UnstyledIcon(Lucide.Phone, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(stringResource(Res.string.settings_call_target), style = Theme[typography][body], color = Theme[colors][text], maxLines = 2, overflow = TextOverflow.Ellipsis)
-            Text(bot?.label ?: target.label, style = Theme[typography][bodySmall], color = Theme[colors][textSecondary], maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(stringResource(Res.string.settings_call_target_detail), style = Theme[typography][bodySmall], color = Theme[colors][textTertiary])
+            Text(title, style = Theme[typography][body], color = Theme[colors][text], maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(label, style = Theme[typography][bodySmall], color = Theme[colors][textSecondary], maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(detail, style = Theme[typography][bodySmall], color = Theme[colors][textTertiary])
         }
         UnstyledIcon(Lucide.ChevronRight, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(16.dp))
     }

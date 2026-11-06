@@ -1,5 +1,6 @@
 package dev.hermeskotlin.core.settings
 
+import dev.hermeskotlin.core.bots.SidebarMode
 import dev.hermeskotlin.core.gateway.GatewayUrl
 import dev.hermeskotlin.core.storage.InMemoryKeyValueStore
 import kotlinx.coroutines.flow.filterNotNull
@@ -8,7 +9,9 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class SettingsStoreTest {
 
@@ -209,5 +212,58 @@ class SettingsStoreTest {
     fun unreadableStoredSettingsFallBackToDefaults() = runTest {
         val disk = InMemoryKeyValueStore().apply { put("settings.v1", """{"theme":"Neon"}""") }
         assertEquals(AppSettings(), SettingsStore(disk, backgroundScope).settings.filterNotNull().first())
+    }
+
+    @Test
+    fun theSidebarKeepsItsSwitchAndPagesUntilChangedAndRemembersTheChanges() = runTest {
+        val disk = InMemoryKeyValueStore()
+        // Settings saved before the options existed keep today's sidebar.
+        disk.put("settings.v1", """{"theme":"Dark","projectsAsDropdown":true}""")
+        val first = SettingsStore(disk, backgroundScope)
+        val old = first.settings.filterNotNull().first()
+        assertTrue(old.sidebarModeSwitch)
+        assertEquals(SidebarMode.Chats, old.sidebarView)
+        assertTrue(old.sidebarNav)
+        assertEquals(emptyList(), old.sidebarNavHidden)
+        assertTrue(old.projectsAsDropdown)
+
+        first.update { it.copy(sidebarModeSwitch = false, sidebarView = SidebarMode.Bots, sidebarNav = false).withSidebarPage("Insights", shown = false) }
+        advanceUntilIdle()
+
+        val restored = SettingsStore(disk, backgroundScope).settings.filterNotNull().first()
+        assertFalse(restored.sidebarModeSwitch)
+        assertEquals(SidebarMode.Bots, restored.sidebarView)
+        assertFalse(restored.sidebarNav)
+        assertEquals(listOf("Insights"), restored.sidebarNavHidden)
+        assertEquals(ThemeMode.Dark, restored.theme)
+    }
+
+    @Test
+    fun withoutItsSwitchTheSidebarShowsThePickedView() {
+        // With the switch, the side last picked shows, whatever view is set for without it.
+        val switch = AppSettings(sidebarView = SidebarMode.Bots)
+        assertEquals(SidebarMode.Chats, switch.sidebarMode(SidebarMode.Chats))
+        assertEquals(SidebarMode.Bots, switch.sidebarMode(SidebarMode.Bots))
+        val bots = switch.copy(sidebarModeSwitch = false)
+        assertEquals(SidebarMode.Bots, bots.sidebarMode(SidebarMode.Chats))
+        assertEquals(SidebarMode.Chats, bots.copy(sidebarView = SidebarMode.Chats).sidebarMode(SidebarMode.Bots))
+    }
+
+    @Test
+    fun aSidebarPageHidesOnItsOwnOrWithTheWholeSection() {
+        val all = AppSettings()
+        assertTrue(all.showsSidebarPage("Scheduled"))
+        val noInsights = all.withSidebarPage("Insights", shown = false)
+        assertFalse(noInsights.showsSidebarPage("Insights"))
+        assertTrue(noInsights.showsSidebarPage("Scheduled"))
+        // Hidden twice is still hidden once, and shown again it's gone from the list.
+        assertEquals(listOf("Insights"), noInsights.withSidebarPage("Insights", shown = false).sidebarNavHidden)
+        assertEquals(emptyList(), noInsights.withSidebarPage("Insights", shown = true).sidebarNavHidden)
+        // The whole section off hides every page, and keeps which ones were hidden for when it's back on.
+        val off = noInsights.copy(sidebarNav = false)
+        assertFalse(off.showsSidebarPage("Scheduled"))
+        val on = off.copy(sidebarNav = true)
+        assertTrue(on.showsSidebarPage("Scheduled"))
+        assertFalse(on.showsSidebarPage("Insights"))
     }
 }
