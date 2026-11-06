@@ -20,7 +20,7 @@ import dev.hermeskotlin.designsystem.components.verticalScrollWithBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -66,6 +66,8 @@ import dev.hermeskotlin.designsystem.textSecondary
 import dev.hermeskotlin.designsystem.textTertiary
 import dev.hermeskotlin.designsystem.typography
 import dev.hermeskotlin.designsystem.warning
+import dev.hermeskotlin.ui.resources.*
+import org.jetbrains.compose.resources.stringResource
 
 /**
  * One tool call in a reply's tool list: its name, time and one-line summary; tap it to see what it
@@ -79,7 +81,8 @@ internal fun ToolRow(tool: ToolActivity, messageKey: String? = null) {
         CommentSource(it, "the $part of your ${tool.name} tool call$what", code = true)
     }
     val hasDetails = tool.input != null || tool.output != null || tool.diff != null || tool.risk != null
-    var expanded by remember(tool.id) { mutableStateOf(false) }
+    // Saved: what was opened stays open when the activity is made again, as on unfolding a foldable.
+    var expanded by rememberSaveable(tool.id) { mutableStateOf(false) }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(
             Modifier
@@ -92,7 +95,7 @@ internal fun ToolRow(tool: ToolActivity, messageKey: String? = null) {
             Box(Modifier.padding(top = 3.dp)) {
                 when {
                     tool.running -> Spinner(Modifier.size(14.dp))
-                    tool.failed -> UnstyledIcon(Lucide.CircleX, contentDescription = "Failed", tint = Theme[colors][danger], modifier = Modifier.size(14.dp))
+                    tool.failed -> UnstyledIcon(Lucide.CircleX, contentDescription = stringResource(Res.string.chat_tool_failed), tint = Theme[colors][danger], modifier = Modifier.size(14.dp))
                     tool.summary != null || tool.durationSeconds != null || tool.output != null ->
                         UnstyledIcon(Lucide.Check, contentDescription = null, tint = Theme[colors][success], modifier = Modifier.size(14.dp))
                     else -> UnstyledIcon(Lucide.Wrench, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(14.dp))
@@ -111,7 +114,7 @@ internal fun ToolRow(tool: ToolActivity, messageKey: String? = null) {
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             UnstyledIcon(Lucide.ShieldAlert, contentDescription = null, tint = Theme[colors][warning], modifier = Modifier.size(12.dp))
-                            Text("Suspicious output", style = Theme[typography][caption], color = Theme[colors][warning])
+                            Text(stringResource(Res.string.chat_tool_suspicious), style = Theme[typography][caption], color = Theme[colors][warning])
                         }
                     }
                 }
@@ -129,7 +132,7 @@ internal fun ToolRow(tool: ToolActivity, messageKey: String? = null) {
             if (hasDetails) {
                 UnstyledIcon(
                     if (expanded) Lucide.ChevronDown else Lucide.ChevronRight,
-                    contentDescription = if (expanded) "Hide details" else "Show details",
+                    contentDescription = stringResource(if (expanded) Res.string.chat_hide_details else Res.string.chat_show_details),
                     tint = Theme[colors][textTertiary],
                     modifier = Modifier.padding(top = 3.dp).size(14.dp),
                 )
@@ -138,11 +141,13 @@ internal fun ToolRow(tool: ToolActivity, messageKey: String? = null) {
         AnimatedVisibility(visible = expanded) {
             Column(Modifier.padding(start = 24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 tool.risk?.let { RiskNote(it) }
-                tool.input?.let { Block("Input", it, source = source("input")) }
-                tool.diff?.let { Block("Changes", it, diff = true, source = source("changes")) }
-                tool.output?.let { Block(if (tool.failed) "Error" else "Output", it, source = source(if (tool.failed) "error" else "output")) }
+                tool.input?.let { Block(stringResource(Res.string.chat_tool_input), it, source = source("input")) }
+                tool.diff?.let { Block(stringResource(Res.string.chat_tool_changes), it, diff = true, source = source("changes")) }
+                tool.output?.let {
+                    Block(stringResource(if (tool.failed) Res.string.chat_tool_error else Res.string.chat_tool_output), it, source = source(if (tool.failed) "error" else "output"))
+                }
                 if (tool.running && tool.output == null) {
-                    Text("Still running…", style = Theme[typography][caption], color = Theme[colors][textTertiary])
+                    Text(stringResource(Res.string.chat_tool_still_running), style = Theme[typography][caption], color = Theme[colors][textTertiary])
                 }
             }
         }
@@ -163,15 +168,15 @@ private fun RiskNote(risk: ToolRisk) {
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Text(
-            "This output looks like it's trying to steer the agent or reach secrets. The agent was told not to trust it.",
+            stringResource(Res.string.chat_tool_risk),
             style = Theme[typography][caption],
             color = Theme[colors][text],
         )
         risk.labels.takeIf { it.isNotEmpty() }?.let { labels ->
-            Text("Found: ${labels.joinToString(", ")}", style = Theme[typography][caption], color = Theme[colors][textSecondary])
+            Text(stringResource(Res.string.chat_tool_risk_found, labels.joinToString(", ")), style = Theme[typography][caption], color = Theme[colors][textSecondary])
         }
         if (risk.redacted) {
-            Text("Parts of it were redacted.", style = Theme[typography][caption], color = Theme[colors][textSecondary])
+            Text(stringResource(Res.string.chat_tool_redacted), style = Theme[typography][caption], color = Theme[colors][textSecondary])
         }
     }
 }

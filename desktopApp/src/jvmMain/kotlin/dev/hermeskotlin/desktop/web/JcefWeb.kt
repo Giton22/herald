@@ -42,6 +42,7 @@ import dev.hermeskotlin.designsystem.components.Spinner
 import dev.hermeskotlin.designsystem.text as textColor
 import dev.hermeskotlin.designsystem.textTertiary
 import dev.hermeskotlin.designsystem.typography
+import dev.hermeskotlin.desktop.resources.*
 import dev.hermeskotlin.ui.DesktopWeb
 import dev.hermeskotlin.ui.screen.ScreenBrowserStage
 import dev.hermeskotlin.ui.screen.ScreenViewerEvent
@@ -86,6 +87,7 @@ import org.cef.network.CefCookie
 import org.cef.network.CefCookieManager
 import org.cef.network.CefRequest
 import org.cef.network.CefResponse
+import org.jetbrains.compose.resources.stringResource
 import java.awt.Desktop
 import java.io.File
 import java.net.URI
@@ -130,9 +132,11 @@ internal class JcefWeb(private val cookies: WebCookieJar, private val gateways: 
     @Composable
     override fun Widget(document: String, name: String, modifier: Modifier, keepsWheel: (title: String?, down: Boolean) -> Boolean, onFailure: (String) -> Unit) {
         val failure by rememberUpdatedState(onFailure)
+        val noBrowser by rememberUpdatedState(stringResource(Res.string.web_widget_no_browser))
+        val widgetFailed by rememberUpdatedState(stringResource(Res.string.web_widget_failed))
         val app by produceState<CefApp?>(null) {
             value = app()
-            if (value == null) failure("Couldn't start the browser widgets show in.")
+            if (value == null) failure(noBrowser)
         }
         val cef = app
         if (cef == null) {
@@ -142,7 +146,7 @@ internal class JcefWeb(private val cookies: WebCookieJar, private val gateways: 
         val content by rememberUpdatedState(document)
         val client = remember(cef) { cef.createClient() }
         val page = remember(client) {
-            client.lockDown(document = { content }, onFailure = { failure("Couldn't display this widget.") })
+            client.lockDown(document = { content }, onFailure = { failure(widgetFailed) })
             OffscreenBrowser(client, WIDGET_URL, transparent = true).also { page ->
                 client.addDisplayHandler(object : CefDisplayHandlerAdapter() {
                     override fun onTitleChange(browser: CefBrowser, title: String?) {
@@ -294,7 +298,7 @@ internal class JcefWeb(private val cookies: WebCookieJar, private val gateways: 
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                IconButton(Lucide.X, contentDescription = "Close the page", onClick = onClose)
+                IconButton(Lucide.X, contentDescription = stringResource(Res.string.web_close_page), onClick = onClose)
                 Text(
                     title,
                     style = Theme[typography][body].copy(fontWeight = FontWeight.SemiBold),
@@ -468,8 +472,8 @@ internal class JcefWeb(private val cookies: WebCookieJar, private val gateways: 
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
                 ) {
-                    Text("Couldn't open the page.", style = Theme[typography][body], color = Theme[colors][textTertiary])
-                    Button("Try again", onClick = {
+                    Text(stringResource(Res.string.web_page_failed), style = Theme[typography][body], color = Theme[colors][textTertiary])
+                    Button(stringResource(Res.string.web_try_again), onClick = {
                         fail(false)
                         val target = page.browser.url?.takeUnless { it == "about:blank" } ?: url
                         scope.launch { renewAndReload(target) }

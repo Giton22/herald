@@ -38,6 +38,7 @@ import com.composables.icons.lucide.Phone
 import com.composables.icons.lucide.PhoneOff
 import dev.hermeskotlin.designsystem.surface3
 import dev.hermeskotlin.ui.voice.VoicePhase
+import dev.hermeskotlin.ui.components.ProvideAppWords
 import kotlinx.coroutines.delay
 import kotlin.time.TimeSource
 import com.composeunstyled.Text
@@ -60,6 +61,8 @@ import dev.hermeskotlin.designsystem.onAccent
 import dev.hermeskotlin.designsystem.text
 import dev.hermeskotlin.designsystem.textSecondary
 import dev.hermeskotlin.designsystem.typography
+import dev.hermeskotlin.ui.resources.*
+import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 
 /**
@@ -73,7 +76,7 @@ fun IncomingCallScreen(caller: String, why: String, onAnswer: () -> Unit, onDecl
     val palette = AccentPalette.named(settings.accent)
     hermesTheme(palette)(if (settings.pureBlack) PureBlack else ColorScheme.Dark) {
         CompositionLocalProvider(LocalAccentPalette provides palette) {
-            IncomingCallView(caller, why, onAnswer, onDecline)
+            ProvideAppWords { IncomingCallView(caller, why, onAnswer, onDecline) }
         }
     }
 }
@@ -89,7 +92,7 @@ internal fun IncomingCallView(caller: String, why: String, onAnswer: () -> Unit,
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Text("Kyllene call", style = Theme[typography][label], color = Theme[colors][textSecondary])
+            Text(stringResource(Res.string.call_title), style = Theme[typography][label], color = Theme[colors][textSecondary])
             Text(
                 caller,
                 style = Theme[typography][display],
@@ -104,8 +107,8 @@ internal fun IncomingCallView(caller: String, why: String, onAnswer: () -> Unit,
             Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(start = 48.dp, end = 48.dp, bottom = 72.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            CallButton("Decline", Lucide.PhoneOff, Theme[colors][danger], onDecline)
-            CallButton("Answer", Lucide.Phone, Theme[colors][accent], onAnswer)
+            CallButton(stringResource(Res.string.call_decline), Lucide.PhoneOff, Theme[colors][danger], onDecline)
+            CallButton(stringResource(Res.string.call_answer), Lucide.Phone, Theme[colors][accent], onAnswer)
         }
     }
 }
@@ -143,7 +146,7 @@ fun InCallScreen(model: PhoneCallModel) {
     }
     hermesTheme(palette)(if (settings.pureBlack) PureBlack else ColorScheme.Dark) {
         CompositionLocalProvider(LocalAccentPalette provides palette) {
-            InCallView(state, seconds, onMute = model::toggleMute, onEnd = model::hangUp)
+            ProvideAppWords { InCallView(state, seconds, onMute = model::toggleMute, onEnd = model::hangUp) }
         }
     }
 }
@@ -168,7 +171,7 @@ internal fun InCallView(state: PhoneCallState, seconds: Long, onMute: () -> Unit
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
-            Text(callStatus(state, seconds), style = Theme[typography][body], color = Theme[colors][textSecondary], textAlign = TextAlign.Center)
+            Text(callStatusText(callStatus(state, seconds)), style = Theme[typography][body], color = Theme[colors][textSecondary], textAlign = TextAlign.Center)
         }
         // What was said last, as captions: Hermes's words, or yours.
         val caption = state.error ?: voice.caption
@@ -180,7 +183,7 @@ internal fun InCallView(state: PhoneCallState, seconds: Long, onMute: () -> Unit
             ) {
                 if (state.error == null) {
                     Text(
-                        if (voice.captionIsVoice) "Hermes" else "You",
+                        if (voice.captionIsVoice) "Hermes" else stringResource(Res.string.voice_you),
                         style = Theme[typography][label],
                         color = Theme[colors][textSecondary],
                     )
@@ -203,34 +206,73 @@ internal fun InCallView(state: PhoneCallState, seconds: Long, onMute: () -> Unit
         ) {
             if (mutable) {
                 CallButton(
-                    if (voice.muted) "Unmute" else "Mute",
+                    stringResource(if (voice.muted) Res.string.voice_unmute else Res.string.voice_mute),
                     if (voice.muted) Lucide.MicOff else Lucide.Mic,
                     if (voice.muted) Theme[colors][accent] else Theme[colors][surface3],
                     onMute,
                 )
             }
-            CallButton("End", Lucide.PhoneOff, Theme[colors][danger], onEnd)
+            CallButton(stringResource(Res.string.voice_end), Lucide.PhoneOff, Theme[colors][danger], onEnd)
         }
     }
 }
 
 /** Under the caller: the call's state, or its length with what Hermes is doing now. */
-internal fun callStatus(state: PhoneCallState, seconds: Long): String {
+internal fun callStatus(state: PhoneCallState, seconds: Long): CallStatus {
     val voice = state.voice
-    if (state.ended) return "Call ended"
+    if (state.ended) return CallStatus.Ended
     val length = "${seconds / 60}:${(seconds % 60).toString().padStart(2, '0')}"
     val doing = when (voice.phase) {
-        VoicePhase.Off, VoicePhase.Connecting -> return "Connecting…"
-        VoicePhase.Listening -> if (voice.muted) "Muted" else "Listening"
-        VoicePhase.Transcribing -> "Listening"
-        VoicePhase.Thinking -> voice.working?.let { "Working: $it" } ?: "Thinking"
-        VoicePhase.Speaking -> "Speaking"
+        VoicePhase.Off, VoicePhase.Connecting -> return CallStatus.Connecting
+        VoicePhase.Listening -> if (voice.muted) CallStatus.Doing.Muted else CallStatus.Doing.Listening
+        VoicePhase.Transcribing -> CallStatus.Doing.Listening
+        VoicePhase.Thinking -> if (voice.working != null) CallStatus.Doing.Working else CallStatus.Doing.Thinking
+        VoicePhase.Speaking -> CallStatus.Doing.Speaking
     }
-    return "$length · $doing"
+    return CallStatus.Live(length, doing, voice.working.takeIf { doing == CallStatus.Doing.Working })
 }
 
-/** Why it rings, in a few words: what the agent waits for, never the command or the question itself. */
+/** What [callStatus] found; [callStatusText] words it. */
+internal sealed interface CallStatus {
+    data object Ended : CallStatus
+    data object Connecting : CallStatus
+
+    /** [length] as m:ss; [tool] is what Hermes runs, while [doing] is [Doing.Working]. */
+    data class Live(val length: String, val doing: Doing, val tool: String? = null) : CallStatus
+
+    enum class Doing { Listening, Muted, Thinking, Working, Speaking }
+}
+
+@Composable
+internal fun callStatusText(status: CallStatus): String = when (status) {
+    CallStatus.Ended -> stringResource(Res.string.call_ended)
+    CallStatus.Connecting -> stringResource(Res.string.voice_connecting)
+    is CallStatus.Live -> {
+        val doing = when (status.doing) {
+            CallStatus.Doing.Listening -> stringResource(Res.string.call_listening)
+            CallStatus.Doing.Muted -> stringResource(Res.string.voice_muted)
+            CallStatus.Doing.Thinking -> stringResource(Res.string.call_thinking)
+            CallStatus.Doing.Working -> stringResource(Res.string.call_working, status.tool.orEmpty())
+            CallStatus.Doing.Speaking -> stringResource(Res.string.call_speaking)
+        }
+        stringResource(Res.string.call_status, status.length, doing)
+    }
+}
+
+/**
+ * Why it rings, in a few words: what the agent waits for, never the command or the question itself. In English,
+ * for the call's notification, whose other words are English too; [IncomingCallScreen] shows [callReasonText].
+ */
 fun callReason(approval: Boolean): String = if (approval) "Needs your approval" else "Has a question for you"
 
 /** Why a call the agent placed rings, over the lock screen: not what it's about, which Hermes says on the line. */
 fun agentCallReason(): String = "Calling you"
+
+/** [callReason] in the app's language, for the call screen. */
+@Composable
+fun callReasonText(approval: Boolean): String =
+    stringResource(if (approval) Res.string.call_reason_approval else Res.string.call_reason_question)
+
+/** [agentCallReason] in the app's language, for the call screen. */
+@Composable
+fun agentCallReasonText(): String = stringResource(Res.string.call_reason_agent)

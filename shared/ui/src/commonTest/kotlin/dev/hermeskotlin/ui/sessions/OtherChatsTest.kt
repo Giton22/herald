@@ -10,6 +10,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import dev.hermeskotlin.ui.resources.*
 
 class OtherChatsTest {
 
@@ -50,21 +51,21 @@ class OtherChatsTest {
     }
 
     @Test
-    fun theBadgeSaysHowManyAndHowUrgentInWords() {
+    fun theBadgeSaysHowManyAndHowUrgent() {
         assertTrue(SessionsBadge().none)
-        assertEquals("Sessions", SessionsBadge().description)
-        assertEquals("Sessions, 1 needs you", SessionsBadge(replies = 1).description)
-        assertEquals("Sessions, 3 need you", SessionsBadge(waiting = 1, replies = 2).description)
+        assertFalse(SessionsBadge(replies = 1).none)
+        assertEquals(1, SessionsBadge(replies = 1).count)
+        assertEquals(3, SessionsBadge(waiting = 1, replies = 2).count)
         assertFalse(SessionsBadge(replies = 2).urgent)
         assertTrue(SessionsBadge(waiting = 1).urgent)
     }
 
     @Test
     fun theBannerSaysWhatHappenedAndHowManyMore() {
-        assertEquals("Reply in Alpha", OtherChatEvent("a", "Alpha", OtherChatCall.Reply).message)
-        assertEquals("Alpha needs your OK, and 2 more", OtherChatEvent("a", "Alpha", OtherChatCall.Approval, more = 2).message)
-        assertEquals("Alpha needs an answer", OtherChatEvent("a", "Alpha", OtherChatCall.Question).message)
-        assertEquals("Alpha needs your input", OtherChatEvent("a", "Alpha", OtherChatCall.Input).message)
+        assertEquals(Res.string.sessions_other_reply, OtherChatEvent("a", "Alpha", OtherChatCall.Reply).said)
+        assertEquals(Res.string.sessions_other_approval, OtherChatEvent("a", "Alpha", OtherChatCall.Approval, more = 2).said)
+        assertEquals(Res.string.sessions_other_question, OtherChatEvent("a", "Alpha", OtherChatCall.Question).said)
+        assertEquals(Res.string.sessions_other_input, OtherChatEvent("a", "Alpha", OtherChatCall.Input).said)
         assertFalse(OtherChatEvent("a", "Alpha", OtherChatCall.Reply).waiting)
         assertTrue(OtherChatEvent("a", "Alpha", OtherChatCall.Input).waiting)
     }
@@ -158,7 +159,7 @@ class OtherChatsTest {
         assertEquals("b", event.chatId)
         assertEquals(OtherChatCall.Approval, event.call)
         assertEquals(2, event.more)
-        assertEquals("B needs your OK, and 2 more", event.message)
+        assertEquals("B", event.title)
     }
 
     @Test
@@ -364,7 +365,7 @@ class OtherChatsTest {
         val one = InputRequest.Clarify("r2", listOf(ClarifyQuestion(null, "Which **branch**?")))
         assertEquals("Which branch?", previewOf(one))
         val three = InputRequest.Clarify("r3", listOf(ClarifyQuestion("q1", "Which branch?"), ClarifyQuestion("q2", "Squash?"), ClarifyQuestion("q3", "Push?")))
-        assertEquals("Which branch? (+2 more)", previewOf(three))
+        assertEquals("Which branch? (+2)", previewOf(three))
         assertNull(previewOf(InputRequest.Clarify("r4", emptyList())))
     }
 

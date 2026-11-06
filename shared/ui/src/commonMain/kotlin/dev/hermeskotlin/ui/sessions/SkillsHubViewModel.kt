@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import dev.hermeskotlin.ui.resources.*
 
 /** The `running` key of the "update all" action. */
 const val UPDATE_ALL = "update-all"
@@ -30,7 +31,7 @@ data class HubDetail(
     val preview: HubPreview? = null,
     val scan: HubScan? = null,
     val error: String? = null,
-    val scanError: String? = null,
+    val scanError: Said? = null,
 )
 
 data class SkillsHubUiState(
@@ -46,7 +47,7 @@ data class SkillsHubUiState(
     val confirm: HubScan? = null,
     /** Actions in flight, keyed by installKey, uninstall name or [UPDATE_ALL]. */
     val running: Set<String> = emptySet(),
-    val message: String? = null,
+    val message: Said? = null,
     val unsupported: Boolean = false,
     val sessionExpired: Boolean = false,
 )
@@ -198,7 +199,7 @@ class SkillsHubViewModel(private val api: SkillsHubApi) : ViewModel(), SkillsHub
                     r is ApiResult.Success -> s.copy(detail = s.detail.copy(scan = r.value))
                     // Install scans again when this one failed.
                     else -> s.copy(
-                        detail = s.detail.copy(scanError = "Couldn't scan: ${r.errorMessage}"),
+                        detail = s.detail.copy(scanError = said(Res.string.sessions_hub_scan_failed, detail = r.errorMessage)),
                         sessionExpired = s.sessionExpired || r == ApiResult.SessionExpired,
                     )
                 }
@@ -241,7 +242,7 @@ class SkillsHubViewModel(private val api: SkillsHubApi) : ViewModel(), SkillsHub
                 else -> {
                     stopRunning(key)
                     _state.update {
-                        it.copy(message = "Couldn't check ${skill.name}: ${r.errorMessage}", sessionExpired = it.sessionExpired || r == ApiResult.SessionExpired)
+                        it.copy(message = said(Res.string.sessions_hub_check_failed, skill.name, detail = r.errorMessage), sessionExpired = it.sessionExpired || r == ApiResult.SessionExpired)
                     }
                 }
             }
@@ -267,9 +268,11 @@ class SkillsHubViewModel(private val api: SkillsHubApi) : ViewModel(), SkillsHub
         if (name in _state.value.running) return
         setRunning(name)
         viewModelScope.launch(binding) {
-            finish(name, api.uninstall(url, profile, name), failure = "Couldn't remove $name") {
+            finish(name, api.uninstall(url, profile, name), failure = Said.Line(Res.string.sessions_hub_remove_failed, listOf(name))) {
                 localChanges++
-                _state.update { s -> s.copy(installed = s.installed.filterNot { it == name || it.endsWith("/$name") }.toSet(), message = "Removed $name. $APPLIES_NEXT_CHAT") }
+                _state.update { s ->
+                    s.copy(installed = s.installed.filterNot { it == name || it.endsWith("/$name") }.toSet(), message = said(Res.string.sessions_hub_removed, name))
+                }
             }
         }
     }
@@ -279,8 +282,8 @@ class SkillsHubViewModel(private val api: SkillsHubApi) : ViewModel(), SkillsHub
         if (UPDATE_ALL in _state.value.running) return
         setRunning(UPDATE_ALL)
         viewModelScope.launch(binding) {
-            finish(UPDATE_ALL, api.updateAll(url, profile), failure = "Couldn't update skills") {
-                _state.update { it.copy(message = "Skills updated. $APPLIES_NEXT_CHAT") }
+            finish(UPDATE_ALL, api.updateAll(url, profile), failure = Said.Line(Res.string.sessions_hub_update_failed)) {
+                _state.update { it.copy(message = said(Res.string.sessions_hub_updated)) }
             }
         }
     }
@@ -296,7 +299,7 @@ class SkillsHubViewModel(private val api: SkillsHubApi) : ViewModel(), SkillsHub
             val result = api.install(url, profile, key)
             if (result is ApiResult.Success && result.value is HubActionResult.Blocked) {
                 stopRunning(key)
-                _state.update { it.copy(message = "${skill.name} was blocked by the security scan.") }
+                _state.update { it.copy(message = said(Res.string.sessions_hub_blocked, skill.name)) }
                 when (val scan = api.scan(url, profile, key)) {
                     is ApiResult.Success -> showScan(skill, scan.value)
                     // Only the sheet still open on this skill gets the error; the Blocked message already told them.
@@ -310,15 +313,15 @@ class SkillsHubViewModel(private val api: SkillsHubApi) : ViewModel(), SkillsHub
                 }
                 return@launch
             }
-            finish(key, result, failure = "Couldn't install ${skill.name}") {
+            finish(key, result, failure = Said.Line(Res.string.sessions_hub_install_failed, listOf(skill.name))) {
                 localChanges++
-                _state.update { it.copy(installed = it.installed + key, message = "Installed ${skill.name}. $APPLIES_NEXT_CHAT") }
+                _state.update { it.copy(installed = it.installed + key, message = said(Res.string.sessions_hub_installed, skill.name)) }
             }
         }
     }
 
     /** Ends the action on [key]: [onDone] for a success, otherwise a message with the last log line or the error. */
-    private fun finish(key: String, result: ApiResult<HubActionResult>, failure: String, onDone: () -> Unit) {
+    private fun finish(key: String, result: ApiResult<HubActionResult>, failure: Said.Line, onDone: () -> Unit) {
         stopRunning(key)
         when (result) {
             is ApiResult.Success -> when (val r = result.value) {
@@ -328,14 +331,14 @@ class SkillsHubViewModel(private val api: SkillsHubApi) : ViewModel(), SkillsHub
                 }
                 // Not a failure: it may still finish, so the lists are read again and Install is free again.
                 is HubActionResult.StillRunning -> {
-                    _state.update { it.copy(message = r.lines.firstOrNull()) }
+                    _state.update { it.copy(message = r.lines.firstOrNull().verbatim()) }
                     onSkillsChanged()
                 }
-                else -> _state.update { it.copy(message = listOfNotNull(failure, r.lines.lastOrNull { l -> l.isNotBlank() }).joinToString(": ")) }
+                else -> _state.update { it.copy(message = failure.copy(detail = r.lines.lastOrNull { l -> l.isNotBlank() })) }
             }
             else -> _state.update {
                 it.copy(
-                    message = listOfNotNull(failure, result.errorMessage).joinToString(": "),
+                    message = failure.copy(detail = result.errorMessage),
                     sessionExpired = it.sessionExpired || result == ApiResult.SessionExpired,
                 )
             }
@@ -357,6 +360,5 @@ class SkillsHubViewModel(private val api: SkillsHubApi) : ViewModel(), SkillsHub
 
     private companion object {
         const val SEARCH_PAUSE_MS = 400L
-        const val APPLIES_NEXT_CHAT = "It applies from the next chat."
     }
 }

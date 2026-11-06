@@ -60,6 +60,9 @@ import dev.hermeskotlin.designsystem.surface
 import dev.hermeskotlin.designsystem.text as textColor
 import dev.hermeskotlin.designsystem.textTertiary
 import dev.hermeskotlin.designsystem.typography
+import dev.hermeskotlin.ui.resources.*
+import org.jetbrains.compose.resources.StringResource
+import org.jetbrains.compose.resources.stringResource
 
 /** The files waiting in the composer, each with a remove button. */
 @Composable
@@ -72,7 +75,7 @@ internal fun ComposerTray(attachments: List<OutgoingAttachment>, onRemove: (Stri
             Box {
                 AttachmentTile(attachment.name, attachment.kind, attachment.thumbnail, size = 64.dp)
                 // Named on hover on the desktop, as an icon button is.
-                Tooltip("Remove", Modifier.align(Alignment.TopEnd)) { UnstyledButton(
+                Tooltip(stringResource(Res.string.common_remove), Modifier.align(Alignment.TopEnd)) { UnstyledButton(
                     onClick = { onRemove(attachment.id) },
                     modifier = Modifier
                         .padding(4.dp)
@@ -81,7 +84,7 @@ internal fun ComposerTray(attachments: List<OutgoingAttachment>, onRemove: (Stri
                         .background(Color.Black.copy(alpha = 0.6f)),
                     indication = rememberHoverIndication(Color.White),
                 ) {
-                    UnstyledIcon(Lucide.X, contentDescription = "Remove ${attachment.name}", tint = Color.White, modifier = Modifier.size(14.dp))
+                    UnstyledIcon(Lucide.X, contentDescription = stringResource(Res.string.chat_remove_named, attachment.name), tint = Color.White, modifier = Modifier.size(14.dp))
                 } }
             }
         }
@@ -146,7 +149,7 @@ private fun AttachmentTile(name: String, kind: AttachmentKind, thumbnail: ByteAr
         UnstyledIcon(kind.icon, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(22.dp))
         Column(Modifier.padding(end = if (size > 64.dp) 0.dp else 18.dp)) {
             Text(name, style = Theme[typography][bodySmall], color = Theme[colors][textColor], maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(kind.label, style = Theme[typography][caption], color = Theme[colors][textTertiary], maxLines = 1)
+            Text(stringResource(kind.label), style = Theme[typography][caption], color = Theme[colors][textTertiary], maxLines = 1)
         }
     }
 }
@@ -161,24 +164,27 @@ private val AttachmentKind.icon: ImageVector
         AttachmentKind.File -> Lucide.File
     }
 
-private val AttachmentKind.label: String
+private val AttachmentKind.label: StringResource
     get() = when (this) {
-        AttachmentKind.Image -> "Image"
-        AttachmentKind.Pdf -> "PDF"
-        AttachmentKind.File -> "File"
+        AttachmentKind.Image -> Res.string.chat_attachment_image
+        AttachmentKind.Pdf -> Res.string.chat_kind_pdf
+        AttachmentKind.File -> Res.string.chat_kind_file
     }
 
-/** The + button's choices. */
+/** The + button's choices; [subtitle] defaults to the chat's own limits. */
 @Composable
-internal fun AttachSheet(visible: Boolean, onDismiss: () -> Unit, picker: AttachmentPicker, subtitle: String = "Up to ${OutgoingAttachment.MAX_COUNT} photos or files, ${OutgoingAttachment.MAX_BYTES / (1024 * 1024)} MB each") {
+internal fun AttachSheet(visible: Boolean, onDismiss: () -> Unit, picker: AttachmentPicker, subtitle: String? = null) {
     fun pick(action: () -> Unit) {
         onDismiss()
         action()
     }
     BottomSheet(visible = visible, onDismiss = onDismiss) {
-        SheetHeader("Add to message", subtitle)
-        SheetAction("Photos", Lucide.ImageIcon, onClick = { pick(picker::pickPhotos) })
-        SheetAction("Camera", Lucide.Camera, onClick = { pick(picker::takePhoto) })
-        SheetAction("Files", Lucide.Paperclip, onClick = { pick(picker::pickFiles) })
+        SheetHeader(
+            stringResource(Res.string.chat_attach_title),
+            subtitle ?: stringResource(Res.string.chat_attach_limits, OutgoingAttachment.MAX_COUNT, OutgoingAttachment.MAX_BYTES / 1_000_000),
+        )
+        SheetAction(stringResource(Res.string.chat_attach_photos), Lucide.ImageIcon, onClick = { pick(picker::pickPhotos) })
+        SheetAction(stringResource(Res.string.chat_attach_camera), Lucide.Camera, onClick = { pick(picker::takePhoto) })
+        SheetAction(stringResource(Res.string.chat_attach_files), Lucide.Paperclip, onClick = { pick(picker::pickFiles) })
     }
 }

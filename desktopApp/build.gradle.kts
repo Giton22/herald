@@ -29,6 +29,10 @@ kotlin {
             compileOnly(libs.jcef)
             // Windows' global hotkey for the quick entry.
             implementation(libs.jna.platform)
+            // The tray's, quick entry's and system prompts' words (src/jvmMain/composeResources).
+            implementation(compose.components.resources)
+            // FileKit uses the same D-Bus runtime; the Linux shortcut portal uses no file descriptors.
+            implementation(libs.dbus.core)
         }
         jvmTest.dependencies {
             implementation(libs.kotlin.test)
@@ -38,6 +42,14 @@ kotlin {
             implementation(libs.jcef)
         }
     }
+}
+
+// The desktop app's own words: the tray, the quick entry, notifications and the storage prompt. values/ is English,
+// one folder per language beside it, as in shared/ui (docs/i18n.md). They follow the system's language.
+compose.resources {
+    packageOfResClass = "dev.hermeskotlin.desktop.resources"
+    // "auto" looks for the library in commonMain, which a desktop-only module doesn't use.
+    generateResClass = always
 }
 
 compose.desktop {
@@ -57,9 +69,11 @@ compose.desktop {
 
         // The installers (packageRelease…) leave out the library code the app never reaches. Names are kept:
         // renaming would save little more, and code that looks classes up by name (Warmup, Compose's text menu)
-        // would need a rule for each.
+        // would need a rule for each. No optimisation either: it took over half of a Linux CI run (13 of 25 min)
+        // and saved only about 3.4 MB on top of the shrinking.
         buildTypes.release.proguard {
             obfuscate = false
+            optimize = false
             configurationFiles.from(project.file("proguard-rules.pro"))
         }
 
@@ -229,4 +243,9 @@ if (System.getProperty("os.name").startsWith("Linux")) {
             nativeJars.forEach { it.copyTo(output.get().asFile.resolve(it.name), overwrite = true) }
         }
     }
+}
+
+// A failed check's message (which language, how wide) shows in the CI log, not only in the HTML report.
+tasks.withType<Test>().configureEach {
+    testLogging { exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL }
 }

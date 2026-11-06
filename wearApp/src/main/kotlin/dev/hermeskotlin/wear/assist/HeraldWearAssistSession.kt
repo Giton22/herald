@@ -28,6 +28,8 @@ import dev.hermeskotlin.wear.AssistPanel
 import dev.hermeskotlin.wear.HeraldWatch
 import dev.hermeskotlin.wear.Listening
 import dev.hermeskotlin.wear.PROFILE_CHANGED
+import dev.hermeskotlin.wear.R
+import dev.hermeskotlin.wear.WatchLine
 import dev.hermeskotlin.wear.WatchLink
 import dev.hermeskotlin.wear.WatchRecorder
 import dev.hermeskotlin.wear.recordAsk
@@ -190,6 +192,6 @@ class HeraldWearAssistSession(context: Context) :
     }
 
     private companion object {
-        const val NEEDS_MICROPHONE = "Tap to allow the microphone."
+        val NEEDS_MICROPHONE = WatchLine.Res(R.string.wear_tap_allow_microphone)
     }
 }

@@ -53,6 +53,11 @@ enum class SendCheck {
     NotReceived,
 }
 
+/** [sent] of [total] bytes of attachment [name] uploaded so far. */
+data class UploadProgress(val name: String, val sent: Long, val total: Long) {
+    val percent: Int get() = if (total <= 0) 0 else (sent * 100 / total).toInt().coerceIn(0, 100)
+}
+
 /** How a send ended. */
 enum class SendOutcome {
     Sent,
@@ -65,7 +70,16 @@ enum class SendOutcome {
 }
 
 /** What went out for a bubble marked by a [SendCheck]: [text] as sent, [display] as shown. */
-internal class UnsettledPrompt(val text: String, val display: String?, val startsTurn: Boolean)
+/**
+ * A prompt whose delivery isn't known yet, as it went out. [files] are the `@file:` references it carried, each
+ * with its card: they stay in the session's workspace, so a resend refers to them again.
+ */
+internal class UnsettledPrompt(
+    val text: String,
+    val display: String?,
+    val startsTurn: Boolean,
+    val files: List<Pair<String, ShownAttachment>> = emptyList(),
+)
 
 sealed interface ChatMessage {
     val key: String
@@ -87,6 +101,8 @@ sealed interface ChatMessage {
         val sentText: String? = null,
         /** When it was sent, in epoch seconds: the stored row's time, or when this device sent it. */
         val timestamp: Double? = null,
+        /** A large attachment going up over HTTP before the prompt is sent; null once it's up. */
+        val upload: UploadProgress? = null,
     ) : ChatMessage
 
     /** One reply: streamed text, reasoning and the tools it ran. [streaming] until `message.complete`. */

@@ -118,6 +118,11 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import dev.hermeskotlin.ui.resources.*
+import org.jetbrains.compose.resources.PluralStringResource
+import org.jetbrains.compose.resources.StringResource
+import org.jetbrains.compose.resources.pluralStringResource
+import org.jetbrains.compose.resources.stringResource
 
 /** An action in flight, and the last one's failure, shown in the sheet until the next action clears it. */
 data class ControlPanelState(
@@ -182,17 +187,19 @@ fun SessionControlStrip(control: SessionControl?, hazeState: HazeState, onOpen: 
 private fun Strip(control: SessionControl, hazeState: HazeState, onOpen: () -> Unit) {
     val use24Hour = uses24HourClock()
     val rows = listOfNotNull(
-        control.goal?.let { StripItem(Lucide.Target, phaseTint(it.phase), goalLine(it), it.title) },
+        control.goal?.let { StripItem(Lucide.Target, phaseTint(it.phase), goalLine(it).line(), it.title) },
         control.loop?.let { loop ->
             val tint = if (loop.status == "active" && !loop.deferredByGoal) Theme[colors][accentText] else Theme[colors][textSecondary]
-            StripItem(Lucide.Repeat, tint, loopLine(loop, use24Hour), loop.prompt)
+            StripItem(Lucide.Repeat, tint, loopLine(loop, use24Hour).line(), loop.prompt)
         },
         control.heartbeat?.let { heartbeat ->
             val tint = if (heartbeat.status == "paused") Theme[colors][textSecondary] else Theme[colors][accentText]
-            StripItem(Lucide.HeartPulse, tint, heartbeatLine(heartbeat), heartbeat.prompt)
+            StripItem(Lucide.HeartPulse, tint, heartbeatLine(heartbeat).line(), heartbeat.prompt)
         },
     )
-    val spoken = rows.joinToString(". ") { if (it.title.isBlank()) it.line else "${it.line}: ${it.title}" }
+    val spokenRows = rows.map { if (it.title.isBlank()) it.line else stringResource(Res.string.chat_detail_line, it.line, it.title) }
+    val openLabel = stringResource(Res.string.chat_control_open)
+    val spoken = stringResource(Res.string.chat_control_spoken, spokenRows.joinToString(". "), openLabel)
     val shape = RoundedCornerShape(Theme[radii][radiusLarge])
     val page = Theme[colors][background]
     val frosted = remember(page) {
@@ -208,8 +215,8 @@ private fun Strip(control: SessionControl, hazeState: HazeState, onOpen: () -> U
             .fillMaxWidth()
             .frostedPanel(shape, Theme[colors][surfaceElevated].copy(alpha = 0.85f), Theme[colors][strokeStrong], Modifier.hazeBlur(input = HazeInput.Sources(hazeState), style = frosted))
             .handCursor()
-            .clickable(role = Role.Button, onClickLabel = "Open goal and loops", onClick = onOpen)
-            .semantics { contentDescription = "$spoken. Open goal and loops" }
+            .clickable(role = Role.Button, onClickLabel = openLabel, onClick = onOpen)
+            .semantics { contentDescription = spoken }
             // The whole strip is the touch target, so its rows sit close rather than 48dp apart each.
             .heightIn(min = MinTouchTarget)
             .padding(vertical = 6.dp),
@@ -246,65 +253,85 @@ private fun StripRow(item: StripItem) {
     }
 }
 
+/**
+ * A piece of a label, chosen in plain code and put into words in a composable: a catalogue string with its
+ * arguments, a count, or text that already is words (the gateway's, a clock time).
+ */
+internal sealed interface Words {
+    data class Of(val res: StringResource, val args: List<Any> = emptyList()) : Words
+
+    data class Count(val res: PluralStringResource, val count: Int, val args: List<Any> = listOf(count)) : Words
+
+    data class Said(val text: String) : Words
+}
+
+@Composable
+internal fun Words.text(): String = when (this) {
+    is Words.Of -> stringResource(res, *args.toTypedArray())
+    is Words.Count -> pluralStringResource(res, count, *args.toTypedArray())
+    is Words.Said -> text
+}
+
+/** The pieces as one line, "Goal · Working · 4 of 20 turns". */
+@Composable
+internal fun List<Words>.line(): String = map { it.text() }.joinToString(" · ")
+
 /** "Goal · Working · 4 of 20 turns". */
-internal fun goalLine(goal: GoalControl): String =
-    listOf("Goal", goalPhaseLabel(goal.phase), turnsLabel(goal.turnsUsed, goal.maxTurns))
-        .filter { it.isNotEmpty() }
-        .joinToString(" · ")
+internal fun goalLine(goal: GoalControl): List<Words> =
+    listOfNotNull(Words.Of(Res.string.chat_goal), Words.Of(goalPhaseLabel(goal.phase)), turnsLabel(goal.turnsUsed, goal.maxTurns))
 
 /** "Loop · Running · 2 of 6 runs · next 3:45 PM". */
-internal fun loopLine(loop: LoopControl, use24Hour: Boolean, nowMillis: Long = Clock.System.now().toEpochMilliseconds()): String {
+internal fun loopLine(loop: LoopControl, use24Hour: Boolean, nowMillis: Long = Clock.System.now().toEpochMilliseconds()): List<Words> {
     val next = if (loop.status == "active" && !loop.deferredByGoal && loop.nextDueAt > 0) {
         // A past due time reads as now, not as a clock time that already went by.
-        if (loop.nextDueAt * 1000 <= nowMillis) "due now" else "next ${messageTime(loop.nextDueAt, use24Hour, nowMillis)}"
+        if (loop.nextDueAt * 1000 <= nowMillis) {
+            Words.Of(Res.string.chat_loop_due_now)
+        } else {
+            Words.Of(Res.string.chat_loop_next, listOf(messageTime(loop.nextDueAt, use24Hour, nowMillis)))
+        }
     } else {
-        ""
+        null
     }
-    return listOf("Loop", loopStateLabel(loop), runsLabel(loop.ticksFired, loop.times), next)
-        .filter { it.isNotEmpty() }
-        .joinToString(" · ")
+    return listOfNotNull(Words.Of(Res.string.chat_loop), Words.Of(loopStateLabel(loop)), runsLabel(loop.ticksFired, loop.times), next)
 }
 
 /** "Heartbeat · every 1 h · 3 fired"; "Heartbeat · Paused". */
-internal fun heartbeatLine(heartbeat: HeartbeatControl): String =
+internal fun heartbeatLine(heartbeat: HeartbeatControl): List<Words> =
     if (heartbeat.status == "paused") {
-        "Heartbeat · Paused"
+        listOf(Words.Of(Res.string.chat_heartbeat), Words.Of(Res.string.chat_paused))
     } else {
-        listOf("Heartbeat", everyLabel(heartbeat.intervalSeconds.toDouble()), firedLabel(heartbeat.fireCount))
-            .filter { it.isNotEmpty() }
-            .joinToString(" · ")
+        listOfNotNull(Words.Of(Res.string.chat_heartbeat), everyLabel(heartbeat.intervalSeconds.toDouble()), firedLabel(heartbeat.fireCount))
     }
 
 /** How a goal reads at a glance. */
-internal fun goalPhaseLabel(phase: GoalPhase): String = when (phase) {
-    GoalPhase.Active -> "Working"
-    GoalPhase.Paused -> "Paused"
-    GoalPhase.Waiting -> "Waiting"
-    GoalPhase.Blocked -> "Blocked"
-    GoalPhase.Done -> "Done"
+internal fun goalPhaseLabel(phase: GoalPhase): StringResource = when (phase) {
+    GoalPhase.Active -> Res.string.chat_goal_working
+    GoalPhase.Paused -> Res.string.chat_paused
+    GoalPhase.Waiting -> Res.string.chat_goal_waiting
+    GoalPhase.Blocked -> Res.string.chat_goal_blocked
+    GoalPhase.Done -> Res.string.chat_subagent_done
 }
 
 /** "4 of 20 turns" with a cap, "turn 4" without; nothing before the first turn. */
-internal fun turnsLabel(turnsUsed: Int, maxTurns: Int): String = when {
-    turnsUsed <= 0 -> ""
-    maxTurns > 0 -> "$turnsUsed of $maxTurns turns"
-    else -> "turn $turnsUsed"
+internal fun turnsLabel(turnsUsed: Int, maxTurns: Int): Words? = when {
+    turnsUsed <= 0 -> null
+    maxTurns > 0 -> Words.Count(Res.plurals.chat_goal_turns_of, maxTurns, listOf(turnsUsed, maxTurns))
+    else -> Words.Of(Res.string.chat_goal_turn, listOf(turnsUsed))
 }
 
 /** What a loop is doing, held back by the goal first since that's why it's quiet. */
-internal fun loopStateLabel(loop: LoopControl): String = when {
-    loop.deferredByGoal && loop.status == "active" -> "Held by the goal"
-    loop.status == "paused" -> "Paused"
-    loop.status == "done" -> "Finished"
-    else -> "Running"
+internal fun loopStateLabel(loop: LoopControl): StringResource = when {
+    loop.deferredByGoal && loop.status == "active" -> Res.string.chat_loop_held
+    loop.status == "paused" -> Res.string.chat_paused
+    loop.status == "done" -> Res.string.chat_loop_finished
+    else -> Res.string.chat_process_running
 }
 
 /** "2 of 6 runs" with a cap, "2 runs" ("1 run") without; nothing before the first run. */
-internal fun runsLabel(ticksFired: Int, times: Int): String = when {
-    ticksFired <= 0 -> ""
-    times > 0 -> "$ticksFired of $times runs"
-    ticksFired == 1 -> "1 run"
-    else -> "$ticksFired runs"
+internal fun runsLabel(ticksFired: Int, times: Int): Words? = when {
+    ticksFired <= 0 -> null
+    times > 0 -> Words.Count(Res.plurals.chat_loop_runs_of, times, listOf(ticksFired, times))
+    else -> Words.Count(Res.plurals.chat_loop_runs, ticksFired)
 }
 
 /**
@@ -316,41 +343,54 @@ internal fun pausedReasonLabel(reason: String?): String? =
 
 private const val USER_PAUSED = "user-paused"
 
-/** "3 fired"; "" when it never has. */
-internal fun firedLabel(fireCount: Int): String = if (fireCount <= 0) "" else "$fireCount fired"
+/** "3 fired"; nothing when it never has. */
+internal fun firedLabel(fireCount: Int): Words? = if (fireCount <= 0) null else Words.Count(Res.plurals.chat_heartbeat_fired, fireCount)
 
-/** "every 45 s", "every 30 min", "every 1 h", "every 1 h 30 min"; "" for no interval at all. */
-internal fun everyLabel(intervalSeconds: Double): String {
+/** "every 45 s", "every 30 min", "every 1 h", "every 1 h 30 min"; nothing for no interval at all. */
+internal fun everyLabel(intervalSeconds: Double): Words? {
     val s = intervalSeconds.toLong()
-    if (s <= 0) return ""
+    if (s <= 0) return null
     return when {
-        s < 60 -> "every $s s"
-        s < 3600 -> "every ${s / 60} min"
-        s % 3600 == 0L -> "every ${s / 3600} h"
-        else -> "every ${s / 3600} h ${(s % 3600) / 60} min"
+        s < 60 -> Words.Of(Res.string.chat_every_seconds, listOf(s))
+        s < 3600 -> Words.Of(Res.string.chat_every_minutes, listOf(s / 60))
+        s % 3600 == 0L -> Words.Of(Res.string.chat_every_hours, listOf(s / 3600))
+        else -> Words.Of(Res.string.chat_every_hours_minutes, listOf(s / 3600, (s % 3600) / 60))
     }
 }
 
 /** "2 of 3 attempts · exit 1"; "not run yet" before the first try. */
-internal fun gateLabel(gate: GoalGate): String {
-    if (gate.attempts <= 0) return "not run yet"
-    val exit = gate.lastExitCode?.let { " · exit $it" }.orEmpty()
-    return "${gate.attempts} of ${gate.maxRetries + 1} attempts$exit"
+internal fun gateLabel(gate: GoalGate): List<Words> {
+    if (gate.attempts <= 0) return listOf(Words.Of(Res.string.chat_gate_not_run))
+    val tries = gate.maxRetries + 1
+    return listOfNotNull(
+        Words.Count(Res.plurals.chat_gate_attempts, tries, listOf(gate.attempts, tries)),
+        gate.lastExitCode?.let { Words.Of(Res.string.chat_gate_exit, listOf(it)) },
+    )
 }
 
-/** "Waiting until 3:45 PM", "Waiting to resume: <reason>" once that time passed, "Waiting on another chat". */
-internal fun waitBarrierLabel(barrier: WaitBarrier, use24Hour: Boolean, nowMillis: Long = Clock.System.now().toEpochMilliseconds()): String =
+/**
+ * "Waiting until 3:45 PM", "Waiting to resume" once that time passed, "Waiting on another chat"; the barrier's
+ * reason goes after it, as [waitBarrierText] puts it.
+ */
+internal fun waitBarrierLabel(barrier: WaitBarrier, use24Hour: Boolean, nowMillis: Long = Clock.System.now().toEpochMilliseconds()): Words =
     when (barrier) {
         is WaitBarrier.Until ->
             // The wait's end time went by without the barrier lifting; a past clock time would mislead.
             if (barrier.untilAt * 1000 <= nowMillis) {
-                "Waiting to resume" + barrier.reason.takeIf { it.isNotBlank() }?.let { ": $it" }.orEmpty()
+                Words.Of(Res.string.chat_wait_resume)
             } else {
-                "Waiting until ${messageTime(barrier.untilAt, use24Hour, nowMillis)}"
+                Words.Of(Res.string.chat_wait_until, listOf(messageTime(barrier.untilAt, use24Hour, nowMillis)))
             }
-        is WaitBarrier.OnSession -> "Waiting on another chat"
-        is WaitBarrier.OnProcess -> "Waiting on process ${barrier.pid}"
+        is WaitBarrier.OnSession -> Words.Of(Res.string.chat_wait_other_chat)
+        is WaitBarrier.OnProcess -> Words.Of(Res.string.chat_wait_process, listOf(barrier.pid))
     }
+
+/** [waitBarrierLabel], then the barrier's reason when it gave one: "Waiting to resume: CI is running". */
+@Composable
+private fun waitBarrierText(barrier: WaitBarrier, use24Hour: Boolean): String {
+    val label = waitBarrierLabel(barrier, use24Hour).text()
+    return if (barrier.reason.isBlank()) label else stringResource(Res.string.chat_detail_line, label, barrier.reason)
+}
 
 @Composable
 private fun phaseTint(phase: GoalPhase): Color = Theme[colors][when (phase) {
@@ -392,7 +432,7 @@ internal fun SessionControlSheetView(
     LaunchedEffect(visible) { if (!visible) confirm = null }
     BottomSheet(visible = visible, onDismiss = onDismiss) {
         val current = shown ?: return@BottomSheet
-        SheetHeader("Goal and loops", "Set with /goal, /loop and /heartbeat")
+        SheetHeader(stringResource(Res.string.chat_control_title), stringResource(Res.string.chat_control_subtitle))
         Column(
             Modifier.fillMaxWidth().heightIn(max = 560.dp).verticalScrollWithBar().padding(start = 14.dp, end = 14.dp, top = 4.dp, bottom = 10.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -408,39 +448,39 @@ internal fun SessionControlSheetView(
 
 /** The sheet's confirmations, each saying what the action stops before it runs. */
 private sealed interface ConfirmAction {
-    val title: String
-    val message: String
-    val confirmLabel: String
+    val title: StringResource
+    val message: Words
+    val confirmLabel: StringResource
 
     data object ClearGoal : ConfirmAction {
-        override val title = "Clear this goal?"
-        override val message = "The agent stops working toward it. The chat stays."
-        override val confirmLabel = "Clear goal"
+        override val title = Res.string.chat_goal_clear_title
+        override val message = Words.Of(Res.string.chat_goal_clear_message)
+        override val confirmLabel = Res.string.chat_goal_clear
     }
 
     // The index isn't stored: the list may change under the open dialog, so it's resolved at confirm time.
     data class RemoveSubgoal(val text: String) : ConfirmAction {
-        override val title = "Remove this sub-goal?"
-        override val message = "“$text” leaves the goal's criteria. The goal itself stays."
-        override val confirmLabel = "Remove"
+        override val title = Res.string.chat_subgoal_remove_title
+        override val message = Words.Of(Res.string.chat_subgoal_remove_message, listOf(text))
+        override val confirmLabel = Res.string.common_remove
     }
 
     data object ClearSubgoals : ConfirmAction {
-        override val title = "Clear all sub-goals?"
-        override val message = "The goal keeps going without its criteria."
-        override val confirmLabel = "Clear all"
+        override val title = Res.string.chat_subgoals_clear_title
+        override val message = Words.Of(Res.string.chat_subgoals_clear_message)
+        override val confirmLabel = Res.string.chat_clear_all
     }
 
     data object StopLoop : ConfirmAction {
-        override val title = "Stop this loop?"
-        override val message = "It won't fire again. The chat stays."
-        override val confirmLabel = "Stop"
+        override val title = Res.string.chat_loop_stop_title
+        override val message = Words.Of(Res.string.chat_wont_fire_again)
+        override val confirmLabel = Res.string.chat_stop
     }
 
     data object ClearHeartbeat : ConfirmAction {
-        override val title = "Clear this heartbeat?"
-        override val message = "It won't fire again. The chat stays."
-        override val confirmLabel = "Clear"
+        override val title = Res.string.chat_heartbeat_clear_title
+        override val message = Words.Of(Res.string.chat_wont_fire_again)
+        override val confirmLabel = Res.string.chat_clear
     }
 }
 
@@ -457,12 +497,12 @@ private fun ConfirmControlAction(pending: ConfirmAction?, subgoals: List<String>
     Dialog(
         visible = pending != null,
         onDismissRequest = onDismiss,
-        title = target.title,
-        message = target.message,
+        title = stringResource(target.title),
+        message = target.message.text(),
         actions = {
-            Button("Cancel", onClick = onDismiss, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
+            Button(stringResource(Res.string.common_cancel), onClick = onDismiss, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
             Button(
-                target.confirmLabel,
+                stringResource(target.confirmLabel),
                 onClick = {
                     onDismiss()
                     when (val it = pending) {
@@ -486,13 +526,13 @@ private fun ConfirmControlAction(pending: ConfirmAction?, subgoals: List<String>
 
 @Composable
 private fun GoalSection(goal: GoalControl, use24Hour: Boolean, busy: ControlAction?, onAction: (ControlAction, String?, Int?) -> Unit, onConfirm: (ConfirmAction) -> Unit) {
-    Section("GOAL") {
+    Section(stringResource(Res.string.chat_goal)) {
         SelectionContainer {
             Text(goal.title, style = Theme[typography][body].copy(fontWeight = FontWeight.Medium), color = Theme[colors][text])
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(
-                listOf(goalPhaseLabel(goal.phase), turnsLabel(goal.turnsUsed, goal.maxTurns)).filter { it.isNotEmpty() }.joinToString(" · "),
+                listOfNotNull(Words.Of(goalPhaseLabel(goal.phase)), turnsLabel(goal.turnsUsed, goal.maxTurns)).line(),
                 style = Theme[typography][label],
                 color = phaseTint(goal.phase),
             )
@@ -508,10 +548,7 @@ private fun GoalSection(goal: GoalControl, use24Hour: Boolean, busy: ControlActi
         val barrier = goal.waitBarrier
         val pausedReason = pausedReasonLabel(goal.pausedReason)
         val relevant = when {
-            barrier != null -> waitBarrierLabel(barrier, use24Hour).let { label ->
-                // The label already carries the reason when it replaced a past clock time.
-                if (barrier.reason.isBlank() || label.endsWith(barrier.reason)) label else "$label: ${barrier.reason}"
-            }
+            barrier != null -> waitBarrierText(barrier, use24Hour)
             pausedReason != null -> pausedReason
             !goal.lastReason.isNullOrBlank() -> goal.lastReason
             else -> null
@@ -519,17 +556,17 @@ private fun GoalSection(goal: GoalControl, use24Hour: Boolean, busy: ControlActi
         relevant?.let { Detail(it) }
         if (!goal.contract.isEmpty) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                ContractLine("Outcome", goal.contract.outcome)
-                ContractLine("How it's checked", goal.contract.verification, codeValue = true)
-                ContractLine("Constraints", goal.contract.constraints)
-                ContractLine("Boundaries", goal.contract.boundaries)
-                ContractLine("Stop when", goal.contract.stopWhen)
+                ContractLine(stringResource(Res.string.chat_contract_outcome), goal.contract.outcome)
+                ContractLine(stringResource(Res.string.chat_contract_verification), goal.contract.verification, codeValue = true)
+                ContractLine(stringResource(Res.string.chat_contract_constraints), goal.contract.constraints)
+                ContractLine(stringResource(Res.string.chat_contract_boundaries), goal.contract.boundaries)
+                ContractLine(stringResource(Res.string.chat_contract_stop_when), goal.contract.stopWhen)
             }
         }
         Subgoals(goal, busy, onAction, onConfirm)
         if (goal.gates.isNotEmpty()) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("CHECKS", style = Theme[typography][eyebrow], color = Theme[colors][textTertiary], modifier = Modifier.semantics { heading() })
+                Text(stringResource(Res.string.chat_goal_checks).uppercase(), style = Theme[typography][eyebrow], color = Theme[colors][textTertiary], modifier = Modifier.semantics { heading() })
                 goal.gates.forEach { gate ->
                     Column {
                         Text(
@@ -539,7 +576,7 @@ private fun GoalSection(goal: GoalControl, use24Hour: Boolean, busy: ControlActi
                             maxLines = 3,
                             overflow = TextOverflow.Ellipsis,
                         )
-                        Text(gateLabel(gate), style = Theme[typography][caption], color = Theme[colors][textMuted])
+                        Text(gateLabel(gate).line(), style = Theme[typography][caption], color = Theme[colors][textMuted])
                     }
                 }
             }
@@ -550,19 +587,19 @@ private fun GoalSection(goal: GoalControl, use24Hour: Boolean, busy: ControlActi
             when (goal.phase) {
                 GoalPhase.Active, GoalPhase.Blocked ->
                     if (resumable) {
-                        PanelButton("Resume", ControlAction.GoalResume, busy, onAction, leadingIcon = Lucide.Play)
+                        PanelButton(stringResource(Res.string.chat_resume), ControlAction.GoalResume, busy, onAction, leadingIcon = Lucide.Play)
                     } else {
-                        PanelButton("Pause", ControlAction.GoalPause, busy, onAction, leadingIcon = Lucide.Pause)
+                        PanelButton(stringResource(Res.string.chat_pause), ControlAction.GoalPause, busy, onAction, leadingIcon = Lucide.Pause)
                     }
-                GoalPhase.Paused -> PanelButton("Resume", ControlAction.GoalResume, busy, onAction, leadingIcon = Lucide.Play)
+                GoalPhase.Paused -> PanelButton(stringResource(Res.string.chat_resume), ControlAction.GoalResume, busy, onAction, leadingIcon = Lucide.Play)
                 GoalPhase.Waiting -> {
-                    PanelButton("Resume now", ControlAction.GoalUnwait, busy, onAction, leadingIcon = Lucide.Play)
-                    PanelButton("Pause", ControlAction.GoalPause, busy, onAction, leadingIcon = Lucide.Pause)
+                    PanelButton(stringResource(Res.string.chat_resume_now), ControlAction.GoalUnwait, busy, onAction, leadingIcon = Lucide.Play)
+                    PanelButton(stringResource(Res.string.chat_pause), ControlAction.GoalPause, busy, onAction, leadingIcon = Lucide.Pause)
                 }
                 GoalPhase.Done -> {}
             }
             Button(
-                "Clear goal",
+                stringResource(Res.string.chat_goal_clear),
                 onClick = { onConfirm(ConfirmAction.ClearGoal) },
                 variant = ButtonVariant.Outline,
                 size = ButtonSize.Small,
@@ -589,10 +626,10 @@ private fun Subgoals(goal: GoalControl, busy: ControlAction?, onAction: (Control
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         if (goal.subgoals.isNotEmpty()) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("SUB-GOALS", style = Theme[typography][eyebrow], color = Theme[colors][textTertiary], modifier = Modifier.weight(1f).semantics { heading() })
+                Text(stringResource(Res.string.chat_subgoals).uppercase(), style = Theme[typography][eyebrow], color = Theme[colors][textTertiary], modifier = Modifier.weight(1f).semantics { heading() })
                 if (goal.subgoals.size > 1) {
                     Button(
-                        "Clear all",
+                        stringResource(Res.string.chat_clear_all),
                         onClick = { onConfirm(ConfirmAction.ClearSubgoals) },
                         variant = ButtonVariant.Ghost,
                         size = ButtonSize.Small,
@@ -606,7 +643,7 @@ private fun Subgoals(goal: GoalControl, busy: ControlAction?, onAction: (Control
                     // Named on hover on the desktop, as every icon button is.
                     IconButton(
                         Lucide.X,
-                        contentDescription = "Remove sub-goal",
+                        contentDescription = stringResource(Res.string.chat_subgoal_remove),
                         onClick = { onConfirm(ConfirmAction.RemoveSubgoal(text)) },
                         enabled = busy == null,
                         tint = Theme[colors][textTertiary],
@@ -619,12 +656,12 @@ private fun Subgoals(goal: GoalControl, busy: ControlAction?, onAction: (Control
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 TextField(
                     state = newSubgoal,
-                    placeholder = "Add a sub-goal",
+                    placeholder = stringResource(Res.string.chat_subgoal_add_placeholder),
                     onKeyboardAction = { addSubgoal(newSubgoal, busy, onAction, onSubmitted = { submitted = it }) },
                     modifier = Modifier.weight(1f),
                 )
                 Button(
-                    "Add",
+                    stringResource(Res.string.chat_add),
                     onClick = { addSubgoal(newSubgoal, busy, onAction, onSubmitted = { submitted = it }) },
                     variant = ButtonVariant.Secondary,
                     size = ButtonSize.Small,
@@ -647,32 +684,38 @@ private fun addSubgoal(field: TextFieldState, busy: ControlAction?, onAction: (C
 
 @Composable
 private fun LoopSection(loop: LoopControl, use24Hour: Boolean, busy: ControlAction?, onAction: (ControlAction, String?, Int?) -> Unit, onConfirm: (ConfirmAction) -> Unit) {
-    Section("LOOP") {
+    Section(stringResource(Res.string.chat_loop)) {
         if (loop.prompt.isNotBlank()) Detail(loop.prompt)
-        val cadence = if (loop.selfPaced) "Self-paced" else everyLabel(loop.intervalSeconds).replaceFirstChar { it.uppercase() }
+        val cadence = if (loop.selfPaced) stringResource(Res.string.chat_loop_self_paced) else everyLabel(loop.intervalSeconds)?.text()?.replaceFirstChar { it.uppercase() }
         Text(
-            listOf(loopStateLabel(loop), cadence, runsLabel(loop.ticksFired, loop.times)).filter { it.isNotEmpty() }.joinToString(" · "),
+            listOfNotNull(stringResource(loopStateLabel(loop)), cadence, runsLabel(loop.ticksFired, loop.times)?.text()).joinToString(" · "),
             style = Theme[typography][label],
             color = Theme[colors][textSecondary],
         )
         if (loop.status == "active" && !loop.deferredByGoal && loop.nextDueAt > 0) {
-            Detail(if (loop.nextDueAt * 1000 <= Clock.System.now().toEpochMilliseconds()) "Due now" else "Next run ${messageTime(loop.nextDueAt, use24Hour)}")
+            Detail(
+                if (loop.nextDueAt * 1000 <= Clock.System.now().toEpochMilliseconds()) {
+                    stringResource(Res.string.chat_loop_due_now_detail)
+                } else {
+                    stringResource(Res.string.chat_loop_next_run, messageTime(loop.nextDueAt, use24Hour))
+                },
+            )
         }
-        if (loop.until.isNotBlank()) Detail("Until: ${loop.until}")
-        if (loop.deferredByGoal) Detail("Waits while the goal is working.")
-        if (loop.awaitingResponse) Detail("Waiting for its last reply.")
+        if (loop.until.isNotBlank()) Detail(stringResource(Res.string.chat_loop_until, loop.until))
+        if (loop.deferredByGoal) Detail(stringResource(Res.string.chat_loop_waits_for_goal))
+        if (loop.awaitingResponse) Detail(stringResource(Res.string.chat_loop_awaiting_reply))
         pausedReasonLabel(loop.pausedReason)?.let { Detail(it) }
-        loop.lastStopReason?.takeIf { it.isNotBlank() }?.let { Detail("Stopped: $it") }
+        loop.lastStopReason?.takeIf { it.isNotBlank() }?.let { Detail(stringResource(Res.string.chat_loop_stopped_reason, it)) }
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             when (loop.status) {
-                "active" -> PanelButton("Pause", ControlAction.LoopPause, busy, onAction, leadingIcon = Lucide.Pause)
-                "paused" -> PanelButton("Resume", ControlAction.LoopResume, busy, onAction, leadingIcon = Lucide.Play)
+                "active" -> PanelButton(stringResource(Res.string.chat_pause), ControlAction.LoopPause, busy, onAction, leadingIcon = Lucide.Pause)
+                "paused" -> PanelButton(stringResource(Res.string.chat_resume), ControlAction.LoopResume, busy, onAction, leadingIcon = Lucide.Play)
             }
             if (loop.status == "done") {
-                PanelButton("Dismiss", ControlAction.LoopStop, busy, onAction, leadingIcon = Lucide.X)
+                PanelButton(stringResource(Res.string.chat_dismiss), ControlAction.LoopStop, busy, onAction, leadingIcon = Lucide.X)
             } else {
                 Button(
-                    "Stop",
+                    stringResource(Res.string.chat_stop),
                     onClick = { onConfirm(ConfirmAction.StopLoop) },
                     variant = ButtonVariant.Outline,
                     size = ButtonSize.Small,
@@ -686,31 +729,34 @@ private fun LoopSection(loop: LoopControl, use24Hour: Boolean, busy: ControlActi
 
 @Composable
 private fun HeartbeatSection(heartbeat: HeartbeatControl, busy: ControlAction?, onAction: (ControlAction, String?, Int?) -> Unit, onConfirm: (ConfirmAction) -> Unit) {
-    Section("HEARTBEAT") {
+    Section(stringResource(Res.string.chat_heartbeat)) {
         if (heartbeat.prompt.isNotBlank()) Detail(heartbeat.prompt)
         Text(
             if (heartbeat.status == "paused") {
-                "Paused"
+                stringResource(Res.string.chat_paused)
             } else {
-                listOf(everyLabel(heartbeat.intervalSeconds.toDouble()).replaceFirstChar { it.uppercase() }, firedLabel(heartbeat.fireCount))
-                    .filter { it.isNotEmpty() }
-                    .joinToString(" · ")
+                listOfNotNull(
+                    everyLabel(heartbeat.intervalSeconds.toDouble())?.text()?.replaceFirstChar { it.uppercase() },
+                    firedLabel(heartbeat.fireCount)?.text(),
+                ).joinToString(" · ")
             },
             style = Theme[typography][label],
             color = Theme[colors][textSecondary],
         )
         if (heartbeat.lastFiredAt > 0) {
             val ago = relativeTime(heartbeat.lastFiredAt)
-            if (ago.isNotEmpty()) Detail("Last fired ${if (ago == "now") "just now" else "$ago ago"}")
+            if (ago.isNotEmpty()) {
+                Detail(if (ago == "now") stringResource(Res.string.chat_heartbeat_fired_now) else stringResource(Res.string.chat_heartbeat_fired_ago, ago))
+            }
         }
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (heartbeat.status == "paused") {
-                PanelButton("Resume", ControlAction.HeartbeatResume, busy, onAction, leadingIcon = Lucide.Play)
+                PanelButton(stringResource(Res.string.chat_resume), ControlAction.HeartbeatResume, busy, onAction, leadingIcon = Lucide.Play)
             } else {
-                PanelButton("Pause", ControlAction.HeartbeatPause, busy, onAction, leadingIcon = Lucide.Pause)
+                PanelButton(stringResource(Res.string.chat_pause), ControlAction.HeartbeatPause, busy, onAction, leadingIcon = Lucide.Pause)
             }
             Button(
-                "Clear",
+                stringResource(Res.string.chat_clear),
                 onClick = { onConfirm(ConfirmAction.ClearHeartbeat) },
                 variant = ButtonVariant.Outline,
                 size = ButtonSize.Small,
@@ -734,7 +780,7 @@ private fun Section(header: String, content: @Composable androidx.compose.founda
             .padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Text(header, style = Theme[typography][eyebrow], color = Theme[colors][textTertiary], modifier = Modifier.semantics { heading() })
+        Text(header.uppercase(), style = Theme[typography][eyebrow], color = Theme[colors][textTertiary], modifier = Modifier.semantics { heading() })
         content()
     }
 }

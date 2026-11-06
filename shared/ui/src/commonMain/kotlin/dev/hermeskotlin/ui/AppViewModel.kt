@@ -29,6 +29,9 @@ import dev.hermeskotlin.core.bots.BotsApi
 import dev.hermeskotlin.core.sessions.SessionsApi
 import dev.hermeskotlin.core.settings.SettingsStore
 import dev.hermeskotlin.core.settings.CallTarget
+import dev.hermeskotlin.core.settings.AppSettings
+import dev.hermeskotlin.core.settings.startProject
+import dev.hermeskotlin.core.settings.withLastProject
 import dev.hermeskotlin.core.network.ApiResult
 import dev.hermeskotlin.core.network.errorMessage
 import kotlinx.coroutines.Job
@@ -46,6 +49,27 @@ import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import dev.hermeskotlin.ui.resources.*
+import org.jetbrains.compose.resources.getString
+
+/** Why the sign-in page opened on its own; the page words it. */
+enum class SignInNotice { SessionExpired }
+
+/** Why a call from a shortcut didn't start; the dialog words it. */
+sealed interface CallError {
+    data object InvalidTarget : CallError
+    data object BotUnavailable : CallError
+
+    /** The target's chat didn't load: [detail] is the gateway's reason, empty when it gave none. */
+    data class OpenFailed(val detail: String) : CallError
+    data object BotUnreachable : CallError
+
+    /** Anything else: [message] as the error said it, null when it said nothing. */
+    data class Failed(val message: String?) : CallError
+}
+
+/** A call target that can't be used, as [CallError] says. */
+private class CallTargetException(val error: CallError) : Exception()
 
 sealed interface Route {
     data object Loading : Route
@@ -54,7 +78,7 @@ sealed interface Route {
     data class Connect(val canCancel: Boolean = false) : Route
 
     /** Sign in to [gateway]. [adding] when it was just entered on [Connect], which Back returns to. */
-    data class SignIn(val gateway: SavedGateway, val notice: String? = null, val adding: Boolean = false) : Route
+    data class SignIn(val gateway: SavedGateway, val notice: SignInNotice? = null, val adding: Boolean = false) : Route
 
     /** The signed-in home: one chat (stored, or new when `target.storedSessionId` is null) with the sessions sidebar beside it. */
     data class Chat(val target: ChatTarget) : Route {
@@ -142,8 +166,8 @@ class AppViewModel(
 
     private var callJob: Job? = null
     private var callGeneration = 0L
-    private val _callError = MutableStateFlow<String?>(null)
-    val callError: StateFlow<String?> = _callError.asStateFlow()
+    private val _callError = MutableStateFlow<CallError?>(null)
+    val callError: StateFlow<CallError?> = _callError.asStateFlow()
     private val _openingCall = MutableStateFlow(false)
     val openingCall: StateFlow<Boolean> = _openingCall.asStateFlow()
     fun dismissCallError() { _callError.value = null }
@@ -192,7 +216,7 @@ class AppViewModel(
                     when {
                         bot != null -> openBotLink(bot, link.title, stored, link.draft, stored?.let { lastLook(it, profile = bot) })
                         stored == null -> newChat(link.draft)
-                        open != stored -> openSession(stored, link.title ?: "Chat", lastLook(stored, currentProfile()))
+                        open != stored -> openSession(stored, link.title ?: getString(Res.string.app_chat_fallback_title), lastLook(stored, currentProfile()))
                         // Usually the notification is for the chat left open: the reply came in while away.
                         // It stays open, with the line placed from the last look.
                         else -> (_route.value as? Route.Chat)?.let { route ->
@@ -213,34 +237,37 @@ class AppViewModel(
         callJob = viewModelScope.launch {
             try {
                 val target = settings.settings.filterNotNull().first().callTargets[route.gateway.url] ?: CallTarget()
-                require(target.valid) { "Choose a valid Default Call Target in Settings." }
+                if (!target.valid) throw CallTargetException(CallError.InvalidTarget)
                 val (bot, id) = if (target.profile != null) {
                     withTimeout(15_000) {
                         connection.state.first { it is ConnectionState.Connected }
                         if (_route.value !== route || generation != callGeneration) throw CancellationException()
                         val bot = botsApi.roster().bots.firstOrNull { it.name == target.profile }
-                            ?: error("This bot is unavailable. Choose a Default Call Target in Settings.")
+                            ?: throw CallTargetException(CallError.BotUnavailable)
                         bot to botChats.open(bot)
                     }
                 } else null to target.sessionId
                 if (id != null) {
                     val page = sessions.messages(route.gateway.gatewayUrl, id, limit = 1, profile = target.profile)
-                    check(page is ApiResult.Success) { "Couldn't open the Default Call Target. ${page.errorMessage.orEmpty()}" }
+                    if (page !is ApiResult.Success) throw CallTargetException(CallError.OpenFailed(page.errorMessage.orEmpty()))
                 }
                 if (_route.value !== route || generation != callGeneration) return@launch
                 val profile = target.profile ?: currentProfile().takeIf { target.sessionId == null }
                 val chat = newChatTarget(route.gateway, profile).copy(
-                    storedSessionId = id, title = bot?.label ?: if (id == null) "New chat" else target.label,
+                    // A new chat has no title: the chat names it, in the app's language.
+                    storedSessionId = id, title = bot?.label ?: if (id == null) null else target.label,
                     draft = ComposeDraft(start = DraftStart.VoiceChat),
                     bot = bot?.let { BotIdentity(it.name, it.label, chatsProfile = currentProfile()) },
                 )
                 _route.value = Route.Chat(chat)
             } catch (_: TimeoutCancellationException) {
-                if (_route.value === route && generation == callGeneration) _callError.value = "Couldn’t reach the bot. Try again once connected."
+                if (_route.value === route && generation == callGeneration) _callError.value = CallError.BotUnreachable
             } catch (e: CancellationException) {
                 throw e
+            } catch (e: CallTargetException) {
+                if (_route.value === route && generation == callGeneration) _callError.value = e.error
             } catch (e: Exception) {
-                if (_route.value === route && generation == callGeneration) _callError.value = e.message ?: "Couldn't open the Default Call Target. Try again."
+                if (_route.value === route && generation == callGeneration) _callError.value = CallError.Failed(e.message)
             } finally {
                 if (generation == callGeneration) _openingCall.value = false
             }
@@ -291,11 +318,14 @@ class AppViewModel(
         }
     }
 
-    /** Makes [gateway] the current one: its chats when it still holds a session, else its sign-in. */
-    fun switchGateway(gateway: SavedGateway) {
+    /**
+     * Makes [gateway] the current one: its chats when it still holds a session, else its sign-in. With [fresh], a new
+     * chat there rather than the one the user left off in (switched from an empty chat, to start one there).
+     */
+    fun switchGateway(gateway: SavedGateway, fresh: Boolean = false) {
         cancelPendingCall()
         if (gateway.url == signedInGateway()?.url) return
-        viewModelScope.launch { open(gateway) }
+        viewModelScope.launch { open(gateway, fresh) }
     }
 
     fun setPrimaryGateway(gateway: SavedGateway) {
@@ -361,11 +391,69 @@ class AppViewModel(
      * A new chat in the picked profile; [draft] fills its composer (shared from another app, a shortcut).
      * [cwd] is the folder it runs in, when it starts in a project.
      */
-    fun newChat(draft: ComposeDraft? = null, cwd: String? = null) {
+    fun newChat(draft: ComposeDraft? = null, cwd: String? = null, picked: Boolean = cwd != null) {
         cancelPendingCall()
         val gateway = signedInGateway() ?: return
-        _route.value = Route.Chat(newChatTarget(gateway, currentProfile()).copy(draft = draft, cwd = cwd))
+        val profile = currentProfile()
+        // [picked]: started in a project on purpose (the list's, Home included). The next new chat starts there too.
+        if (picked) rememberProject(gateway, profile, cwd)
+        if (!picked && settings.settings.value == null) {
+            // Opened from a share or a shortcut at launch, before the settings are read: wait for them, so the chat
+            // starts in the last project. Moved once open, a draft that sends itself would already be on its way.
+            viewModelScope.launch {
+                val read = settings.settings.filterNotNull().first()
+                _route.value = Route.Chat(freshChat(gateway, profile, read).copy(draft = draft))
+            }
+            return
+        }
+        val target = if (picked) newChatTarget(gateway, profile).copy(cwd = cwd) else freshChat(gateway, profile)
+        _route.value = Route.Chat(target.copy(draft = draft))
     }
+
+    /**
+     * Moves the open new chat, while nothing has been sent in it, to the project in [cwd] (null: none), picked on
+     * its greeting. The next new chat starts there too. What's typed in it stays.
+     */
+    fun pickProject(cwd: String?) {
+        val target = (_route.value as? Route.Chat)?.target ?: return
+        if (target.storedSessionId != null || target.bot != null || !unstarted()) return
+        rememberProject(target.gateway, target.profile, cwd)
+        if (target.cwd == cwd) return
+        // The draft it opened with is in the composer already; given again, it would be put there twice.
+        _route.value = Route.Chat(target.copy(cwd = cwd, draft = null))
+    }
+
+    private fun rememberProject(gateway: SavedGateway, profile: String?, cwd: String?) {
+        val remember = { settings.update { it.withLastProject(gateway.gatewayUrl, profile, cwd) } }
+        if (settings.settings.value != null) return remember()
+        // Not before the stored settings are read: a change made then would replace them all.
+        viewModelScope.launch {
+            settings.settings.filterNotNull().first()
+            remember()
+        }
+    }
+
+    /**
+     * On launch the settings may still be being read, so the new chat [opened] opens at once and moves to the
+     * project they name once they're in, if it's still the one on screen.
+     */
+    private fun startWhenRead(opened: ChatTarget) {
+        viewModelScope.launch {
+            val project = settings.settings.filterNotNull().first().startProject(opened.gateway.gatewayUrl, opened.profile) ?: return@launch
+            val route = _route.value as? Route.Chat ?: return@launch
+            if (route.target == opened && unstarted()) _route.value = Route.Chat(opened.copy(cwd = project))
+        }
+    }
+
+    /**
+     * The open new chat hasn't begun on the gateway (or isn't open in the host yet), so it can still move to another
+     * project; once its first send is under way, moving it would open another chat in its place.
+     */
+    private fun unstarted(): Boolean = host.session.value?.unstarted != false
+
+    /** A new chat on [gateway] in [profile], in the project the last one was started in. */
+    private fun freshChat(gateway: SavedGateway, profile: String?, settings: AppSettings? = this.settings.settings.value): ChatTarget =
+        newChatTarget(gateway, profile).copy(cwd = settings?.startProject(gateway.gatewayUrl, profile))
 
     /**
      * A chat about an Inbox report ([chat]): the run's own stored chat, or a new one that starts with the report.
@@ -432,7 +520,7 @@ class AppViewModel(
                 id != null -> _route.value = Route.Chat(botChatTarget(gateway, id, bot, name, draft))
                 // A share to a bot that's gone (an old shortcut) isn't lost: it waits in a new chat instead,
                 // which says so, since a send from there goes to the profile's own assistant, not the bot.
-                draft != null -> newChat(draft.withNotice("Couldn't open $name's chat, so the share is in a new chat."))
+                draft != null -> newChat(draft.withNotice(getString(Res.string.app_share_bot_gone, name)))
             }
         }
     }
@@ -465,15 +553,15 @@ class AppViewModel(
 
     /**
      * Switches to [profile] (null: the launch profile) and back to where the user left off in it,
-     * since its chats, memory and model are its own.
+     * since its chats, memory and model are its own. With [fresh], to a new chat in it instead.
      */
-    fun switchProfile(profile: String?) {
+    fun switchProfile(profile: String?, fresh: Boolean = false) {
         cancelPendingCall()
         val gateway = signedInGateway() ?: return
         if (profile == currentProfile()) return
         viewModelScope.launch {
             profiles.set(gateway.gatewayUrl, profile)
-            _route.value = home(gateway)
+            _route.value = home(gateway, fresh)
         }
     }
 
@@ -483,7 +571,7 @@ class AppViewModel(
         val gateway = signedInGateway() ?: return
         connection.stop()
         host.close()
-        _route.value = Route.SignIn(gateway, notice = "Your session expired. Sign in again.")
+        _route.value = Route.SignIn(gateway, notice = SignInNotice.SessionExpired)
     }
 
     /** Signs out of the current gateway; it stays saved, so signing in again (or switching away) is one step. */
@@ -516,22 +604,22 @@ class AppViewModel(
         return true
     }
 
-    private suspend fun open(gateway: SavedGateway) {
+    private suspend fun open(gateway: SavedGateway, fresh: Boolean = false) {
         connection.stop()
         host.close()
         gateways.select(gateway.url)
-        _route.value = if (auth.hasStoredSession(gateway.gatewayUrl)) home(gateway).also { connection.start(gateway.gatewayUrl) }
+        _route.value = if (auth.hasStoredSession(gateway.gatewayUrl)) home(gateway, fresh).also { connection.start(gateway.gatewayUrl) }
         else Route.SignIn(gateway)
     }
 
-    /** The last chat the user had open on [gateway] in its picked profile, or a fresh one. */
-    private suspend fun home(gateway: SavedGateway): Route.Chat {
+    /** The last chat the user had open on [gateway] in its picked profile, or a fresh one (always, with [fresh]). */
+    private suspend fun home(gateway: SavedGateway, fresh: Boolean = false): Route.Chat {
         val profile = profiles.get(gateway.gatewayUrl)
         _chatsProfile.value = profile
-        val last = lastChats.get(gateway.gatewayUrl, profile)
+        val last = lastChats.get(gateway.gatewayUrl, profile).takeUnless { fresh }
         val bot = last?.bot
         val target = when {
-            last == null -> newChatTarget(gateway, profile)
+            last == null -> freshChat(gateway, profile).also { if (settings.settings.value == null) startWhenRead(it) }
             bot != null -> botChatTarget(gateway, last.sessionId, bot, last.botLabel ?: bot).also(::followBotChat)
             else -> ChatTarget(gateway, last.sessionId, last.title, profile = profile)
         }

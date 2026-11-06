@@ -126,6 +126,12 @@ import dev.hermeskotlin.ui.rooms.RoomMenuActions
 import dev.hermeskotlin.ui.rooms.roomMembers
 import dev.hermeskotlin.ui.rooms.rowSubtitle
 import dev.hermeskotlin.ui.isDesktop
+import dev.hermeskotlin.ui.inbox.Words
+import dev.hermeskotlin.ui.inbox.text
+import dev.hermeskotlin.ui.inbox.wordsThen
+import dev.hermeskotlin.ui.resources.*
+import org.jetbrains.compose.resources.pluralStringResource
+import org.jetbrains.compose.resources.stringResource
 import dev.hermeskotlin.ui.sessions.ListNotice
 import dev.hermeskotlin.ui.sessions.RowContextMenu
 import dev.hermeskotlin.ui.sessions.RowMenuItem
@@ -182,6 +188,8 @@ fun BotsRoster(
     actions: BotActions,
     onRetry: () -> Unit,
     onDismissNotice: () -> Unit,
+    /** Drawn above everything else in the list, scrolling with it: the sidebar's page buttons when it has no switch. */
+    top: (@Composable () -> Unit)? = null,
     /** Bots that can't work until something is fixed, by profile. */
     troubles: Map<String, BotTrouble> = emptyMap(),
     /** Each bot's routine whose last run went wrong, by profile. */
@@ -203,7 +211,7 @@ fun BotsRoster(
     onRenameRoom: (Room, String) -> Unit = { _, _ -> },
     onDeleteRoom: (Room) -> Unit = {},
     /** Why a room's rename or delete didn't work. */
-    roomsNotice: String? = null,
+    roomsNotice: Words? = null,
     onDismissRoomsNotice: () -> Unit = {},
 ) {
     val heldUp = remember(needsYou) { needsYou.filterIsInstance<NeedsYou.Answer>().associate { it.bot.name to it.waiting } }
@@ -263,6 +271,7 @@ fun BotsRoster(
             // Room to scroll the last cards out from under the floating footer.
             contentPadding = PaddingValues(start = 14.dp, end = 14.dp, top = 4.dp, bottom = 96.dp),
         ) {
+            if (top != null) item(key = "top") { top() }
             // Row keys carry a ':', which no profile name has, so a bot named like a key can't collide.
             items(needsYou, key = { "needs:${it.bot.name}" }) { item ->
                 NeedsYouCard(
@@ -274,21 +283,25 @@ fun BotsRoster(
                 )
             }
             item(key = "label") {
-                SectionHeader("Bots", top = if (needsYou.isEmpty()) 0.dp else 10.dp) {
-                    IconButton(Lucide.Plus, contentDescription = "New bot", onClick = actions::create, tint = Theme[colors][textTertiary])
+                SectionHeader(stringResource(Res.string.bots_section), top = if (needsYou.isEmpty()) 0.dp else 10.dp) {
+                    IconButton(Lucide.Plus, contentDescription = stringResource(Res.string.bots_new_bot), onClick = actions::create, tint = Theme[colors][textTertiary])
                 }
             }
             when {
                 state.loading && state.all.isEmpty() -> item(key = "loading") { ListSpinner() }
                 state.unsupported -> item(key = "unsupported") {
-                    ListNotice("This gateway doesn't list bots yet. Bot Mode needs Hermes 0.20.3 or newer.")
+                    ListNotice(stringResource(Res.string.bots_unsupported))
                 }
                 state.error != null && state.all.isEmpty() -> item(key = "error") {
-                    ListNotice("Couldn't load the bots. ${state.error}", action = "Try again", onAction = onRetry)
+                    ListNotice(
+                        wordsThen(Res.string.bots_load_failed, state.error).text(),
+                        action = stringResource(Res.string.bots_try_again),
+                        onAction = onRetry,
+                    )
                 }
-                state.all.isEmpty() -> item(key = "empty") { ListNotice("No bots on this gateway yet.") }
+                state.all.isEmpty() -> item(key = "empty") { ListNotice(stringResource(Res.string.bots_none)) }
                 state.bots.isEmpty() -> item(key = "all-hidden") {
-                    ListNotice("All bots are hidden. They keep working and keep their history.", action = "Show hidden bots") { hiddenOpen = true }
+                    ListNotice(stringResource(Res.string.bots_all_hidden), action = stringResource(Res.string.bots_show_hidden)) { hiddenOpen = true }
                 }
             }
             grid(state.bots, "bots", hidden = false)
@@ -300,7 +313,9 @@ fun BotsRoster(
                             .heightIn(min = MinTouchTarget)
                             .clip(RoundedCornerShape(Theme[radii][radiusMedium]))
                             .handCursor()
-                            .clickable(onClickLabel = if (hiddenOpen) "Collapse hidden bots" else "Show hidden bots") { hiddenOpen = !hiddenOpen }
+                            .clickable(
+                                onClickLabel = stringResource(if (hiddenOpen) Res.string.bots_collapse_hidden else Res.string.bots_show_hidden),
+                            ) { hiddenOpen = !hiddenOpen }
                             .padding(horizontal = 6.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -311,7 +326,7 @@ fun BotsRoster(
                             tint = Theme[colors][textTertiary],
                             modifier = Modifier.size(14.dp),
                         )
-                        Text("Hidden ${state.hidden.size}", style = Theme[typography][caption], color = Theme[colors][textTertiary])
+                        Text(stringResource(Res.string.bots_hidden_count, state.hidden.size), style = Theme[typography][caption], color = Theme[colors][textTertiary])
                     }
                 }
                 if (hiddenOpen) grid(state.hidden, "hidden", hidden = true)
@@ -319,18 +334,18 @@ fun BotsRoster(
             // Hosted rooms when the gateway runs them, and Desktop's own read-only copies beside them.
             if (roomsAvailable || desktopRooms.isNotEmpty()) {
                 item(key = "rooms-label") {
-                    SectionHeader("Rooms", top = 10.dp) {
+                    SectionHeader(stringResource(Res.string.rooms_section), top = 10.dp) {
                         // Only a gateway that hosts rooms can make one; Desktop's are made on Desktop.
-                        if (roomsAvailable) IconButton(Lucide.Plus, contentDescription = "New room", onClick = onNewRoom, tint = Theme[colors][textTertiary])
+                        if (roomsAvailable) IconButton(Lucide.Plus, contentDescription = stringResource(Res.string.rooms_new_room), onClick = onNewRoom, tint = Theme[colors][textTertiary])
                     }
                 }
                 if (roomsAvailable) {
                     roomsNotice?.let { message ->
-                        item(key = "rooms-notice") { MessageBanner(message, onDismiss = onDismissRoomsNotice, modifier = Modifier.padding(vertical = 4.dp)) }
+                        item(key = "rooms-notice") { MessageBanner(message.text(), onDismiss = onDismissRoomsNotice, modifier = Modifier.padding(vertical = 4.dp)) }
                     }
                     if (rooms.isEmpty()) {
                         // With Desktop rooms below, the page does have rooms to show; only say "none" when there are none.
-                        if (desktopRooms.isEmpty()) item(key = "rooms-empty") { ListNotice("No rooms yet. New room starts one with 2–6 bots.") }
+                        if (desktopRooms.isEmpty()) item(key = "rooms-empty") { ListNotice(stringResource(Res.string.rooms_none, 2, 6)) }
                     } else {
                         items(rooms, key = { "room:${it.roomId}" }) { room ->
                             RoomRow(
@@ -345,7 +360,7 @@ fun BotsRoster(
                     }
                 }
                 if (desktopRooms.isNotEmpty()) {
-                    item(key = "desktop-rooms-label") { SectionHeader("On Hermes Desktop", top = 10.dp) {} }
+                    item(key = "desktop-rooms-label") { SectionHeader(stringResource(Res.string.rooms_desktop_status), top = 10.dp) {} }
                     items(desktopRooms, key = { "desktop-room:${it.key}" }) { room ->
                         DesktopRoomRow(room, roomFaces, onClick = { onOpenDesktopRoom(room) })
                     }
@@ -354,7 +369,7 @@ fun BotsRoster(
         }
         VerticalScrollbar(list, Modifier.align(Alignment.TopEnd).fillMaxHeight().padding(top = 2.dp, bottom = 96.dp, end = 1.dp))
         state.notice?.let { message ->
-            MessageBanner(message, onDismiss = onDismissNotice, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 88.dp))
+            MessageBanner(message.text(), onDismiss = onDismissNotice, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 88.dp))
         }
     }
     StartOverDialog(startOver, onDismiss = { startOver = null }, onConfirm = actions::startFresh)
@@ -389,12 +404,11 @@ private fun DeleteBotDialog(bot: Bot?, onDismiss: () -> Unit, onConfirm: (Bot) -
     Dialog(
         visible = bot != null,
         onDismissRequest = onDismiss,
-        title = "Delete ${b.label}?",
-        message = "The ${b.name} profile is removed from the gateway with its chats, memory, skills and settings. " +
-            "This can't be undone.",
+        title = stringResource(Res.string.bots_delete_title, b.label),
+        message = stringResource(Res.string.bots_delete_detail, b.name),
         actions = {
-            Button("Cancel", onClick = onDismiss, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
-            Button("Delete", onClick = { onDismiss(); onConfirm(b) }, variant = ButtonVariant.Danger, size = ButtonSize.Small)
+            Button(stringResource(Res.string.common_cancel), onClick = onDismiss, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
+            Button(stringResource(Res.string.bots_delete), onClick = { onDismiss(); onConfirm(b) }, variant = ButtonVariant.Danger, size = ButtonSize.Small)
         },
     )
 }
@@ -442,30 +456,42 @@ private fun BotCard(
     val (line, italic) = when {
         // Held up on the user beats everything: nothing moves until they answer.
         waiting != null -> waiting.label to false
-        thinking -> "Thinking…" to false
-        working -> "Working…" to false
+        thinking -> stringResource(Res.string.bots_thinking) to false
+        working -> stringResource(Res.string.bots_working) to false
         // What's wrong outranks the last line: a phone has no hover to say it.
         trouble != null -> trouble.problem.hint to false
-        failingRoutine != null -> "Routine “${failingRoutine.displayName}” didn't go through" to false
+        failingRoutine != null -> stringResource(Res.string.bots_routine_failed, failingRoutine.displayName) to false
         preview?.fromBot != null -> "${preview.fromBot}: ${preview.text}" to true
         preview != null -> preview.text to false
-        else -> (bot.description?.takeIf { it.isNotBlank() } ?: "Say hello") to false
+        else -> (bot.description?.takeIf { it.isNotBlank() } ?: stringResource(Res.string.bots_say_hello)) to false
     }
     var contextMenuOpen by remember { mutableStateOf(false) }
+    // Said here, where the language is known: the menu's own lambda isn't composed.
+    val checkAgain = stringResource(Res.string.common_check_again)
+    val pinLabel = stringResource(if (pinned) Res.string.bots_unpin else Res.string.bots_pin)
+    val hideLabel = stringResource(if (hidden) Res.string.bots_unhide else Res.string.bots_hide)
+    val openRecent = stringResource(Res.string.bots_open_recent)
+    val newChat = stringResource(Res.string.bots_new_chat_with, bot.label)
+    val routines = stringResource(Res.string.bots_routines)
+    val screen = stringResource(Res.string.bots_screen)
+    val startFresh = stringResource(Res.string.bots_start_fresh)
+    val edit = stringResource(Res.string.bots_edit)
+    val duplicate = stringResource(Res.string.bots_duplicate)
+    val delete = stringResource(Res.string.bots_delete)
     val menuItems = {
         listOfNotNull(
-            RowMenuItem("Check again", Lucide.RefreshCw) { actions.checkAgain(bot) }.takeIf { trouble != null },
-            RowMenuItem(if (pinned) "Unpin" else "Pin to top", if (pinned) Lucide.PinOff else Lucide.Pin) { actions.setPinned(bot, !pinned) },
-            RowMenuItem(if (hidden) "Unhide" else "Hide", if (hidden) Lucide.Eye else Lucide.EyeOff) { actions.setHidden(bot, !hidden) },
-            RowMenuItem("Open recent session", Lucide.History) { actions.openRecent(bot) }.takeIf { recent != null },
-            RowMenuItem("New chat with ${bot.label}", Lucide.MessageSquarePlus) { actions.newChat(bot) },
-            RowMenuItem("Routines", Lucide.CalendarClock) { actions.routines(bot) },
-            RowMenuItem("Screen", Lucide.Monitor) { actions.screen(bot) },
-            RowMenuItem("Start fresh", Lucide.RotateCcw, run = onStartOver).takeIf { bot.canonicalSession != null },
-            RowMenuItem("Edit", Lucide.Pencil) { actions.edit(bot) },
-            RowMenuItem("Duplicate", Lucide.Copy) { actions.duplicate(bot) },
+            RowMenuItem(checkAgain, Lucide.RefreshCw) { actions.checkAgain(bot) }.takeIf { trouble != null },
+            RowMenuItem(pinLabel, if (pinned) Lucide.PinOff else Lucide.Pin) { actions.setPinned(bot, !pinned) },
+            RowMenuItem(hideLabel, if (hidden) Lucide.Eye else Lucide.EyeOff) { actions.setHidden(bot, !hidden) },
+            RowMenuItem(openRecent, Lucide.History) { actions.openRecent(bot) }.takeIf { recent != null },
+            RowMenuItem(newChat, Lucide.MessageSquarePlus) { actions.newChat(bot) },
+            RowMenuItem(routines, Lucide.CalendarClock) { actions.routines(bot) },
+            RowMenuItem(screen, Lucide.Monitor) { actions.screen(bot) },
+            RowMenuItem(startFresh, Lucide.RotateCcw, run = onStartOver).takeIf { bot.canonicalSession != null },
+            RowMenuItem(edit, Lucide.Pencil) { actions.edit(bot) },
+            RowMenuItem(duplicate, Lucide.Copy) { actions.duplicate(bot) },
             // The gateway keeps its primary profile.
-            RowMenuItem("Delete", Lucide.Trash2, destructive = true, run = onDelete).takeIf { bot.name != Bot.DEFAULT },
+            RowMenuItem(delete, Lucide.Trash2, destructive = true, run = onDelete).takeIf { bot.name != Bot.DEFAULT },
         )
     }
     DropdownMenu(
@@ -487,12 +513,12 @@ private fun BotCard(
                 .handCursor()
                 .combinedClickable(
                     onClick = { actions.open(bot) },
-                    onClickLabel = "Open ${bot.label}'s chat",
+                    onClickLabel = stringResource(Res.string.bots_open_chat_of, bot.label),
                     onLongClick = {
                         haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                         menuOpen = true
                     },
-                    onLongClickLabel = "${bot.label} actions",
+                    onLongClickLabel = stringResource(Res.string.bots_actions_of, bot.label),
                     interactionSource = null,
                     indication = rememberHoverIndication(Theme[colors][text]),
                 )
@@ -512,7 +538,7 @@ private fun BotCard(
             }
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
-                    if (pinned) UnstyledIcon(Lucide.Pin, contentDescription = "Pinned", tint = Theme[colors][textTertiary], modifier = Modifier.size(12.dp))
+                    if (pinned) UnstyledIcon(Lucide.Pin, contentDescription = stringResource(Res.string.bots_pinned), tint = Theme[colors][textTertiary], modifier = Modifier.size(12.dp))
                     Text(
                         bot.label,
                         style = Theme[typography][body].copy(fontSize = 15.sp, fontWeight = if (unread) FontWeight.Bold else FontWeight.SemiBold),
@@ -522,7 +548,7 @@ private fun BotCard(
                         modifier = Modifier.weight(1f, fill = false),
                     )
                     if (trouble != null || failingRoutine != null) {
-                        UnstyledIcon(Lucide.TriangleAlert, contentDescription = "Needs attention", tint = Theme[colors][warning], modifier = Modifier.size(13.dp))
+                        UnstyledIcon(Lucide.TriangleAlert, contentDescription = stringResource(Res.string.bots_needs_attention), tint = Theme[colors][warning], modifier = Modifier.size(13.dp))
                     }
                 }
                 if (showHandle) {
@@ -559,11 +585,12 @@ private fun StatusDot(tone: BotTone, unread: Boolean) {
         unread -> Theme[colors][accent] to Color.Transparent
         else -> Theme[colors][textMuted].copy(alpha = 0.5f) to Color.Transparent
     }
+    val unreadLabel = stringResource(Res.string.bots_unread)
     Box(
         Modifier
             .size(14.dp)
             .background(ring, CircleShape)
-            .clearAndSetSemantics { if (unread) contentDescription = "Unread" },
+            .clearAndSetSemantics { if (unread) contentDescription = unreadLabel },
         contentAlignment = Alignment.Center,
     ) {
         Box(Modifier.size(8.dp).background(dot, CircleShape))
@@ -582,7 +609,13 @@ private fun NeedsYouCard(item: NeedsYou, picture: ByteArray?, onClick: () -> Uni
             .clip(shape)
             .background(Theme[colors][warningSoft])
             .handCursor()
-            .clickable(onClickLabel = if (item is NeedsYou.Routine) "Open ${item.bot.label}'s routines" else "Open ${item.bot.label}'s chat", onClick = onClick)
+            .clickable(
+                onClickLabel = stringResource(
+                    if (item is NeedsYou.Routine) Res.string.bots_open_routines_of else Res.string.bots_open_chat_of,
+                    item.bot.label,
+                ),
+                onClick = onClick,
+            )
             .padding(horizontal = 14.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -590,18 +623,18 @@ private fun NeedsYouCard(item: NeedsYou, picture: ByteArray?, onClick: () -> Uni
         BotAvatar(item.bot, picture, size = 36.dp)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
             Text(
-                "${item.bot.label} needs you",
+                stringResource(Res.string.bots_needs_you, item.bot.label),
                 style = Theme[typography][body].copy(fontSize = 14.5.sp, fontWeight = FontWeight.Medium),
                 color = Theme[colors][text],
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
-            Text(item.reason, style = Theme[typography][bodySmall].copy(fontSize = 12.5.sp), color = Theme[colors][textSecondary], maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(item.reason.text(), style = Theme[typography][bodySmall].copy(fontSize = 12.5.sp), color = Theme[colors][textSecondary], maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
         // Not a button of its own: the whole card is the one target, and this says where it goes. A large
         // font leaves it out, so the words keep the room.
         if (LocalDensity.current.fontScale <= 1.3f) Text(
-            if (answer) "Review" else "Open",
+            stringResource(if (answer) Res.string.bots_review else Res.string.bots_open),
             style = Theme[typography][caption].copy(fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold),
             color = Theme[colors][onInverse],
             maxLines = 1,
@@ -622,12 +655,11 @@ internal fun StartOverDialog(bot: Bot?, onDismiss: () -> Unit, onConfirm: (Bot) 
     Dialog(
         visible = bot != null,
         onDismissRequest = onDismiss,
-        title = "Start fresh with ${b.label}?",
-        message = "${b.label}'s chat is archived and a new, empty one begins. ${b.label} keeps its memory, skills " +
-            "and settings, and the old chat stays on the gateway, archived.",
+        title = stringResource(Res.string.bots_start_fresh_title, b.label),
+        message = stringResource(Res.string.bots_start_fresh_detail, b.label),
         actions = {
-            Button("Cancel", onClick = onDismiss, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
-            Button("Start fresh", onClick = { onDismiss(); onConfirm(b) }, variant = ButtonVariant.Primary, size = ButtonSize.Small)
+            Button(stringResource(Res.string.common_cancel), onClick = onDismiss, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
+            Button(stringResource(Res.string.bots_start_fresh), onClick = { onDismiss(); onConfirm(b) }, variant = ButtonVariant.Primary, size = ButtonSize.Small)
         },
     )
 }
@@ -658,21 +690,23 @@ private fun RoomRow(room: Room, faces: BotFaces, unread: Boolean, onClick: () ->
             unread,
             Modifier.handCursor().combinedClickable(
                 onClick = onClick,
-                onClickLabel = "Open room ${room.name}",
+                onClickLabel = stringResource(Res.string.rooms_open_named, room.name),
                 onLongClick = {
                     haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                     menuOpen = true
                 },
-                onLongClickLabel = "${room.name} actions",
+                onLongClickLabel = stringResource(Res.string.bots_actions_of, room.name),
                 interactionSource = null,
                 indication = rememberHoverIndication(Theme[colors][text]),
             ).then(if (isDesktop) Modifier.onSecondaryPress { contextMenuOpen = true } else Modifier),
         )
         // A desktop's way to the same actions: a right-click, with the menu at the pointer.
+        val rename = stringResource(Res.string.rooms_rename)
+        val deleteRoom = stringResource(Res.string.rooms_delete_room)
         RowContextMenu(contextMenuOpen, onDismiss = { contextMenuOpen = false }) {
             listOf(
-                RowMenuItem("Rename", Lucide.Pencil, run = onRename),
-                RowMenuItem("Delete room", Lucide.Trash2, destructive = true, run = onDelete),
+                RowMenuItem(rename, Lucide.Pencil, run = onRename),
+                RowMenuItem(deleteRoom, Lucide.Trash2, destructive = true, run = onDelete),
             )
         }
     }
@@ -681,7 +715,8 @@ private fun RoomRow(room: Room, faces: BotFaces, unread: Boolean, onClick: () ->
 @Composable
 private fun RoomRowContent(room: Room, faces: BotFaces, unread: Boolean, clicks: Modifier) {
     // New lines since the user last looked: bold and a dot, as a bot's card shows them.
-    RoomRowLayout(room.members, room.name, roomSubtitle(room), room.updatedAt, faces, marked = unread, clicks = clicks)
+    val subtitle = if (room.members.isEmpty()) stringResource(Res.string.rooms_no_members) else roomSubtitle(room)
+    RoomRowLayout(room.members, room.name, subtitle, room.updatedAt, faces, marked = unread, clicks = clicks)
 }
 
 /** A room's ringed card, hosted or Desktop's: faces, the name (bold with a dot when [marked]), a subtitle and its time. */
@@ -738,10 +773,7 @@ private fun RoomRowLayout(
 }
 
 /** "Ops, Scribe, Cadence": the faces show how many, the names say who. */
-private fun roomSubtitle(room: Room): String {
-    if (room.members.isEmpty()) return "No members"
-    return room.members.joinToString(", ") { it.label }
-}
+private fun roomSubtitle(room: Room): String = room.members.joinToString(", ") { it.label }
 
 /**
  * One Desktop room: the mirror's copy, read-only — no room menu, since the room belongs to Desktop and
@@ -755,11 +787,11 @@ private fun DesktopRoomRow(room: DesktopRoom, faces: BotFaces, onClick: () -> Un
     RoomRowLayout(
         members,
         room.name,
-        subtitle,
+        subtitle.text(),
         // The mirror's times are epoch millis; rows read seconds like every other row.
         room.updatedAt?.div(1000.0),
         faces,
         marked = room.needsYou,
-        clicks = Modifier.handCursor().clickable(onClickLabel = "Open room ${room.name}") { onClick() },
+        clicks = Modifier.handCursor().clickable(onClickLabel = stringResource(Res.string.rooms_open_named, room.name)) { onClick() },
     )
 }

@@ -113,8 +113,8 @@ class CloudflareAccessTest {
         assertEquals(302, result.httpStatus)
         assertFalse(result.tokenSent)
         val failed = assertIs<StageResult.Failed>(result.toStageResult())
-        assertTrue("Cloudflare Access" in failed.problem)
-        assertTrue("service token" in failed.fix)
+        assertEquals(CheckNote(CheckNote.Kind.AccessBlocked, listOf("302")), failed.problem)
+        assertEquals(CheckNote.Kind.FixAddAccessToken, failed.fix.kind)
     }
 
     @Test
@@ -127,7 +127,7 @@ class CloudflareAccessTest {
 
         assertTrue(result.tokenSent)
         val failed = assertIs<StageResult.Failed>(result.toStageResult())
-        assertTrue("turned down" in failed.problem)
+        assertEquals(CheckNote.Kind.AccessTokenRefused, failed.problem.kind)
     }
 
     @Test

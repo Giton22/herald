@@ -26,6 +26,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import dev.hermeskotlin.ui.resources.*
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class SkillsHubViewModelTest {
@@ -150,7 +151,7 @@ class SkillsHubViewModelTest {
         vm.install(official)
         assertEquals(0, rig.count("hub/scan"))
         assertEquals(1, rig.count("POST /api/skills/hub/install"))
-        assertEquals("Installed ascii-art. It applies from the next chat.", vm.state.value.message)
+        assertEquals(said(Res.string.sessions_hub_installed, "ascii-art"), vm.state.value.message)
         assertEquals(1, changed)
         assertTrue(vm.state.value.running.isEmpty())
     }
@@ -202,7 +203,7 @@ class SkillsHubViewModelTest {
         val vm = vm(rig)
         vm.bound(null)
         vm.install(community)
-        assertEquals("pdf was blocked by the security scan.", vm.state.value.message)
+        assertEquals(said(Res.string.sessions_hub_blocked, "pdf"), vm.state.value.message)
         assertEquals("safe", vm.state.value.detail?.scan?.verdict)
     }
 
@@ -212,7 +213,7 @@ class SkillsHubViewModelTest {
         val vm = vm(rig)
         vm.bound(null)
         vm.install(community)
-        assertEquals("Couldn't install pdf: network down", vm.state.value.message)
+        assertEquals(said(Res.string.sessions_hub_install_failed, "pdf", detail = "network down"), vm.state.value.message)
     }
 
     @Test
@@ -239,7 +240,7 @@ class SkillsHubViewModelTest {
         vm.bound(null)
         vm.uninstall("ascii-art")
         assertEquals(1, changed)
-        assertEquals("Removed ascii-art. It applies from the next chat.", vm.state.value.message)
+        assertEquals(said(Res.string.sessions_hub_removed, "ascii-art"), vm.state.value.message)
     }
 
     @Test
@@ -329,7 +330,7 @@ class SkillsHubViewModelTest {
         assertTrue(UPDATE_ALL in vm.state.value.running)
         hold.complete(Unit)
         assertTrue(vm.state.value.running.isEmpty())
-        assertEquals("Skills updated. It applies from the next chat.", vm.state.value.message)
+        assertEquals(said(Res.string.sessions_hub_updated), vm.state.value.message)
         assertEquals(1, changed)
     }
 
@@ -454,7 +455,7 @@ class SkillsHubViewModelTest {
         val vm = vm(rig().apply { scanStatus = HttpStatusCode.NotFound; scan = """{"detail":"Hub scan failed: boom"}""" })
         vm.bound(null)
         vm.open(community)
-        assertEquals("Couldn't scan: Hub scan failed: boom", vm.state.value.detail?.scanError)
+        assertEquals(said(Res.string.sessions_hub_scan_failed, detail = "Hub scan failed: boom"), vm.state.value.detail?.scanError)
         // The preview's own error stays free, so the page knows the preview loaded.
         assertNull(vm.state.value.detail?.error)
         assertNotNull(vm.state.value.detail?.preview)
@@ -485,7 +486,7 @@ class SkillsHubViewModelTest {
         vm.bound(null)
         vm.install(official)
         advanceTimeBy(5_000)
-        assertEquals("The install is still running on the gateway. Check back later.", vm.state.value.message)
+        assertEquals(Said.Verbatim("The install is still running on the gateway. Check back later."), vm.state.value.message)
         assertTrue(vm.state.value.running.isEmpty())
         assertFalse(official.installKey in vm.state.value.installed)
         assertEquals(1, changed)

@@ -41,7 +41,9 @@ import dev.hermeskotlin.designsystem.textSecondary
 import dev.hermeskotlin.designsystem.textTertiary
 import dev.hermeskotlin.designsystem.typography
 import dev.hermeskotlin.ui.chat.AppMark
+import dev.hermeskotlin.ui.resources.*
 import kotlinx.coroutines.launch
+import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 
 /** Whether to tell the user the app was renamed, and a way to stop telling them. */
@@ -80,15 +82,15 @@ fun RenameBanner(modifier: Modifier = Modifier) {
     ) {
         AppMark(28.dp, glow = false)
         Column(Modifier.weight(1f).padding(top = 2.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text("Herald is now Kyllene", style = Theme[typography][bodySmall], color = Theme[colors][text])
+            Text(stringResource(Res.string.update_renamed), style = Theme[typography][bodySmall], color = Theme[colors][text])
             Text(
-                "Same app with a new name and icon. Your sign-in, chats and settings stay.",
+                stringResource(Res.string.update_renamed_detail),
                 style = Theme[typography][caption],
                 color = Theme[colors][textSecondary],
             )
         }
         UnstyledButton(onClick = offer.onDismiss, modifier = Modifier.size(MinTouchTarget).clip(RoundedCornerShape(Theme[radii][radiusSmall]))) {
-            UnstyledIcon(Lucide.X, contentDescription = "Got it", tint = Theme[colors][textTertiary], modifier = Modifier.size(14.dp))
+            UnstyledIcon(Lucide.X, contentDescription = stringResource(Res.string.update_got_it), tint = Theme[colors][textTertiary], modifier = Modifier.size(14.dp))
         }
     }
 }

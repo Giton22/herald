@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="tile_label">Hermes hívása</string>
+    <string name="tile_description">Beszélj Hermesszel, és nézd meg a legutóbbi válaszát.</string>
+    <string name="complication_label">Hermes hívása</string>
+
+    <string name="wear_call_hermes">Hermes hívása</string>
+    <string name="wear_call_target">Hívás: %1$s</string>
+    <string name="wear_call_short">Hívás</string>
+    <string name="wear_start_call">Hívás indítása</string>
+
+    <string name="wear_phone_connected">Kapcsolódva</string>
+    <string name="wear_phone_reconnecting">Újrakapcsolódás</string>
+    <string name="wear_phone_not_connected">Nincs kapcsolat</string>
+    <string name="wear_phone_not_connected_detail">A telefonod nincs csatlakoztatva.</string>
+    <string name="wear_phone_no_app">A telefonodon lévő Kyllene nem válaszolt. Nyisd meg ott, vagy frissítsd.</string>
+    <string name="wear_phone_signed_out">Előbb jelentkezz be a Kyllene-be a telefonodon.</string>
+    <string name="wear_phone_unreachable">A Kyllene nem éri el a Gateway-edet. Ellenőrizd a telefonodon.</string>
+    <string name="wear_phone_no_answer">A telefonodon lévő Kyllene nem válaszolt. Próbáld újra.</string>
+    <string name="wear_phone_changed">A telefon megváltozott. Próbáld újra.</string>
+    <string name="wear_phone_unreachable_short">Nem sikerült elérni a telefonodat.</string>
+    <string name="wear_profile_changed">A telefon profilja megváltozott. Kérlek, próbáld újra.</string>
+    <string name="wear_profile_changed_short">A telefon profilja megváltozott. Próbáld újra.</string>
+    <string name="wear_update_for_profiles">Frissítsd a Kyllene-t a telefonodon a profilalapú hívásokhoz.</string>
+    <string name="wear_update_for_bots">Frissítsd a Kyllene-t a telefonodon, hogy botokkal beszélhess.</string>
+    <string name="wear_update_for_bot_calls">Frissítsd a Kyllene-t a telefonodon, hogy botokat hívhass.</string>
+    <string name="wear_call_target_changed">A hívás célja megváltozott. Koppints újra a Hívásra.</string>
+    <string name="wear_default_call_target_changed">Az alapértelmezett hívási cél megváltozott. Koppints újra a Hívásra.</string>
+
+    <string name="wear_new_chat">Új csevegés</string>
+    <string name="wear_chat">Csevegés</string>
+    <string name="wear_open_chats">Csevegések megnyitása</string>
+    <string name="wear_done_talking">Befejeztem</string>
+    <string name="wear_stop">Leállítás</string>
+    <string name="wear_cancel">Mégse</string>
+    <string name="wear_talk_to_hermes">Beszélgetés Hermesszel</string>
+    <string name="wear_context_full">, a kontextus %1$d%%-ban telt</string>
+    <string name="wear_ask_hermes">Kérdezd Hermest</string>
+    <string name="wear_listening">Figyelek… koppints, ha végeztél</string>
+    <string name="wear_checking_phone">A telefon ellenőrzése…</string>
+    <string name="wear_tap_to_stop">Koppints a leállításhoz</string>
+    <string name="wear_something_wrong">Hiba történt.</string>
+    <string name="wear_tap_to_talk">Koppints a beszédhez</string>
+    <string name="wear_transcribing">Leírás…</string>
+    <string name="wear_sending">Küldés…</string>
+    <string name="wear_waiting_on_phone">Rád vár a telefonodon</string>
+    <string name="wear_thinking">Gondolkodik…</string>
+    <string name="wear_said">„%1$s”</string>
+    <string name="wear_needs_microphone">A Kyllene-nek mikrofon kell, hogy halljon.</string>
+    <string name="wear_tap_allow_microphone">Koppints a mikrofon engedélyezéséhez.</string>
+    <string name="wear_nothing_heard">Nem hallottam semmit.</string>
+    <string name="wear_microphone_failed">Nem sikerült használni a mikrofont.</string>
+    <string name="wear_microphone_unavailable">A mikrofon nem érhető el.</string>
+
+    <string name="wear_mute">Némítás</string>
+    <string name="wear_unmute">Némítás feloldása</string>
+    <string name="wear_volume">Hangerő</string>
+    <string name="wear_end_call">Hívás befejezése</string>
+    <string name="wear_decline">Elutasítás</string>
+    <string name="wear_answer">Fogadás</string>
+    <string name="wear_ring_agent">Hív téged</string>
+    <string name="wear_ring_approval">A jóváhagyásodra vár</string>
+    <string name="wear_ring_question">Kérdése van hozzád</string>
+    <string name="wear_call_starting">Indítás…</string>
+    <string name="wear_call_connecting">Kapcsolódás…</string>
+    <string name="wear_call_muted">Némítva</string>
+    <string name="wear_call_working">Hermes: %1$s</string>
+    <string name="wear_call_thinking">Hermes dolgozik rajta…</string>
+    <string name="wear_call_live">Élő</string>
+    <string name="wear_call_ended">A hívás véget ért</string>
+    <string name="wear_call_ended_detail">A hívás véget ért.</string>
+    <string name="wear_call_dropped">A hívás megszakadt.</string>
+    <string name="wear_call_start_failed">Nem sikerült elindítani a hívást.</string>
+    <string name="wear_call_no_connect">A hívás nem jött létre.</string>
+    <string name="wear_call_offer_failed">Nem sikerült előkészíteni a hívást.</string>
+    <string name="wear_call_setup_failed">Nem sikerült felépíteni a hívást.</string>
+    <string name="wear_call_events_failed">Nem sikerült megnyitni a hívás eseménycsatornáját.</string>
+    <string name="wear_call_refused">A hívást elutasították.</string>
+    <string name="wear_channel_calls_name">Válaszra váró hívások</string>
+    <string name="wear_channel_calls_description">Hermes akkor hív, ha jóváhagyásra vagy válaszra van szüksége, vagy valami nem várhat, ha a telefon emiatt csörög.</string>
+
+    <string name="wear_chats">Csevegések</string>
+    <string name="wear_bots">Botok</string>
+    <string name="wear_settings">Beállítások</string>
+    <string name="wear_no_bots">Még nincsenek botok.</string>
+    <string name="wear_no_chats">Még nincsenek csevegések.</string>
+    <string name="wear_ago_now">most</string>
+    <string name="wear_ago_minutes">%1$d p</string>
+    <string name="wear_ago_hours">%1$d ó</string>
+    <string name="wear_ago_days">%1$d n</string>
+    <string name="wear_ago_weeks">%1$d hét</string>
+
+    <string name="wear_talk_live">Élő beszélgetés</string>
+    <string name="wear_talk_live_detail">Hanghívásként</string>
+    <string name="wear_read_aloud">Felolvasás</string>
+    <string name="wear_read_aloud_detail">Minden válasz</string>
+    <string name="wear_assistant">Asszisztens</string>
+    <string name="wear_assistant_set">A Kyllene válaszol a gombra</string>
+    <string name="wear_assistant_refused">Nincs beállítva. Koppints az újrapróbáláshoz</string>
+    <string name="wear_assistant_unset">A Kyllene beállítása asszisztensként</string>
+</resources>

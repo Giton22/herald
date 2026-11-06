@@ -1,7 +1,8 @@
 # Separate from Android CI: keep this workflow's checks advisory in branch rules.
 name: Linux (advisory)
 
-# Only what the desktop app or its package is built from; an Android-only change skips the ~30 min run.
+# Only what the desktop app or its package is built from; an Android-only change skips this workflow.
+# Such PRs get the fast checks, and the full package build only when `select` finds a packaging input.
 on:
   push:
     branches: [master]
@@ -14,8 +15,17 @@ on:
       - "**/*.gradle.kts"
       - "gradle.properties"
       - ".github/workflows/linux.yml"
+      - ".github/workflows/linux-checks.yml"
+      - ".github/workflows/release.yml"
+      - ".github/workflows/flatpak-repo.yml"
+      - "website/*.flatpakref"
+      - "website/*.flatpakrepo"
+      - "gradlew*"
   pull_request:
     paths: *paths
+  workflow_dispatch:
+  schedule:
+    - cron: "17 4 * * 1"
 
 permissions:
   contents: read
@@ -27,7 +37,45 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  select:
+    runs-on: ubuntu-24.04
+    outputs:
+      package: ${{ steps.select.outputs.package }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - id: select
+        env:
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: python3 packaging/flatpak/ci-selection.py
+
+  checks:
+    uses: ./.github/workflows/linux-checks.yml
+    secrets:
+      GRADLE_ENCRYPTION_KEY: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
+
+  repository:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: sudo apt-get update && sudo apt-get install -y flatpak ostree
+      # Through the unittest, which also checks the script leaves nothing behind; a skip here means a tool is missing.
+      - name: Repository protocol and trust
+        run: |
+          set -o pipefail
+          cd packaging/flatpak/tests
+          python3 -m unittest test_repo_smoke -v 2>&1 | tee "$RUNNER_TEMP/repo-smoke.log"
+          ! grep -q skipped "$RUNNER_TEMP/repo-smoke.log"
+
   linux:
+    needs: select
+    if: needs.select.outputs.package == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
@@ -36,24 +84,11 @@ jobs:
           persist-credentials: false
           # The Flatpak build clones this checkout; a shallow one can't be cloned reliably.
           fetch-depth: 0
-      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
-        with:
-          distribution: jetbrains
-          java-version: "25"
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
-        with:
-          cache-encryption-key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
-      - name: JVM tests
-        run: >
-          ./gradlew --no-daemon --max-workers=4
-          :shared:core:jvmTest :shared:designsystem:jvmTest :shared:ui:jvmTest
-          :shared:wearlink:jvmTest :desktopApp:jvmTest
       - name: Install Flatpak tools and SDK
         run: |
           sudo apt-get update
-          sudo apt-get install -y flatpak flatpak-builder fontconfig
+          sudo apt-get install -y flatpak flatpak-builder fontconfig xvfb xauth xdotool python3-pil \
+            xdg-desktop-portal gnome-keyring ostree
           flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
           flatpak install --user --noninteractive flathub org.freedesktop.Sdk//26.08 org.freedesktop.Platform//26.08
       - name: Packaging contracts
@@ -67,20 +102,30 @@ jobs:
             --env="FONTCONFIG_FILE=$FONTCONFIG_FILE" --command=fc-list org.freedesktop.Sdk//26.08 "$@"
           SH
           chmod +x "$RUNNER_TEMP/fontconfig-sdk/fc-list"
-          PATH="$RUNNER_TEMP/fontconfig-sdk:$PATH" python3 -m unittest discover -s packaging/flatpak/tests -v
+          PATH="$RUNNER_TEMP/fontconfig-sdk:$PATH" python3 -m unittest discover -s packaging/flatpak/tests -p test_fonts.py -v
       # From this checkout, not GitHub: a PR's merge ref moves whenever master does, which would fail the
       # builder's commit check mid-run. A clone carries only committed files, never untracked ones.
       - name: Select tested source
         run: |
           git update-ref refs/heads/flatpak-ci-tested "$GITHUB_SHA"
           python3 packaging/flatpak/prepare-ci.py \
-            packaging/flatpak/io.github.Giton22.Kyllene.Devel.json \
+            packaging/flatpak/app.kyllene.Kyllene.Devel.json \
             --repository "file://$GITHUB_WORKSPACE" \
             --ref flatpak-ci-tested --commit "$GITHUB_SHA"
-      - name: Build offline and bundle
+      # Separate steps, so the run's timings show whether the builder's cache pruning or the bundle takes the time.
+      - name: Build offline
+        run: flatpak-builder --user --repo=build/flatpak-repo build/flatpak packaging/flatpak/ci.json
+      - name: Bundle
+        run: flatpak build-bundle build/flatpak-repo build/kyllene.flatpak app.kyllene.Kyllene.Devel devel
+      # The app reads its settings key from the Secret portal at startup, so the smoke runs in a session as a
+      # desktop has one: its own bus, and an unlocked keyring answering the portal.
+      - name: Installed sandbox smoke
         run: |
-          flatpak-builder --user --repo=build/flatpak-repo build/flatpak packaging/flatpak/ci.json
-          flatpak build-bundle build/flatpak-repo build/kyllene.flatpak io.github.Giton22.Kyllene.Devel devel
+          mkdir -p ~/.config/xdg-desktop-portal
+          printf '[preferred]\ndefault=*\norg.freedesktop.impl.portal.Secret=gnome-keyring\n' \
+            > ~/.config/xdg-desktop-portal/portals.conf
+          dbus-run-session -- sh -c 'printf smoke | gnome-keyring-daemon --unlock --components=secrets >/dev/null &&
+            python3 packaging/flatpak/tests/installed_smoke.py build/kyllene.flatpak'
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: kyllene-flatpak-x86_64
