@@ -161,6 +161,7 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [x] Profile picker (account sheet → Profile; `GET /api/profiles`, chats and sessions scoped with `profile`)
 - [x] Switch profile in two taps from the sidebar: its header names the active profile and opens a menu of them (and Switch gateway); the sidebar stays open on the new profile's chats, stand-in rows while they load
 - [x] Settings screen, opened from the account sheet
+- [x] Search settings on the phone too, as on the desktop: what's typed keeps the rows whose name or description has it, and a section whose name has it shows whole
 - [x] Theme: system, light, dark, plus pure black; window and system bars follow it
 - [x] Text size on top of the system font scale
 - [x] Chat background: a photo behind the conversation (frosted under the composer), with how strongly it shows
