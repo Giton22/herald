@@ -204,7 +204,9 @@ native audio backend and default output device. Freedesktop 26.08 supplies
 `/usr/bin/ffmpeg`; encoded replies and raw PCM are decoded through pipes to
 48 kHz mono PCM. Only pipe input and selected audio formats are allowed. The
 codec inherits no environment, opens no temporary media files and needs no new
-sandbox permission. Other Linux distributions need that executable separately.
+sandbox permission. A host install needs that executable at exactly
+`/usr/bin/ffmpeg` (no `PATH` lookup). Without it, dictation and calls still
+work, but voice chat and Read aloud are hidden.
 
 Playback buffers are bounded. Hold emits silence without consuming queued audio;
 cancellation or failure retires the owned codec and output device. No system

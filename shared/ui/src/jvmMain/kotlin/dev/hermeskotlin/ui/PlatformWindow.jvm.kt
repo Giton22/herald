@@ -15,16 +15,17 @@ internal actual val enterSends: Boolean = true
 
 internal actual val macKeys: Boolean = System.getProperty("os.name").orEmpty().startsWith("Mac")
 
-// Read once: the answer can't change while the app runs, and the check touches the disk.
-private val desktopVoice = desktopVoiceSupported(
-    System.getProperty("os.name").orEmpty(), System.getProperty("os.arch").orEmpty(), desktopSpeechDecoder(),
-)
+// The same backends core's platform module picks. Read once: the answer can't change while the app runs, and the
+// decoder check touches the disk.
+private val desktopAudio = nativeDesktopAudio()
+private val desktopPlayback = desktopSpeechPlayback(desktopAudio, desktopSpeechDecoder())
 
-internal actual val hasVoice: Boolean get() = desktopVoice
+internal actual val hasVoice: Boolean get() = desktopAudio
+
+internal actual val hasSpeechPlayback: Boolean get() = desktopPlayback
 
 /**
- * The same backends core's platform module picks: native audio, and a decoder for spoken replies. Without one a voice
- * chat couldn't answer aloud, and Read aloud would stay silent.
+ * Dictation and live calls need only native audio; spoken replies also need a decoder. Without one a voice chat
+ * couldn't answer aloud, and Read aloud would stay silent.
  */
-internal fun desktopVoiceSupported(osName: String, osArch: String, speechDecoder: Boolean): Boolean =
-    nativeDesktopAudio(osName, osArch) && speechDecoder
+internal fun desktopSpeechPlayback(nativeAudio: Boolean, speechDecoder: Boolean): Boolean = nativeAudio && speechDecoder

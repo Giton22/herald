@@ -39,7 +39,7 @@ actual val platformModule: Module = module {
     single<VoiceRecorder> {
         if (nativeDesktopAudio()) LinuxVoiceRecorder(::WebRtcMicrophone) else NoVoiceRecorder
     }
-    // Decoding needs ffmpeg; the voice controls check the same two things (hasVoice in shared/ui).
+    // Decoding needs ffmpeg; voice chat and Read aloud check the same two things (hasSpeechPlayback in shared/ui).
     single<SpeechPlayer> {
         if (nativeDesktopAudio() && desktopSpeechDecoder()) LinuxSpeechPlayer(FfmpegSpeechDecoder(), ::WebRtcSpeaker)
         else NoSpeechPlayer

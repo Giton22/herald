@@ -444,6 +444,7 @@
     <string name="chat_notice_dictation_mic">听写需要麦克风。请在 Android 设置中允许。</string>
     <string name="chat_notice_no_desktop_voice">桌面版还没有语音对话。</string>
     <string name="chat_notice_no_desktop_dictation">桌面版还没有听写。</string>
+    <string name="chat_notice_voice_needs_ffmpeg">语音对话需要位于 /usr/bin/ffmpeg 的 ffmpeg 才能朗读回复。请安装后再重新开始语音对话。</string>
     <string name="chat_notice_nothing_waiting">没有待处理的事项</string>
     <string name="chat_notice_adopted">你领养了 %1$s</string>
     <string name="chat_notice_prompt_not_sent">提示词未发送：Kyllene 无法连接网关。它还在输入框里。</string>
