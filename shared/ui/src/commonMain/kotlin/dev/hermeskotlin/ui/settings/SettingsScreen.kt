@@ -132,6 +132,7 @@ import com.composables.icons.lucide.Moon
 import com.composables.icons.lucide.Phone
 import com.composables.icons.lucide.RefreshCw
 import com.composables.icons.lucide.Send
+import com.composables.icons.lucide.Settings
 import com.composables.icons.lucide.ShieldAlert
 import com.composables.icons.lucide.Smartphone
 import com.composables.icons.lucide.Sun
@@ -425,6 +426,7 @@ internal fun SettingsView(
         contentAlignment = Alignment.TopCenter,
     ) {
         val scroll = rememberScrollState()
+        val liveAccess = rememberLiveUpdateAccess()
         // The desktop's settings are many and a pointer away; a search over their names finds one quicker than scrolling.
         val search = rememberTextFieldState()
         val query = if (isDesktop) search.text.toString() else ""
@@ -804,6 +806,30 @@ internal fun SettingsView(
                         onCheckedChange = { on -> onUpdate { it.copy(notifyReplies = on) } },
                         icon = Lucide.MessageCircle,
                     )
+                    // Live Updates are Android 16's, so a phone without them doesn't show the row at all.
+                    if (!isDesktop && liveAccess.supported) {
+                        Divider()
+                        SwitchRow(
+                            title = stringResource(Res.string.settings_live_updates),
+                            detail = if (settings.liveUpdates && !liveAccess.allowed) {
+                                stringResource(Res.string.settings_live_updates_denied)
+                            } else {
+                                stringResource(Res.string.settings_live_updates_detail)
+                            },
+                            // Android can still say no, but the switch stays the saved preference: the detail line and
+                            // the row below say when the system denies it, and turning it off must still be possible.
+                            checked = settings.liveUpdates,
+                            onCheckedChange = { on ->
+                                onUpdate { it.copy(liveUpdates = on) }
+                                if (on && !liveAccess.allowed) liveAccess.request()
+                            },
+                            icon = Lucide.Activity,
+                        )
+                        if (settings.liveUpdates && !liveAccess.allowed) {
+                            Divider()
+                            ActionRow(stringResource(Res.string.settings_live_updates_open), Lucide.Settings) { liveAccess.request() }
+                        }
+                    }
                     Divider()
                     SwitchRow(
                         title = stringResource(Res.string.settings_notify_other_in_app),

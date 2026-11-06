@@ -136,6 +136,10 @@
     <string name="settings_notify_requests_detail">Quando o agente espera por você. Responda direto pela notificação.</string>
     <string name="settings_notify_replies">Respostas concluídas</string>
     <string name="settings_notify_replies_detail">Quando um turno termina com o Kyllene em segundo plano. Responda pela notificação.</string>
+    <string name="settings_live_updates">Atualizações ao vivo</string>
+    <string name="settings_live_updates_detail">Um turno em andamento como atualização ao vivo: o cronômetro, o que o agente está fazendo e quantas ferramentas usou. Android 16 e versões mais recentes.</string>
+    <string name="settings_live_updates_denied">O Android ainda bloqueia as atualizações ao vivo: permita as notificações e as notificações em destaque do Kyllene nas configurações do Android.</string>
+    <string name="settings_live_updates_open">Abrir configurações do Android</string>
     <string name="settings_notify_other_in_app">Notificações de outras conversas com o Kyllene aberto</string>
     <string name="settings_notify_other_in_app_detail">Respostas e pedidos em conversas que não estão na tela notificam mesmo enquanto você está no Kyllene.</string>
     <string name="settings_alerts_other_chats">Alertas de outras conversas</string>

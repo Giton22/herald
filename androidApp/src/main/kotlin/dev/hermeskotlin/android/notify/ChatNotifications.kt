@@ -21,11 +21,17 @@ import androidx.core.app.Person
 import androidx.core.app.RemoteInput
 import dev.hermeskotlin.core.bots.Bot
 import androidx.core.content.ContextCompat
+import androidx.core.graphics.ColorUtils
+import androidx.core.graphics.drawable.IconCompat
 import androidx.core.net.toUri
 import dev.hermeskotlin.android.HeraldActivity
 import dev.hermeskotlin.android.R
 import dev.hermeskotlin.core.chat.ApprovalChoice
 import dev.hermeskotlin.core.chat.InputRequest
+import dev.hermeskotlin.core.chat.LiveTool
+import dev.hermeskotlin.core.chat.LiveToolState
+import dev.hermeskotlin.core.chat.LiveTurn
+import dev.hermeskotlin.core.chat.LiveTurnKind
 import dev.hermeskotlin.core.connection.ConnectionState
 import dev.hermeskotlin.core.inbox.InboxNotice
 import dev.hermeskotlin.core.inbox.InboxNotices
@@ -35,6 +41,7 @@ import dev.hermeskotlin.core.phone.CallOutcome
 import dev.hermeskotlin.core.phone.CallReason
 import dev.hermeskotlin.ui.calls.agentCallReason
 import dev.hermeskotlin.ui.calls.callReason
+import java.util.Locale
 import java.util.UUID
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
@@ -48,6 +55,12 @@ import kotlinx.coroutines.flow.update
 /** One bot's line in a room's notification, with when it was written. */
 data class RoomNotice(val bot: Bot, val picture: ByteArray?, val text: String, val at: Long)
 
+/** How a turn ended, as its finished card says it. */
+enum class LiveOutcome { Finished, Failed, Stopped }
+
+/** Another chat that is working, as the card of other chats lists it. */
+data class LiveOtherChat(val title: String, val waiting: Boolean)
+
 class ChatNotifications(
     private val context: Context,
     /** Why the agent called, for a call picked up on the watch to open with. */
@@ -59,6 +72,11 @@ class ChatNotifications(
     init {
         // Running turns once had a louder channel of their own (a Live Update); everything ongoing is quiet now.
         manager.deleteNotificationChannel(CHANNEL_WORKING_OLD)
+        // A process that just started has no turn running: any Live Update left is a ghost of the last one.
+        manager.cancel(null, LIVE_ID)
+        manager.cancel(null, LIVE_DONE_ID)
+        manager.cancel(null, LIVE_APPROVAL_ID)
+        manager.cancel(null, LIVE_OTHERS_ID)
         createChannels()
     }
 
@@ -117,6 +135,11 @@ class ChatNotifications(
                     .setVibrationEnabled(true)
                     .setVibrationPattern(RING_VIBRATION)
                     .build(),
+                NotificationChannelCompat.Builder(CHANNEL_LIVE, NotificationManagerCompat.IMPORTANCE_LOW)
+                    .setName(str(R.string.channel_live_name))
+                    .setDescription(str(R.string.channel_live_description))
+                    .setShowBadge(false)
+                    .build(),
             ),
         )
     }
@@ -171,6 +194,19 @@ class ChatNotifications(
     /** Requests that already rang: one that comes back (Herald was opened and left again) is a plain notification. */
     private val rang = LinkedHashSet<String>()
 
+    /** The approval whose live card is up, so an answer from anywhere takes that card down with the request. */
+    var liveApprovalId: String? = null
+        private set
+
+    /**
+     * Whether asking for [request] with [ring] on would ring like a call now: what [postRequest] decides, asked
+     * before it posts so the live approval card doesn't take a ringing call's place.
+     */
+    fun wouldRing(request: InputRequest, ring: Boolean): Boolean =
+        ring && !voiceOn() && !quietNow() &&
+            (request is InputRequest.Approval || request is InputRequest.Clarify) &&
+            synchronized(rang) { request.id !in rang }
+
     private val main = Handler(Looper.getMainLooper())
 
     val canPost: Boolean
@@ -222,6 +258,353 @@ class ChatNotifications(
         post(null, WORKING_ID, ongoing(connection, pushAnywhere))
 
     /**
+     * [turn] as a Live Update: the chat's bot face (its profile's, or its own when it is a Bot Chat), the
+     * chat's name, the status-bar chip, a timer, what the agent is doing now, the tools it ran, Stop, and
+     * Steer while it works. A live plan draws its steps as progress. Android 16 and later promotes it.
+     */
+    fun live(
+        storedSessionId: String?,
+        title: String?,
+        turn: LiveTurn,
+        since: Long,
+        bot: Bot? = null,
+        picture: ByteArray? = null,
+    ): Notification {
+        val step = turn.step
+        val steps = turn.steps
+        val progress = step != null && steps != null
+        val activity = liveText(turn)
+        val detail = turn.detail?.takeIf { it.isNotBlank() }
+        val meta = liveMeta(turn)
+        val builder = liveBase(
+            storedSessionId,
+            title,
+            activity,
+            // The bar's subtext says how far the plan is, so the line above stays the tool or the activity.
+            if (progress) detail else detail ?: meta.ifBlank { null },
+            bot,
+            picture,
+            liveChip(turn.kind),
+            LIVE_ID,
+            since,
+        )
+            .setWhen(since)
+            .setUsesChronometer(true)
+        // A turn that waits on an approval is answered from the approval card instead; steering is for a working turn.
+        // Steer comes first: a promoted card renders a reply action as its reply affordance, and skins show the
+        // first action when there is room for one.
+        if (turn.kind != LiveTurnKind.Waiting) {
+            val input = RemoteInput.Builder(NotificationActionReceiver.KEY_TEXT)
+                .setLabel(str(R.string.live_steer_hint))
+                .build()
+            builder.addAction(
+                NotificationCompat.Action.Builder(
+                    0,
+                    str(R.string.live_steer),
+                    action(NotificationActionReceiver.ACTION_STEER, storedSessionId.orEmpty(), mutable = true) {
+                        putExtra(NotificationActionReceiver.EXTRA_SESSION_ID, storedSessionId)
+                    },
+                ).addRemoteInput(input).setAllowGeneratedReplies(false).setAuthenticationRequired(true)
+                    .setSemanticAction(NotificationCompat.Action.SEMANTIC_ACTION_REPLY).build(),
+            )
+        }
+        builder.addAction(0, str(R.string.live_stop), action(NotificationActionReceiver.ACTION_STOP_TURN, storedSessionId.orEmpty()) {
+            putExtra(NotificationActionReceiver.EXTRA_SESSION_ID, storedSessionId)
+        })
+        return if (step != null && steps != null) {
+            // The bar shows where the plan is; the subtext keeps how much work it took to get there.
+            builder.setSubText(meta).setStyle(progressStyle(step, steps)).build()
+        } else {
+            builder.setStyle(NotificationCompat.BigTextStyle().bigText(liveBody(turn, meta))).build()
+        }
+    }
+
+    /** The finished turn's card: the same Live Update, saying how it ended and then going by itself. */
+    fun liveDone(
+        storedSessionId: String?,
+        title: String?,
+        tools: Int,
+        elapsedMs: Long,
+        outcome: LiveOutcome,
+        since: Long,
+        bot: Bot? = null,
+        picture: ByteArray? = null,
+    ): Notification {
+        val text = str(
+            when (outcome) {
+                LiveOutcome.Finished -> R.string.live_done_text
+                LiveOutcome.Failed -> R.string.live_failed_text
+                LiveOutcome.Stopped -> R.string.live_stopped_text
+            },
+        )
+        val chip = when (outcome) {
+            LiveOutcome.Finished -> R.string.live_chip_done
+            LiveOutcome.Failed -> R.string.live_chip_failed
+            LiveOutcome.Stopped -> R.string.live_stopped_text
+        }
+        val meta = listOfNotNull(toolsLine(tools), clock(elapsedMs)).joinToString(" · ")
+        return liveBase(storedSessionId, title, text, meta.ifBlank { null }, bot, picture, chip, LIVE_DONE_ID, since)
+            // The outcome is the subtext; the body adds only the meta, so it doesn't say "Finished" twice.
+            .setStyle(NotificationCompat.BigTextStyle().bigText(meta))
+            // The time is in the meta already, and a clock beside a finished turn reads as still running.
+            .setShowWhen(false)
+            .setTimeoutAfter(LIVE_DONE_MS)
+            .build()
+    }
+
+    fun postLive(
+        storedSessionId: String?,
+        title: String?,
+        turn: LiveTurn,
+        since: Long,
+        bot: Bot? = null,
+        picture: ByteArray? = null,
+    ) {
+        manager.cancel(null, LIVE_DONE_ID)
+        post(null, LIVE_ID, live(storedSessionId, title, turn, since, bot, picture))
+    }
+
+    fun postLiveDone(
+        storedSessionId: String?,
+        title: String?,
+        tools: Int,
+        elapsedMs: Long,
+        outcome: LiveOutcome,
+        since: Long,
+        bot: Bot? = null,
+        picture: ByteArray? = null,
+    ) {
+        manager.cancel(null, LIVE_ID)
+        post(null, LIVE_DONE_ID, liveDone(storedSessionId, title, tools, elapsedMs, outcome, since, bot, picture))
+    }
+
+    fun cancelLive() = manager.cancel(null, LIVE_ID)
+
+    fun cancelLiveDone() = manager.cancel(null, LIVE_DONE_ID)
+
+    /**
+     * A turn waiting on an approval, as the one card for it: the chat's bot face, the command and what it
+     * does, and the same choices the usual approval notification offers. It takes the live card's place
+     * while it is up, and follows the user's settings for approvals ([CHANNEL_REQUESTS]).
+     */
+    fun liveApproval(
+        storedSessionId: String?,
+        title: String?,
+        request: InputRequest.Approval,
+        since: Long,
+        bot: Bot? = null,
+        picture: ByteArray? = null,
+    ): Notification {
+        val body = listOf(request.description, request.command).filter { it.isNotBlank() }.joinToString("\n\n")
+        val builder = base(CHANNEL_REQUESTS, storedSessionId, title)
+            .setContentTitle(title?.takeIf { it.isNotBlank() } ?: str(R.string.app_name))
+            .setSubText(str(R.string.live_approval_title))
+            .setContentText(request.command.ifBlank { request.description })
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+            .setCategory(NotificationCompat.CATEGORY_PROGRESS)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
+            .setRequestPromotedOngoing(true)
+            .setShortCriticalText(str(R.string.live_chip_waiting))
+            .setDeleteIntent(liveDismissed(LIVE_APPROVAL_ID, since, request.id, storedSessionId, title))
+        if (bot != null) builder.setLargeIcon(BotIcons.icon(bot, picture).toIcon(context))
+        // "Always" is too big a decision for a notification; it stays in the app.
+        request.choices.filter { it != ApprovalChoice.Always }.forEach { choice ->
+            builder.addAction(
+                NotificationCompat.Action.Builder(
+                    0,
+                    str(choice.label),
+                    action(NotificationActionReceiver.ACTION_APPROVE, request.id + choice.wire) {
+                        putExtra(NotificationActionReceiver.EXTRA_REQUEST_ID, request.id)
+                        putExtra(NotificationActionReceiver.EXTRA_CHOICE, choice.wire)
+                    },
+                ).setAuthenticationRequired(true).build(),
+            )
+        }
+        return builder.build()
+    }
+
+    fun postLiveApproval(
+        storedSessionId: String?,
+        title: String?,
+        request: InputRequest.Approval,
+        since: Long,
+        bot: Bot? = null,
+        picture: ByteArray? = null,
+    ) {
+        // The approval is the surface while it waits: no second live card, no finished card, and no plain approval notification.
+        manager.cancel(null, LIVE_ID)
+        manager.cancel(null, LIVE_DONE_ID)
+        manager.cancel(request.id, REQUEST_ID)
+        liveApprovalId = request.id
+        post(null, LIVE_APPROVAL_ID, liveApproval(storedSessionId, title, request, since, bot, picture))
+    }
+
+    fun cancelLiveApproval() {
+        manager.cancel(null, LIVE_APPROVAL_ID)
+        liveApprovalId = null
+    }
+
+    /** Other chats that are working, one line each: more than one turn at a time, but not the open chat's card. */
+    fun postLiveOthers(chats: List<LiveOtherChat>) {
+        val lines = chats.take(MAX_OTHER_CHATS).map { chat ->
+            chat.title + " · " + str(if (chat.waiting) R.string.live_others_needs_you else R.string.live_others_working)
+        }
+        val hidden = chats.size - lines.size
+        val more = hidden.takeIf { it > 0 }?.let { context.resources.getQuantityString(R.plurals.live_more_tools, it, it) }
+        val body = (lines + listOfNotNull(more)).joinToString("\n")
+        val notification = base(CHANNEL_LIVE)
+            .setContentTitle(str(R.string.live_others_title))
+            .setContentText(lines.firstOrNull().orEmpty())
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setSilent(true)
+            .setCategory(NotificationCompat.CATEGORY_STATUS)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setDeleteIntent(liveDismissed(LIVE_OTHERS_ID, 0L))
+            .build()
+        post(null, LIVE_OTHERS_ID, notification)
+    }
+
+    fun cancelLiveOthers() = manager.cancel(null, LIVE_OTHERS_ID)
+
+    private fun liveBase(
+        storedSessionId: String?,
+        title: String?,
+        activity: String,
+        detail: String?,
+        bot: Bot?,
+        picture: ByteArray?,
+        chip: Int,
+        card: Int,
+        since: Long,
+    ) = base(CHANNEL_LIVE, storedSessionId, title)
+        .setContentTitle(title?.takeIf { it.isNotBlank() } ?: str(R.string.app_name))
+        // OxygenOS shows the resting card's middle line from the subtext, so the activity belongs there.
+        .setSubText(activity)
+        .setContentText(detail?.takeIf { it.isNotBlank() } ?: activity)
+        .setLargeIcon((bot?.let { BotIcons.icon(it, picture) } ?: IconCompat.createWithResource(context, R.mipmap.ic_launcher)).toIcon(context))
+        .setOngoing(true)
+        .setOnlyAlertOnce(true)
+        .setSilent(true)
+        .setCategory(NotificationCompat.CATEGORY_PROGRESS)
+        .setPriority(NotificationCompat.PRIORITY_LOW)
+        .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
+        .setRequestPromotedOngoing(true)
+        .setShortCriticalText(str(chip))
+        .setDeleteIntent(liveDismissed(card, since))
+
+    /**
+     * The plan's steps as progress: done in the accent, the one in hand brighter, the later ones muted.
+     * Each segment is one unit long, so the track is `steps` long and the progress of `step` fills the first
+     * `step` of them.
+     */
+    private fun progressStyle(step: Int, steps: Int): NotificationCompat.ProgressStyle {
+        val accent = ContextCompat.getColor(context, R.color.notification_accent)
+        val current = ColorUtils.blendARGB(accent, android.graphics.Color.WHITE, 0.35f)
+        val later = ColorUtils.blendARGB(accent, android.graphics.Color.LTGRAY, 0.75f)
+        return NotificationCompat.ProgressStyle()
+            .setStyledByProgress(false)
+            .setProgress(step)
+            .setProgressSegments(
+                (1..steps).map { index ->
+                    NotificationCompat.ProgressStyle.Segment(1).setColor(
+                        when {
+                            index < step -> accent
+                            index == step -> current
+                            else -> later
+                        },
+                    )
+                },
+            )
+    }
+
+    /**
+     * A dismissed or demoted card's delete action. The cards are ongoing, so a swipe can't take them down, but
+     * Android lets the user dismiss or demote a promoted update. The approval card also carries what the usual
+     * approval needs: that must not leave the agent waiting with nothing to answer.
+     */
+    private fun liveDismissed(
+        card: Int,
+        since: Long,
+        requestId: String? = null,
+        storedSessionId: String? = null,
+        title: String? = null,
+    ) = action(
+        NotificationActionReceiver.ACTION_LIVE_DISMISSED,
+        "$card:$since:${requestId.orEmpty()}",
+    ) {
+        putExtra(NotificationActionReceiver.EXTRA_LIVE_CARD, card)
+        putExtra(NotificationActionReceiver.EXTRA_LIVE_SINCE, since)
+        if (requestId != null) putExtra(NotificationActionReceiver.EXTRA_REQUEST_ID, requestId)
+        if (storedSessionId != null) putExtra(NotificationActionReceiver.EXTRA_SESSION_ID, storedSessionId)
+        if (title != null) putExtra(NotificationActionReceiver.EXTRA_LIVE_TITLE, title)
+    }
+
+    private fun liveChip(kind: LiveTurnKind): Int = when (kind) {
+        LiveTurnKind.Waiting -> R.string.live_chip_waiting
+        else -> R.string.live_chip_working
+    }
+
+    /** How much the turn has done, as the card's meta line: `3 tools · Step 2 of 4`. */
+    private fun liveMeta(turn: LiveTurn): String = listOfNotNull(
+        toolsLine(turn.tools),
+        turn.step?.let { step -> turn.steps?.let { steps -> str(R.string.live_step, step, steps) } },
+    ).joinToString(" · ")
+
+    private fun liveText(turn: LiveTurn): String = when (turn.kind) {
+        LiveTurnKind.Waiting -> str(R.string.live_waiting_text)
+        LiveTurnKind.Tool -> str(R.string.live_using, turn.tool?.replace('_', ' ').orEmpty())
+        LiveTurnKind.Plan -> turn.stepText?.takeIf { it.isNotBlank() } ?: str(R.string.live_thinking)
+        LiveTurnKind.Status -> turn.status?.takeIf { it.isNotBlank() } ?: str(R.string.live_thinking)
+        LiveTurnKind.Thinking -> str(R.string.live_thinking)
+    }
+
+    /**
+     * The expanded card's body: the meta line, then the newest tools it ran in the room left.
+     * "…N more" gets its slot first, so the count is never the line that falls off.
+     */
+    private fun liveBody(turn: LiveTurn, meta: String): String {
+        val lines = buildList { if (meta.isNotBlank()) add(meta) }.toMutableList()
+        val room = (MAX_LIVE_LINES - lines.size).coerceAtLeast(0)
+        // When not every tool fits, "…N more" takes one of the lines before the tools do.
+        val slots = if (turn.tools > minOf(room, turn.recent.size)) (room - 1).coerceAtLeast(0) else room
+        val shown = turn.recent.takeLast(slots.coerceAtMost(turn.recent.size))
+        lines += shown.map(::toolLine)
+        val hidden = turn.tools - shown.size
+        if (hidden > 0) lines += context.resources.getQuantityString(R.plurals.live_more_tools, hidden, hidden)
+        return lines.joinToString("\n")
+    }
+
+    private fun toolLine(tool: LiveTool): String {
+        val glyph = when (tool.state) {
+            LiveToolState.Done -> "✓"
+            LiveToolState.Running -> "◐"
+            LiveToolState.Failed -> "✗"
+        }
+        return tool.line?.takeIf { it.isNotBlank() }?.let { "$glyph ${tool.name} · $it" } ?: "$glyph ${tool.name}"
+    }
+
+    private fun toolsLine(tools: Int): String? =
+        tools.takeIf { it > 0 }?.let { context.resources.getQuantityString(R.plurals.live_tools, it, it) }
+
+    /** The finished turn's time as a clock: `04:12`, or `1:04:12` past the hour. */
+    private fun clock(elapsedMs: Long): String {
+        val total = (elapsedMs / 1000).coerceAtLeast(0)
+        val hours = total / 3600
+        val minutes = (total % 3600) / 60
+        val seconds = total % 60
+        return if (hours > 0) {
+            String.format(Locale.ROOT, "%d:%02d:%02d", hours, minutes, seconds)
+        } else {
+            String.format(Locale.ROOT, "%02d:%02d", minutes, seconds)
+        }
+    }
+
+    /**
      * A question the agent is blocked on, answerable in place when it fits a notification. Every answer
      * asks for an unlock first: from a locked phone, Approve would run a command for whoever holds it.
      * With [ring] an approval or a question rings like a call instead, once ([postCall]); passwords and codes never
@@ -236,8 +619,7 @@ class ChatNotifications(
         talk: Boolean = false,
         quiet: Boolean = false,
     ): Boolean {
-        val rings = ring && !voiceOn() && !quietNow() && (request is InputRequest.Approval || request is InputRequest.Clarify) && synchronized(rang) { request.id !in rang }
-        if (rings) return postCall(Ringing(request.id, storedSessionId, title, request, talk))
+        if (wouldRing(request, ring)) return postCall(Ringing(request.id, storedSessionId, title, request, talk))
         val builder = base(CHANNEL_REQUESTS, storedSessionId, title)
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
@@ -310,6 +692,7 @@ class ChatNotifications(
     fun cancelRequest(id: String) {
         stopRinging(id)
         manager.cancel(id, REQUEST_ID)
+        if (liveApprovalId == id) cancelLiveApproval()
     }
 
     /**
@@ -831,12 +1214,19 @@ class ChatNotifications(
         /** With [EXTRA_OPEN_INBOX] on an Inbox notification's Mark read, and in its extras: the gateway the run is of. */
         const val EXTRA_INBOX_GATEWAY = "inbox_gateway"
         const val CALL_ID = 9
+        const val LIVE_ID = 10
+        const val LIVE_DONE_ID = 11
+        const val LIVE_APPROVAL_ID = 12
+        const val LIVE_OTHERS_ID = 13
 
         /** On an Answer's launch intent: the request whose call was answered. */
         const val EXTRA_ANSWERED_CALL = "answered_call"
 
         /** How long a call rings before it becomes the usual notification. */
         const val RING_MS = 45_000L
+
+        /** How long a finished turn's Live Update stays before it goes by itself. */
+        private const val LIVE_DONE_MS = 6_000L
 
         /** On the launch intent of a room's notification: the hosted room's id (its name in [EXTRA_OPEN_TITLE]). */
         const val EXTRA_OPEN_ROOM = "open_room"
@@ -856,6 +1246,7 @@ class ChatNotifications(
         private const val CHANNEL_VOICE = "voice"
         private const val CHANNEL_INBOX = "inbox"
         private const val CHANNEL_INBOX_FAILED = "inbox_failed"
+        private const val CHANNEL_LIVE = "live"
 
         /** Read by PhoneToolAccess too, to tell whether calls can ring. */
         private const val CHANNEL_CALLS = "calls"
@@ -874,6 +1265,10 @@ class ChatNotifications(
         private const val MAX_STACKED = 6
         private const val DEDUPE_PREFIX = 200
         private const val DEDUPE_WINDOW_MS = 10 * 60_000L
+
+        /** The expanded live card's room, and how many other chats its card lists before "…N more". */
+        private const val MAX_LIVE_LINES = 5
+        private const val MAX_OTHER_CHATS = 3
     }
 }
 

@@ -25,6 +25,8 @@
     <string name="channel_voice_description">Affichée pendant une conversation vocale, écran éteint ou dans une autre app.</string>
     <string name="channel_calls_name">Appels pour une réponse</string>
     <string name="channel_calls_description">Une approbation ou une question sonne comme un appel (Paramètres → Outils du téléphone → Appels).</string>
+    <string name="channel_live_name">Mises à jour en direct</string>
+    <string name="channel_live_description">Un tour en cours dans la barre d’état pendant que Kyllene est en arrière-plan. Android 16 et versions ultérieures.</string>
     <string name="channel_phone_tools_name">Outils du téléphone</string>
     <string name="channel_phone_tools_description">Quand l’agent veut modifier quelque chose sur ce téléphone</string>
 
@@ -64,6 +66,37 @@
     <string name="notification_message_hermes">Écrire à Hermes</string>
     <string name="notification_turn_failed">Échec du tour</string>
     <string name="notification_hermes_replied">Hermes a répondu</string>
+    <string name="live_chip_working">Actif</string>
+    <string name="live_chip_waiting">Attente</string>
+    <string name="live_chip_done">Terminé</string>
+    <string name="live_chip_failed">Échec</string>
+    <!-- %1$s: the tool's name -->
+    <string name="live_using">Utilise %1$s</string>
+    <string name="live_waiting_text">En attente de votre réponse</string>
+    <string name="live_thinking">Réflexion…</string>
+    <string name="live_done_text">✅ Terminé</string>
+    <string name="live_failed_text">Le tour a échoué</string>
+    <string name="live_stopped_text">Arrêté</string>
+    <string name="live_stop">Arrêter</string>
+    <string name="live_steer">Orienter</string>
+    <string name="live_steer_hint">Corriger ou orienter Hermes</string>
+    <string name="live_approval_title">Approuver cette commande ?</string>
+    <string name="live_others_title">Autres conversations</string>
+    <string name="live_others_working">en cours</string>
+    <string name="live_others_needs_you">vous attend</string>
+    <!-- %1$d: how many more tools or chats there are -->
+    <plurals name="live_more_tools">
+        <item quantity="one">…%1$d de plus</item>
+        <item quantity="other">…%1$d de plus</item>
+        <item quantity="many">…%1$d de plus</item>
+    </plurals>
+    <!-- %1$d: the step now; %2$d: how many there are -->
+    <string name="live_step">Étape %1$d sur %2$d</string>
+    <plurals name="live_tools">
+        <item quantity="one">%d outil</item>
+        <item quantity="many">%d outils</item>
+        <item quantity="other">%d outils</item>
+    </plurals>
     <string name="notification_reply">Répondre</string>
     <string name="notification_you">Vous</string>
     <string name="notification_message_bot">Écrire à %1$s</string>

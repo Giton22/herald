@@ -136,6 +136,10 @@
     <string name="settings_notify_requests_detail">Wenn der Agent auf dich wartet. Antworte direkt aus der Benachrichtigung.</string>
     <string name="settings_notify_replies">Fertige Antworten</string>
     <string name="settings_notify_replies_detail">Wenn ein Zug endet, während Kyllene im Hintergrund ist. Antworte aus der Benachrichtigung.</string>
+    <string name="settings_live_updates">Live-Updates</string>
+    <string name="settings_live_updates_detail">Ein laufender Durchlauf als Live-Update: sein Timer, was der Agent gerade tut und wie viele Tools er benutzt hat. Android 16 und neuer.</string>
+    <string name="settings_live_updates_denied">Android blockiert Live-Updates noch: Erlaube Kyllene in den Android-Einstellungen Benachrichtigungen und hervorgehobene Benachrichtigungen.</string>
+    <string name="settings_live_updates_open">Android-Einstellungen öffnen</string>
     <string name="settings_notify_other_in_app">Bei offenem Kyllene auch für andere Chats benachrichtigen</string>
     <string name="settings_notify_other_in_app_detail">Antworten und Anfragen in anderen Chats als dem auf dem Bildschirm benachrichtigen auch, während du in Kyllene bist.</string>
     <string name="settings_alerts_other_chats">Hinweise auf andere Chats</string>

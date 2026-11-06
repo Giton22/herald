@@ -136,6 +136,10 @@
     <string name="settings_notify_requests_detail">代理在等你时。可直接在通知中回答。</string>
     <string name="settings_notify_replies">已完成的回复</string>
     <string name="settings_notify_replies_detail">Kyllene 在后台时，某一轮次结束后通知你。可在通知中回复。</string>
+    <string name="settings_live_updates">实时更新</string>
+    <string name="settings_live_updates_detail">将进行中的轮次显示为实时更新：计时器、智能体正在做什么，以及用了多少工具。Android 16 及更高版本。</string>
+    <string name="settings_live_updates_denied">Android 仍然阻止实时更新：请在 Android 设置中允许 Kyllene 的通知和置顶通知。</string>
+    <string name="settings_live_updates_open">打开 Android 设置</string>
     <string name="settings_notify_other_in_app">Kyllene 打开时，其他对话也发通知</string>
     <string name="settings_notify_other_in_app_detail">即使你正在使用 Kyllene，当前屏幕以外的对话中的回复和请求也会发通知。</string>
     <string name="settings_alerts_other_chats">其他对话的提醒</string>

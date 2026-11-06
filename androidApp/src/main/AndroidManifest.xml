@@ -9,6 +9,8 @@
     <!-- WebRTC watches the network for the call; without this it aborts as the call starts. -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Android 16 Live Updates: a running turn promoted in the status bar. -->
+    <uses-permission android:name="android.permission.POST_PROMOTED_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <!-- A voice chat goes on with the screen off, like a call (VoiceCallService). -->

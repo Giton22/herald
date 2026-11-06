@@ -32,3 +32,13 @@ actual fun rememberPhoneToolAccess(): PhoneToolAccess = remember {
         override fun request(tool: PhoneTool) = Unit
     }
 }
+
+/** Live Updates are Android's, and the desktop has no place for one. */
+@Composable
+actual fun rememberLiveUpdateAccess(): LiveUpdateAccess = remember {
+    object : LiveUpdateAccess {
+        override val supported = false
+        override val allowed = false
+        override fun request() = Unit
+    }
+}

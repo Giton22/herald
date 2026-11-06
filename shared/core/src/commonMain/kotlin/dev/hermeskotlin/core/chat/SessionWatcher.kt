@@ -45,6 +45,8 @@ data class WatchedChat(
     val title: String,
     val requests: List<InputRequest> = emptyList(),
     internal val arrivals: Map<String, Long> = emptyMap(),
+    /** A turn is running there now, rather than the chat only still being watched since its last one. */
+    val running: Boolean = true,
 )
 
 /** A watched chat's turn ended: its reply's [text], or [error] when it failed. */
@@ -248,15 +250,15 @@ class SessionWatcher(
             )
         }
         val now = clock()
+        val running = result.boolean("running") == true
         _chats.update { all ->
             val chat = all[storedId] ?: return@update all
             // The reply lists every request still open. One heard on this socket since the call went out is as
             // new; one from an earlier socket that the reply leaves out was answered while that socket was down.
             val heard = chat.requests.filter { request -> (chat.arrivals[request.id] ?: 0) >= since && open.none { it.id == request.id } }
             val requests = open + heard
-            all + (storedId to chat.copy(runtimeId = runtimeId, requests = requests, arrivals = requests.associate { it.id to (chat.arrivals[it.id] ?: now) }))
+            all + (storedId to chat.copy(runtimeId = runtimeId, requests = requests, arrivals = requests.associate { it.id to (chat.arrivals[it.id] ?: now) }, running = running))
         }
-        val running = result.boolean("running") == true
         attention.watched(runtimeId, storedId, running, open)
         // A turn that started while this socket wasn't attached (an idle chat isn't attached again).
         if (running) _turnStarts.emit(storedId)
@@ -289,10 +291,15 @@ class SessionWatcher(
             "session.title" -> payload.string("title")?.takeIf { it.isNotBlank() }?.let { title ->
                 _chats.update { all -> all[chat.storedId]?.let { all + (chat.storedId to it.copy(title = title)) } ?: all }
             }
-            "message.start" -> _turnStarts.emit(chat.storedId)
+            "message.start" -> {
+                _chats.update { all -> all[chat.storedId]?.let { all + (chat.storedId to it.copy(running = true)) } ?: all }
+                _turnStarts.emit(chat.storedId)
+            }
             "message.complete" -> {
                 // Nothing can still wait once the turn is over.
-                _chats.update { all -> all[chat.storedId]?.let { all + (chat.storedId to it.copy(requests = emptyList(), arrivals = emptyMap())) } ?: all }
+                _chats.update { all ->
+                    all[chat.storedId]?.let { all + (chat.storedId to it.copy(requests = emptyList(), arrivals = emptyMap(), running = false)) } ?: all
+                }
                 val outcome = when (payload.string("status")) {
                     "error" -> TurnOutcome.Error
                     "interrupted" -> TurnOutcome.Interrupted

@@ -25,6 +25,8 @@
     <string name="channel_voice_description">Látható, amíg egy hangos csevegés kikapcsolt képernyővel vagy egy másik alkalmazás mellett folytatódik.</string>
     <string name="channel_calls_name">Válaszra váró hívások</string>
     <string name="channel_calls_description">Egy jóváhagyás vagy kérdés hívásként csörög (Beállítások → Telefonos eszközök → Hívások).</string>
+    <string name="channel_live_name">Élő frissítések</string>
+    <string name="channel_live_description">Futó kör az állapotsorban, miközben a Kyllene a háttérben van. Android 16 és újabb.</string>
     <string name="channel_phone_tools_name">Telefonos eszközök</string>
     <string name="channel_phone_tools_description">Amikor az ügynök módosítani szeretne valamit ezen a telefonon</string>
 
@@ -63,6 +65,35 @@
     <string name="notification_message_hermes">Üzenet Hermesnek</string>
     <string name="notification_turn_failed">Sikertelen kör</string>
     <string name="notification_hermes_replied">Hermes válaszolt</string>
+    <string name="live_chip_working">Aktív</string>
+    <string name="live_chip_waiting">Vár</string>
+    <string name="live_chip_done">Kész</string>
+    <string name="live_chip_failed">Hiba</string>
+    <!-- %1$s: the tool's name -->
+    <string name="live_using">%1$s használata</string>
+    <string name="live_waiting_text">Válaszodra vár</string>
+    <string name="live_thinking">Gondolkodik…</string>
+    <string name="live_done_text">✅ Befejeződött</string>
+    <string name="live_failed_text">A kör sikertelen volt</string>
+    <string name="live_stopped_text">Leállítva</string>
+    <string name="live_stop">Leállítás</string>
+    <string name="live_steer">Irányítás</string>
+    <string name="live_steer_hint">Hermes javítása vagy irányítása</string>
+    <string name="live_approval_title">Engedélyezi ezt a parancsot?</string>
+    <string name="live_others_title">Más csevegések</string>
+    <string name="live_others_working">dolgozik</string>
+    <string name="live_others_needs_you">vár rád</string>
+    <!-- %1$d: how many more tools or chats there are -->
+    <plurals name="live_more_tools">
+        <item quantity="one">…%1$d további</item>
+        <item quantity="other">…%1$d további</item>
+    </plurals>
+    <!-- %1$d: the step now; %2$d: how many there are -->
+    <string name="live_step">%1$d. lépés / %2$d</string>
+    <plurals name="live_tools">
+        <item quantity="one">%d eszköz</item>
+        <item quantity="other">%d eszköz</item>
+    </plurals>
     <string name="notification_reply">Válasz</string>
     <string name="notification_you">Te</string>
     <string name="notification_message_bot">Üzenet neki: %1$s</string>

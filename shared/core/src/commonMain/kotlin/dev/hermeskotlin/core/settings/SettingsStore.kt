@@ -120,6 +120,8 @@ data class AppSettings(
     val lastProjects: Map<String, String> = emptyMap(),
     /** Notify when a turn finishes while the app is in the background. */
     val notifyReplies: Boolean = true,
+    /** A running turn as a Live Update in the status bar, while Kyllene is in the background. Android 16 and later. */
+    val liveUpdates: Boolean = false,
     /** Notify when the agent waits on an approval or a question while the app is in the background. */
     val notifyRequests: Boolean = true,
     /**
