@@ -138,6 +138,8 @@
     <string name="settings_notify_replies_detail">When a turn ends while Kyllene is in the background. Reply from the notification.</string>
     <string name="settings_live_updates">Live updates</string>
     <string name="settings_live_updates_detail">A turn in progress as a Live Update: its timer, what the agent is doing and how many tools it used. Android 16 and later.</string>
+    <string name="settings_live_updates_denied">Android still blocks Live updates: allow notifications and promoted notifications for Kyllene in Android settings.</string>
+    <string name="settings_live_updates_open">Open Android settings</string>
     <string name="settings_notify_other_in_app">Notify for other chats while Kyllene is open</string>
     <string name="settings_notify_other_in_app_detail">Replies and requests in chats other than the one on screen notify even while you’re in Kyllene.</string>
     <string name="settings_alerts_other_chats">Alerts for other chats</string>

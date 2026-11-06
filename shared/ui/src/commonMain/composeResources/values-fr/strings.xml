@@ -138,6 +138,8 @@
     <string name="settings_notify_replies_detail">Quand un tour se termine alors que Kyllene est en arrière-plan. Répondez depuis la notification.</string>
     <string name="settings_live_updates">Mises à jour en direct</string>
     <string name="settings_live_updates_detail">Un tour en cours sous forme de mise à jour en direct : son minuteur, ce que fait l’agent et le nombre d’outils utilisés. Android 16 et versions ultérieures.</string>
+    <string name="settings_live_updates_denied">Android bloque encore les mises à jour en direct : autorisez les notifications et les notifications mises en avant pour Kyllene dans les réglages Android.</string>
+    <string name="settings_live_updates_open">Ouvrir les réglages Android</string>
     <string name="settings_notify_other_in_app">Notifications des autres conversations quand Kyllene est ouvert</string>
     <string name="settings_notify_other_in_app_detail">Les réponses et demandes des conversations autres que celle à l’écran vous notifient même quand vous êtes dans Kyllene.</string>
     <string name="settings_alerts_other_chats">Alertes des autres conversations</string>
