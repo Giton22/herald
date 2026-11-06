@@ -69,6 +69,13 @@ class NotificationActionReceiver : BroadcastReceiver(), KoinComponent {
                 }
             }
             ACTION_DECLINE_CALL -> intent.getStringExtra(EXTRA_REQUEST_ID)?.let(notifications::decline)
+            // Only the chat the Stop was posted for: a late tap must not stop whichever chat is open now.
+            ACTION_STOP_TURN -> {
+                val stored = intent.getStringExtra(EXTRA_SESSION_ID)
+                if (session != null && session.state.value.storedSessionId == stored) {
+                    withTimeoutOrNull(RECEIVER_BUDGET_MS) { session.interrupt() }
+                }
+            }
             ACTION_INBOX_READ -> {
                 // The run this notification showed, of the gateway that sent it: not whichever the app is on now.
                 val key = intent.getStringExtra(ChatNotifications.EXTRA_OPEN_INBOX) ?: return
@@ -167,6 +174,7 @@ class NotificationActionReceiver : BroadcastReceiver(), KoinComponent {
         const val ACTION_BOT_CLEARED = "dev.hermeskotlin.action.BOT_CLEARED"
         const val ACTION_ROOM_CLEARED = "dev.hermeskotlin.action.ROOM_CLEARED"
         const val ACTION_DECLINE_CALL = "dev.hermeskotlin.action.DECLINE_CALL"
+        const val ACTION_STOP_TURN = "dev.hermeskotlin.action.STOP_TURN"
         const val ACTION_INBOX_READ = "dev.hermeskotlin.action.INBOX_READ"
         const val EXTRA_BOT = "bot"
 

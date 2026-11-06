@@ -25,6 +25,8 @@
     <string name="channel_voice_description">Wird angezeigt, während ein Sprachchat bei ausgeschaltetem Bildschirm oder in einer anderen App weiterläuft.</string>
     <string name="channel_calls_name">Anrufe für eine Antwort</string>
     <string name="channel_calls_description">Eine Freigabe oder eine Frage klingelt wie ein Anruf (Einstellungen → Telefon-Tools → Anrufe).</string>
+    <string name="channel_live_name">Live-Updates</string>
+    <string name="channel_live_description">Ein laufender Durchlauf in der Statusleiste, während Kyllene im Hintergrund ist. Android 16 und neuer.</string>
     <string name="channel_phone_tools_name">Telefon-Tools</string>
     <string name="channel_phone_tools_description">Wenn der Agent etwas an diesem Telefon ändern möchte</string>
 
@@ -63,6 +65,23 @@
     <string name="notification_message_hermes">Nachricht an Hermes</string>
     <string name="notification_turn_failed">Durchlauf fehlgeschlagen</string>
     <string name="notification_hermes_replied">Hermes hat geantwortet</string>
+    <string name="live_chip_working">Läuft</string>
+    <string name="live_chip_waiting">Wartet</string>
+    <string name="live_chip_done">Fertig</string>
+    <string name="live_chip_failed">Fehler</string>
+    <!-- %1$s: the tool's name -->
+    <string name="live_using">Nutzt %1$s</string>
+    <string name="live_waiting_text">Wartet auf deine Antwort</string>
+    <string name="live_thinking">Denkt nach …</string>
+    <string name="live_done_text">✅ Abgeschlossen</string>
+    <string name="live_failed_text">Der Durchlauf ist fehlgeschlagen</string>
+    <string name="live_stop">Stopp</string>
+    <!-- %1$d: the step now; %2$d: how many there are -->
+    <string name="live_step">Schritt %1$d von %2$d</string>
+    <plurals name="live_tools">
+        <item quantity="one">%d Tool</item>
+        <item quantity="other">%d Tools</item>
+    </plurals>
     <string name="notification_reply">Antworten</string>
     <string name="notification_you">Du</string>
     <string name="notification_message_bot">Nachricht an %1$s</string>

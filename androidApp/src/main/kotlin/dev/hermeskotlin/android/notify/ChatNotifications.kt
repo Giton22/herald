@@ -26,6 +26,8 @@ import dev.hermeskotlin.android.HeraldActivity
 import dev.hermeskotlin.android.R
 import dev.hermeskotlin.core.chat.ApprovalChoice
 import dev.hermeskotlin.core.chat.InputRequest
+import dev.hermeskotlin.core.chat.LiveTurn
+import dev.hermeskotlin.core.chat.LiveTurnKind
 import dev.hermeskotlin.core.connection.ConnectionState
 import dev.hermeskotlin.core.inbox.InboxNotice
 import dev.hermeskotlin.core.inbox.InboxNotices
@@ -35,6 +37,7 @@ import dev.hermeskotlin.core.phone.CallOutcome
 import dev.hermeskotlin.core.phone.CallReason
 import dev.hermeskotlin.ui.calls.agentCallReason
 import dev.hermeskotlin.ui.calls.callReason
+import java.util.Locale
 import java.util.UUID
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
@@ -59,6 +62,9 @@ class ChatNotifications(
     init {
         // Running turns once had a louder channel of their own (a Live Update); everything ongoing is quiet now.
         manager.deleteNotificationChannel(CHANNEL_WORKING_OLD)
+        // A process that just started has no turn running: any Live Update left is a ghost of the last one.
+        manager.cancel(null, LIVE_ID)
+        manager.cancel(null, LIVE_DONE_ID)
         createChannels()
     }
 
@@ -116,6 +122,11 @@ class ChatNotifications(
                     )
                     .setVibrationEnabled(true)
                     .setVibrationPattern(RING_VIBRATION)
+                    .build(),
+                NotificationChannelCompat.Builder(CHANNEL_LIVE, NotificationManagerCompat.IMPORTANCE_LOW)
+                    .setName(str(R.string.channel_live_name))
+                    .setDescription(str(R.string.channel_live_description))
+                    .setShowBadge(false)
                     .build(),
             ),
         )
@@ -220,6 +231,107 @@ class ChatNotifications(
 
     fun postOngoing(connection: ConnectionState, pushAnywhere: Boolean = false) =
         post(null, WORKING_ID, ongoing(connection, pushAnywhere))
+
+    /**
+     * [turn] as a Live Update: the status-bar chip, when it started as a timer, and what the agent is doing
+     * now, with Stop in the expanded card. Android 16 and later promotes it.
+     */
+    fun live(storedSessionId: String?, title: String?, turn: LiveTurn, since: Long): Notification =
+        liveBase(storedSessionId, title, liveText(turn), liveBody(turn), liveChip(turn.kind))
+            .setWhen(since)
+            .setUsesChronometer(true)
+            .addAction(0, str(R.string.live_stop), action(NotificationActionReceiver.ACTION_STOP_TURN, storedSessionId.orEmpty()) {
+                putExtra(NotificationActionReceiver.EXTRA_SESSION_ID, storedSessionId)
+            })
+            .build()
+
+    /** The finished turn's card: the same Live Update, saying how it ended and then going by itself. */
+    fun liveDone(storedSessionId: String?, title: String?, tools: Int, elapsedMs: Long, failed: Boolean): Notification {
+        val text = str(if (failed) R.string.live_failed_text else R.string.live_done_text)
+        val meta = listOfNotNull(toolsLine(tools), clock(elapsedMs)).joinToString(" · ")
+        return liveBase(
+            storedSessionId,
+            title,
+            text,
+            listOfNotNull(text, meta.ifBlank { null }).joinToString("\n"),
+            if (failed) R.string.live_chip_failed else R.string.live_chip_done,
+        )
+            .setTimeoutAfter(LIVE_DONE_MS)
+            .build()
+    }
+
+    fun postLive(storedSessionId: String?, title: String?, turn: LiveTurn, since: Long) {
+        manager.cancel(null, LIVE_DONE_ID)
+        post(null, LIVE_ID, live(storedSessionId, title, turn, since))
+    }
+
+    fun postLiveDone(storedSessionId: String?, title: String?, tools: Int, elapsedMs: Long, failed: Boolean) {
+        manager.cancel(null, LIVE_ID)
+        post(null, LIVE_DONE_ID, liveDone(storedSessionId, title, tools, elapsedMs, failed))
+    }
+
+    fun cancelLive() = manager.cancel(null, LIVE_ID)
+
+    fun cancelLiveDone() = manager.cancel(null, LIVE_DONE_ID)
+
+    private fun liveBase(
+        storedSessionId: String?,
+        title: String?,
+        text: String,
+        bigText: String,
+        chip: Int,
+    ) = base(CHANNEL_LIVE, storedSessionId, title)
+        .setContentTitle(title?.takeIf { it.isNotBlank() } ?: str(R.string.app_name))
+        .setContentText(text)
+        .setStyle(NotificationCompat.BigTextStyle().bigText(bigText))
+        .setOngoing(true)
+        .setOnlyAlertOnce(true)
+        .setSilent(true)
+        .setCategory(NotificationCompat.CATEGORY_PROGRESS)
+        .setPriority(NotificationCompat.PRIORITY_LOW)
+        .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
+        .setRequestPromotedOngoing(true)
+        .setShortCriticalText(str(chip))
+
+    private fun liveChip(kind: LiveTurnKind): Int = when (kind) {
+        LiveTurnKind.Waiting -> R.string.live_chip_waiting
+        else -> R.string.live_chip_working
+    }
+
+    private fun liveText(turn: LiveTurn): String = when (turn.kind) {
+        LiveTurnKind.Waiting -> str(R.string.live_waiting_text)
+        LiveTurnKind.Tool -> str(R.string.live_using, turn.tool?.replace('_', ' ').orEmpty())
+        LiveTurnKind.Plan -> turn.stepText?.takeIf { it.isNotBlank() } ?: str(R.string.live_thinking)
+        LiveTurnKind.Status -> turn.status?.takeIf { it.isNotBlank() } ?: str(R.string.live_thinking)
+        LiveTurnKind.Thinking -> str(R.string.live_thinking)
+    }
+
+    /** The expanded card's body: the activity, the tool's other line, then the meta, one per line. */
+    private fun liveBody(turn: LiveTurn): String {
+        val activity = liveText(turn)
+        val detail = turn.detail?.takeIf { it.isNotBlank() && it != activity }
+        val meta = listOfNotNull(
+            toolsLine(turn.tools),
+            turn.step?.let { step -> turn.steps?.let { steps -> str(R.string.live_step, step, steps) } },
+        ).joinToString(" · ")
+        return listOfNotNull(activity, detail, meta.ifBlank { null }).joinToString("\n")
+    }
+
+    private fun toolsLine(tools: Int): String? =
+        tools.takeIf { it > 0 }?.let { context.resources.getQuantityString(R.plurals.live_tools, it, it) }
+
+    /** The finished turn's time as a clock: `04:12`, or `1:04:12` past the hour. */
+    private fun clock(elapsedMs: Long): String {
+        val total = (elapsedMs / 1000).coerceAtLeast(0)
+        val hours = total / 3600
+        val minutes = (total % 3600) / 60
+        val seconds = total % 60
+        return if (hours > 0) {
+            String.format(Locale.ROOT, "%d:%02d:%02d", hours, minutes, seconds)
+        } else {
+            String.format(Locale.ROOT, "%02d:%02d", minutes, seconds)
+        }
+    }
 
     /**
      * A question the agent is blocked on, answerable in place when it fits a notification. Every answer
@@ -831,12 +943,17 @@ class ChatNotifications(
         /** With [EXTRA_OPEN_INBOX] on an Inbox notification's Mark read, and in its extras: the gateway the run is of. */
         const val EXTRA_INBOX_GATEWAY = "inbox_gateway"
         const val CALL_ID = 9
+        const val LIVE_ID = 10
+        const val LIVE_DONE_ID = 11
 
         /** On an Answer's launch intent: the request whose call was answered. */
         const val EXTRA_ANSWERED_CALL = "answered_call"
 
         /** How long a call rings before it becomes the usual notification. */
         const val RING_MS = 45_000L
+
+        /** How long a finished turn's Live Update stays before it goes by itself. */
+        private const val LIVE_DONE_MS = 6_000L
 
         /** On the launch intent of a room's notification: the hosted room's id (its name in [EXTRA_OPEN_TITLE]). */
         const val EXTRA_OPEN_ROOM = "open_room"
@@ -856,6 +973,7 @@ class ChatNotifications(
         private const val CHANNEL_VOICE = "voice"
         private const val CHANNEL_INBOX = "inbox"
         private const val CHANNEL_INBOX_FAILED = "inbox_failed"
+        private const val CHANNEL_LIVE = "live"
 
         /** Read by PhoneToolAccess too, to tell whether calls can ring. */
         private const val CHANNEL_CALLS = "calls"

@@ -25,6 +25,8 @@
     <string name="channel_voice_description">Se muestra mientras sigue un chat de voz con la pantalla apagada o en otra app.</string>
     <string name="channel_calls_name">Llamadas para responder</string>
     <string name="channel_calls_description">Una aprobación o una pregunta suena como una llamada (Ajustes → Herramientas del teléfono → Llamadas).</string>
+    <string name="channel_live_name">Actualizaciones en vivo</string>
+    <string name="channel_live_description">Un turno en curso en la barra de estado mientras Kyllene está en segundo plano. Android 16 y versiones posteriores.</string>
     <string name="channel_phone_tools_name">Herramientas del teléfono</string>
     <string name="channel_phone_tools_description">Cuando el agente quiere cambiar algo en este teléfono</string>
 
@@ -64,6 +66,24 @@
     <string name="notification_message_hermes">Escribir a Hermes</string>
     <string name="notification_turn_failed">El turno falló</string>
     <string name="notification_hermes_replied">Hermes respondió</string>
+    <string name="live_chip_working">Activo</string>
+    <string name="live_chip_waiting">Espera</string>
+    <string name="live_chip_done">Hecho</string>
+    <string name="live_chip_failed">Falló</string>
+    <!-- %1$s: the tool's name -->
+    <string name="live_using">Usando %1$s</string>
+    <string name="live_waiting_text">Esperando tu respuesta</string>
+    <string name="live_thinking">Pensando…</string>
+    <string name="live_done_text">✅ Terminado</string>
+    <string name="live_failed_text">El turno falló</string>
+    <string name="live_stop">Detener</string>
+    <!-- %1$d: the step now; %2$d: how many there are -->
+    <string name="live_step">Paso %1$d de %2$d</string>
+    <plurals name="live_tools">
+        <item quantity="one">%d herramienta</item>
+        <item quantity="many">%d herramientas</item>
+        <item quantity="other">%d herramientas</item>
+    </plurals>
     <string name="notification_reply">Responder</string>
     <string name="notification_you">Tú</string>
     <string name="notification_message_bot">Escribir a %1$s</string>

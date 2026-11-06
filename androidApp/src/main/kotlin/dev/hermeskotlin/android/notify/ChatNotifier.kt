@@ -5,7 +5,9 @@ import dev.hermeskotlin.core.chat.ChatHost
 import dev.hermeskotlin.core.chat.ChatMessage
 import dev.hermeskotlin.core.chat.ChatSession
 import dev.hermeskotlin.core.chat.ChatState
+import dev.hermeskotlin.core.chat.LiveTurn
 import dev.hermeskotlin.core.chat.TurnOutcome
+import dev.hermeskotlin.core.chat.liveTurn
 import dev.hermeskotlin.core.connection.ConnectionState
 import dev.hermeskotlin.core.connection.GatewayConnection
 import dev.hermeskotlin.core.phone.ringsForAnswers
@@ -44,6 +46,12 @@ class ChatNotifier(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var serviceStarted = false
 
+    /**
+     * Whether Android can promote a Live Update, read when the app goes out of sight (and false while it is in
+     * sight: none is posted then). Checking it asks the system, so it isn't done on every change of the chat.
+     */
+    private var canPromote = false
+
     fun start() {
         scope.launch {
             combine(host.session, settings.settings, outsideWork) { session, prefs, outside -> Triple(session, prefs?.keepsProcessUp == true, outside) }
@@ -59,7 +67,10 @@ class ChatNotifier(
                 }
         }
         scope.launch {
-            visibility.visible.collect { visible -> if (visible) notifications.cancelAttention() }
+            visibility.visible.collect { visible ->
+                canPromote = !visible && LiveUpdates.supported(context)
+                if (visible) notifications.cancelAttention()
+            }
         }
     }
 
@@ -67,6 +78,10 @@ class ChatNotifier(
         val notified = mutableSetOf<String>()
         var previous: ChatState? = null
         var shown: Shown? = null
+        var liveShown = false
+        var liveNow: LivePosted? = null
+        var liveSince = 0L
+        var liveThisTurn = false
         try {
             combine(session.state, visibility.visible, settings.settings, connection.state, outsideWork) { state, visible, stored, link, outside ->
                 Quad(state, visible, stored, link) to outside
@@ -87,6 +102,30 @@ class ChatNotifier(
                 if (serviceStarted && now != shown) {
                     notifications.postOngoing(link, prefs.pushAnywhere)
                     shown = now
+                }
+
+                // The turn's own clock, on the false→true edge, whether or not anything is posted. A turn this
+                // device opens mid-flight starts when it is first seen; leaving the app, losing the link or
+                // reopening the chat keeps that same start.
+                if (state.running && previous?.running != true) liveSince = System.currentTimeMillis()
+
+                // A Live Update only while the app is out of sight, the link is up, and Android can promote one.
+                val live = if (prefs.liveUpdates && !visible) {
+                    state.liveTurn()?.takeIf { link is ConnectionState.Connected && canPromote }
+                } else {
+                    null
+                }
+                if (live != null) {
+                    val posting = LivePosted(state.storedSessionId, state.title, live)
+                    if (posting != liveNow || !liveShown) {
+                        notifications.postLive(state.storedSessionId, state.title, live, liveSince)
+                        liveShown = true
+                    }
+                    liveNow = posting
+                    liveThisTurn = true
+                } else if (liveShown) {
+                    notifications.cancelLive()
+                    liveShown = false
                 }
 
                 // Only what was actually posted counts: a question that came in while Herald was in sight
@@ -124,10 +163,29 @@ class ChatNotifier(
                         }
                     }
                 }
+                if (previous?.running == true && !state.running) {
+                    // The Live Update, if one was up, becomes the finished card and then goes by itself.
+                    if (!visible && prefs.liveUpdates && liveThisTurn && canPromote) {
+                        val reply = state.messages.lastOrNull { it is ChatMessage.Assistant } as? ChatMessage.Assistant
+                        notifications.postLiveDone(
+                            state.storedSessionId,
+                            state.title,
+                            liveNow?.turn?.tools ?: 0,
+                            System.currentTimeMillis() - liveSince,
+                            reply?.outcome == TurnOutcome.Error,
+                        )
+                    }
+                    liveThisTurn = false
+                    liveShown = false
+                    liveNow = null
+                    liveSince = 0L
+                }
                 previous = state
             }
         } finally {
             notified.forEach(notifications::cancelRequest)
+            notifications.cancelLive()
+            notifications.cancelLiveDone()
         }
     }
 
@@ -156,6 +214,9 @@ class ChatNotifier(
     private val AppSettings.keepsProcessUp: Boolean get() = pushAnywhere
 
     private data class Quad(val state: ChatState, val visible: Boolean, val settings: AppSettings?, val link: ConnectionState)
+
+    /** What the Live Update shows: the chat as well as the turn, so a new title or chat is posted too. */
+    private data class LivePosted(val storedSessionId: String?, val title: String?, val turn: LiveTurn)
 
     /** What the ongoing notification says: it's posted again only when this changes. */
     private data class Shown(val link: KClass<*>, val push: Boolean)

@@ -28,6 +28,8 @@
     <string name="channel_voice_description">Shown while a voice chat goes on with the screen off or another app open.</string>
     <string name="channel_calls_name">Calls for an answer</string>
     <string name="channel_calls_description">An approval or a question rings like a call (Settings → Phone tools → Calls).</string>
+    <string name="channel_live_name">Live updates</string>
+    <string name="channel_live_description">A running turn in the status bar while Kyllene is in the background. Android 16 and later.</string>
     <string name="channel_phone_tools_name">Phone tools</string>
     <string name="channel_phone_tools_description">When the agent wants to change something on this phone</string>
 
@@ -71,6 +73,23 @@
     <string name="notification_message_hermes">Message Hermes</string>
     <string name="notification_turn_failed">Turn failed</string>
     <string name="notification_hermes_replied">Hermes replied</string>
+    <string name="live_chip_working">Working</string>
+    <string name="live_chip_waiting">Waiting</string>
+    <string name="live_chip_done">Done</string>
+    <string name="live_chip_failed">Failed</string>
+    <!-- %1$s: the tool's name -->
+    <string name="live_using">Using %1$s</string>
+    <string name="live_waiting_text">Waiting for your answer</string>
+    <string name="live_thinking">Thinking…</string>
+    <string name="live_done_text">✅ Finished</string>
+    <string name="live_failed_text">The turn failed</string>
+    <string name="live_stop">Stop</string>
+    <!-- %1$d: the step now; %2$d: how many there are -->
+    <string name="live_step">Step %1$d of %2$d</string>
+    <plurals name="live_tools">
+        <item quantity="one">%d tool</item>
+        <item quantity="other">%d tools</item>
+    </plurals>
     <string name="notification_reply">Reply</string>
     <string name="notification_you">You</string>
     <!-- %1$s: the bot's name -->
