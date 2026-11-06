@@ -41,6 +41,7 @@
     <string name="voice_error_voice_reply">Die Antwort ließ sich nicht vertonen.</string>
     <string name="voice_error_play_reply">Die Antwort ließ sich nicht abspielen.</string>
     <string name="voice_error_call_on">Ein Anruf läuft.</string>
+    <string name="voice_error_ended_elsewhere">Beendet für einen Sprachchat, der auf einem anderen Bildschirm gestartet wurde.</string>
     <string name="voice_error_live_start">Der Live-Anruf konnte nicht starten.</string>
     <string name="voice_error_live_vendor">GPT-Live konnte nicht starten: %1$s</string>
     <string name="voice_error_live_no_answer">GPT-Live hat keine Antwort geschickt.</string>

@@ -48,6 +48,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import dev.hermeskotlin.ui.resources.Res
 import dev.hermeskotlin.ui.resources.voice_error_call_on
+import dev.hermeskotlin.ui.resources.voice_error_ended_elsewhere
 import dev.hermeskotlin.ui.resources.voice_error_nothing_heard
 import org.jetbrains.compose.resources.getString
 
@@ -844,5 +845,75 @@ class VoiceControllerTest {
 
         assertEquals(listOf("hold", "hold"), keeper.log)
         two.stopChat()
+    }
+
+    /** A chat started on another screen takes the microphone and the speaker from this one's dictation and Read aloud. */
+    @Test
+    fun aChatStartedOnAnotherScreenStopsDictationAndReadAloudHere() = runTest {
+        val player = HeldPlayer(holds = true)
+        val reader = VoiceController(voiced(mutableListOf()), FakeRecorder(), player, backgroundScope, backgroundScope)
+        val dictatingMic = ScriptedRecorder()
+        val dictating = VoiceController(audio("unused", Requests()), dictatingMic, FakePlayer(), backgroundScope, backgroundScope)
+        val call = VoiceController(audio("unused", Requests()), ScriptedRecorder(), FakePlayer(), backgroundScope, backgroundScope)
+
+        reader.readAloud("r1", "A long reply.", gateway, null)
+        player.started.receive()
+        dictating.startDictation(gateway, "work") { }
+        dictatingMic.waiting.await()
+        call.startChat(offlineSession(), gateway, null)
+        testScheduler.runCurrent()
+
+        assertNull(reader.reading.value.key)
+        assertFalse(dictating.dictation.value.active)
+        // Nor does Read aloud start under it: the chat's microphone would take the reading for someone talking.
+        reader.readAloud("r2", "Another reply.", gateway, null)
+        assertNull(reader.reading.value.key)
+        call.stopChat()
+    }
+
+    /** A chat ended by one started on another screen says so, rather than looking hung up. */
+    @JvmOnly
+    @Test
+    fun aChatEndedByAnotherScreensSaysWhy() = runTest {
+        val first = ScriptedRecorder()
+        val one = VoiceController(audio("unused", Requests()), first, FakePlayer(), backgroundScope, backgroundScope)
+        val two = VoiceController(audio("unused", Requests()), ScriptedRecorder(), FakePlayer(), backgroundScope, backgroundScope)
+
+        one.startChat(offlineSession(), gateway, null)
+        first.waiting.await()
+        two.startChat(offlineSession(), gateway, null)
+
+        val ended = one.chat.first { it.phase == VoicePhase.Off && it.error != null }
+        assertEquals(getString(Res.string.voice_error_ended_elsewhere), ended.error)
+        two.stopChat()
+    }
+
+    /** A chat stuck in ending is waited on once: a chat after that doesn't sit on Connecting for it again. */
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    @Test
+    fun aChatStuckEndingIsWaitedOnOnlyOnce() = runTest {
+        val slow = SlowToStopRecorder(stopMs = 60_000)
+        val stuck = VoiceController(audio("unused", Requests()), slow, FakePlayer(), backgroundScope, backgroundScope)
+        val second = ScriptedRecorder()
+        val two = VoiceController(audio("unused", Requests()), second, FakePlayer(), backgroundScope, backgroundScope)
+        val third = ScriptedRecorder()
+        val three = VoiceController(audio("unused", Requests()), third, FakePlayer(), backgroundScope, backgroundScope)
+
+        stuck.startChat(offlineSession(), gateway, null)
+        slow.listening.await()
+        two.startChat(offlineSession(), gateway, null)
+        // Past the wait, it goes on without the stuck one.
+        testScheduler.advanceTimeBy(2_500)
+        testScheduler.runCurrent()
+        assertTrue(second.waiting.isCompleted)
+        two.stopChat()
+        testScheduler.runCurrent()
+
+        three.startChat(offlineSession(), gateway, null)
+        testScheduler.runCurrent()
+        assertTrue(third.waiting.isCompleted, "the next chat waited on the stuck one again")
+        three.stopChat()
+        testScheduler.advanceTimeBy(60_000)
+        testScheduler.runCurrent()
     }
 }

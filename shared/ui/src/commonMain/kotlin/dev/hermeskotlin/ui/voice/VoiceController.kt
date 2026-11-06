@@ -156,6 +156,18 @@ class VoiceController(
 
     private var chatJob: Job? = null
     private var stoppedByUser = false
+    /** The chat was ended by one started on another screen ([VoiceChats.endOthers]), which its panel says. */
+    private var endedElsewhere = false
+
+    init {
+        // A voice chat started on another screen takes the microphone and the speaker from this one's dictation and
+        // Read aloud too. Told for as long as this controller's scope lives.
+        val quiet = VoiceChats.quietWith(this) {
+            cancelDictation()
+            stopReading()
+        }
+        scope.coroutineContext[Job]?.invokeOnCompletion { quiet() }
+    }
     private var speechJob: Job? = null
     /** The gateway whose speech socket couldn't open in this chat; its replies are read out once they're done. */
     private var noSpeechStream: GatewayUrl? = null
@@ -210,6 +222,7 @@ class VoiceController(
         // Connecting while it checks for a live call: nothing listens yet, so Mute isn't offered until it does.
         _chat.value = VoiceChatState(VoicePhase.Connecting)
         stoppedByUser = false
+        endedElsewhere = false
         roomFloor = 0f
         noSpeechStream = null
         away = false
@@ -217,8 +230,9 @@ class VoiceController(
         val job = scope.launch(start = CoroutineStart.LAZY) {
             var ringing: Job? = null
             try {
-                // Inside the try, so an End while it waits still puts the panel back.
-                withTimeoutOrNull(WIND_DOWN_MS) { windingDown.joinAll() }
+                // Inside the try, so an End while it waits still puts the panel back. One that hasn't ended by then
+                // is stuck, and no later chat waits on it again.
+                if (withTimeoutOrNull(WIND_DOWN_MS) { windingDown.joinAll() } == null) VoiceChats.forget(windingDown)
                 ringing = if (ringback) launch {
                     try {
                         while (isActive) {
@@ -238,9 +252,13 @@ class VoiceController(
                 ringing?.cancel()
 
                 // Also a chat ended before it found its mode (End during the status check). An ending the person
-                // chose needs no explanation; one forced by an error keeps it. A newer chat keeps its own.
+                // chose needs no explanation; one forced by an error keeps it, and one ended by a chat started on
+                // another screen says so. A newer chat keeps its own.
+                // Looked up past the cancel that ended it, before it's known whose panel this is. Without the catalogue
+                // (Android host tests have no resources) it ends as if hung up, as before.
+                val why = if (endedElsewhere) withContext(NonCancellable) { runCatching { getString(Res.string.voice_error_ended_elsewhere) }.getOrNull() } else null
                 if (chatJob == null || chatJob === coroutineContext.job) {
-                    _chat.update { VoiceChatState(error = it.error.takeUnless { stoppedByUser }) }
+                    _chat.update { VoiceChatState(error = why ?: it.error.takeUnless { stoppedByUser }) }
                 }
             }
         }
@@ -248,7 +266,10 @@ class VoiceController(
         // One chat at a time, app-wide. This one counts as on first, so another screen's, ending at once inside
         // endOthers on the main thread, leaves the call service up for it. It routes only once every earlier one (this
         // screen's last, still winding down, too) has let its route and microphone go.
-        VoiceChats.started(job, this, ::stopChat)
+        VoiceChats.started(job, this) {
+            endedElsewhere = true
+            stopChat()
+        }
         windingDown = VoiceChats.endOthers(this, job)
         // Held now, on the tap: Android only lets the microphone go to the background from the foreground.
         held = keepAlive?.hold(
@@ -355,8 +376,10 @@ class VoiceController(
                 }
             }
         } finally {
-            live = null
-            _chat.value = VoiceChatState(error = error.takeUnless { stoppedByUser })
+            // A chat started again on this screen meanwhile has its own call and panel; this one leaves them be.
+            if (live === conversation) live = null
+            val mine = currentCoroutineContext().job
+            if (chatJob == null || chatJob === mine) _chat.value = VoiceChatState(error = error.takeUnless { stoppedByUser })
         }
         return true
     }
@@ -1041,7 +1064,8 @@ class VoiceController(
      * or dictation runs: they have the speaker and the microphone.
      */
     fun readAloud(key: String, reply: String, gateway: GatewayUrl, profile: String?) {
-        if (chatJob?.isActive == true || dictationJob?.isActive == true) return
+        // A chat on another screen listens too: its open microphone would take the reading for the person talking.
+        if (chatJob?.isActive == true || dictationJob?.isActive == true || VoiceChats.on) return
         stopReading()
         val text = readAloudText(reply)
         if (text.isEmpty()) return
@@ -1213,6 +1237,23 @@ internal object VoiceChats {
 
     fun ended(job: Job) = running.update { chats -> chats.filterNot { it.job === job } }
 
+    /** Chats that didn't let go in time: stuck, so no later chat waits on them. */
+    fun forget(jobs: List<Job>) = running.update { chats -> chats.filterNot { chat -> !chat.job.isCompleted && jobs.any { it === chat.job } } }
+
+    private class Quiet(val owner: Any, val quiet: () -> Unit)
+
+    private val quieting = MutableStateFlow(emptyList<Quiet>())
+
+    /**
+     * [quiet] stops [owner]'s other uses of the microphone and the speaker (dictation, Read aloud), when a chat starts on
+     * another screen. Hands back what stops it being told.
+     */
+    fun quietWith(owner: Any, quiet: () -> Unit): () -> Unit {
+        val entry = Quiet(owner, quiet)
+        quieting.update { it + entry }
+        return { quieting.update { all -> all.filterNot { it === entry } } }
+    }
+
     /**
      * A chat is on somewhere, starting or running. One winding down isn't, so one slow or stuck in ending holds nothing
      * up for good.
@@ -1220,12 +1261,14 @@ internal object VoiceChats {
     val on: Boolean get() = running.value.any { !it.job.isCancelled && !it.job.isCompleted }
 
     /**
-     * Ends every chat [owner] doesn't run ([stop]), and hands back the jobs of all still running or winding down,
+     * Ends every chat [owner] doesn't run ([stop]) and quiets the other screens' dictation and Read aloud ([quietWith]),
+     * and hands back the jobs of all chats still running or winding down,
      * [owner]'s own earlier one too, but not its new [chat], for that one to wait out before it routes.
      */
     fun endOthers(owner: Any, chat: Job): List<Job> {
         val now = running.value.filter { it.job !== chat }
         now.filter { it.owner !== owner }.forEach { it.stop() }
+        quieting.value.filter { it.owner !== owner }.forEach { it.quiet() }
         return now.map { it.job }
     }
 }

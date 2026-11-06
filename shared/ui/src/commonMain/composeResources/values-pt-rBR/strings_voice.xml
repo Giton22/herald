@@ -41,6 +41,7 @@
     <string name="voice_error_voice_reply">Não foi possível dar voz à resposta.</string>
     <string name="voice_error_play_reply">Não foi possível tocar a resposta.</string>
     <string name="voice_error_call_on">Há uma chamada em andamento.</string>
+    <string name="voice_error_ended_elsewhere">Encerrada por uma conversa por voz iniciada em outra tela.</string>
     <string name="voice_error_live_start">Não foi possível iniciar a chamada ao vivo.</string>
     <string name="voice_error_live_vendor">O GPT-Live não conseguiu iniciar: %1$s</string>
     <string name="voice_error_live_no_answer">O GPT-Live não enviou resposta.</string>
