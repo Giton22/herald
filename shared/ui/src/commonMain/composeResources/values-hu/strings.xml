@@ -136,6 +136,8 @@
     <string name="settings_notify_requests_detail">Amikor az ügynök rád vár. Válaszolj közvetlenül az értesítésből.</string>
     <string name="settings_notify_replies">Befejezett válaszok</string>
     <string name="settings_notify_replies_detail">Amikor egy kör véget ér, miközben a Kyllene a háttérben van. Válaszolj az értesítésből.</string>
+    <string name="settings_live_updates">Élő frissítések</string>
+    <string name="settings_live_updates_detail">Egy futó kör élő frissítésként: az időzítője, hogy mit tesz éppen az ügynök, és hány eszközt használt. Android 16 és újabb.</string>
     <string name="settings_notify_other_in_app">Értesítés más csevegésekről, amíg a Kyllene nyitva van</string>
     <string name="settings_notify_other_in_app_detail">A képernyőn lévőn kívüli csevegések válaszai és kérései akkor is értesítenek, amikor a Kyllene-ben vagy.</string>
     <string name="settings_alerts_other_chats">Jelzés más csevegésekről</string>

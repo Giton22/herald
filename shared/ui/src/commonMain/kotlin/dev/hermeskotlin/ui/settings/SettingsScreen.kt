@@ -804,6 +804,14 @@ internal fun SettingsView(
                         onCheckedChange = { on -> onUpdate { it.copy(notifyReplies = on) } },
                         icon = Lucide.MessageCircle,
                     )
+                    if (!isDesktop) Divider()
+                    if (!isDesktop) SwitchRow(
+                        title = stringResource(Res.string.settings_live_updates),
+                        detail = stringResource(Res.string.settings_live_updates_detail),
+                        checked = settings.liveUpdates,
+                        onCheckedChange = { on -> onUpdate { it.copy(liveUpdates = on) } },
+                        icon = Lucide.Activity,
+                    )
                     Divider()
                     SwitchRow(
                         title = stringResource(Res.string.settings_notify_other_in_app),
