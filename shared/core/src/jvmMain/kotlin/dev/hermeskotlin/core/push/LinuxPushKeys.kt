@@ -71,11 +71,17 @@ internal class LinuxPushKeys(private val store: KeyValueStore) : PushKeys {
         }
     }
 
+    // The stored text last checked, and what it held. Checking both key pairs signs and verifies twice, too much for
+    // every lookup; the text is still read through the store each time, so a change made elsewhere is checked again.
+    private var checkedText: String? = null
+    private var checkedState: State? = null
+
     // PushKeys is synchronous. Startup unlocks the store first; disk commits run on IO before callers publish success.
     private fun read(): State {
         val text = runBlocking(Dispatchers.IO) {
             if (store is LinuxKeyValueStore) store.getChecked(KEY) else store.get(KEY)
         } ?: return State(1, null, null, null, emptyMap())
+        if (text == checkedText) checkedState?.let { return it }
         return try {
             stateJson.decodeFromString(State.serializer(), text).also { state ->
                 check(state.version == 1)
@@ -91,14 +97,20 @@ internal class LinuxPushKeys(private val store: KeyValueStore) : PushKeys {
                     check(url.isNotBlank())
                     ids.forEach { check(UUID.fromString(it).toString() == it) }
                 }
+                checkedText = text
+                checkedState = state
             }
         } catch (_: Exception) {
             throw IllegalStateException("Kyllene couldn't open its push identity. Existing data has been preserved; restore a known-good backup before retrying.")
         }
     }
 
-    private fun save(state: State) = runBlocking(Dispatchers.IO) {
-        store.put(KEY, stateJson.encodeToString(State.serializer(), state))
+    private fun save(state: State) {
+        val text = stateJson.encodeToString(State.serializer(), state)
+        runBlocking(Dispatchers.IO) { store.put(KEY, text) }
+        // Only after the commit: a failed write leaves the last checked text as it was.
+        checkedText = text
+        checkedState = state
     }
 
     private fun create(): Device {

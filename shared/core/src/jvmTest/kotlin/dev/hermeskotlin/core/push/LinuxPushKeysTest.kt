@@ -11,6 +11,9 @@ import java.nio.file.StandardCopyOption.ATOMIC_MOVE
 import java.nio.file.StandardCopyOption.REPLACE_EXISTING
 import java.nio.file.attribute.PosixFilePermissions
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assume.assumeTrue
 import java.util.UUID
 import java.util.concurrent.Executors
@@ -97,7 +100,13 @@ class LinuxPushKeysTest {
         assertEquals(saved, store.values)
         assertEquals(identity, keys.registration("Fixture"))
         val key = store.values.keys.single()
-        for (corrupt in listOf("{}", """{"version":1,"retired":{}}""")) {
+        // Keys that no longer pair up, written outside this adapter after it last checked the identity.
+        val device = Json.parseToJsonElement(saved.getValue(key)).jsonObject.getValue("device").jsonObject
+        val swapped = saved.getValue(key)
+            .replace(device.getValue("encPublic").jsonPrimitive.content, "ENC")
+            .replace(device.getValue("sigPublic").jsonPrimitive.content, device.getValue("encPublic").jsonPrimitive.content)
+            .replace("ENC", device.getValue("sigPublic").jsonPrimitive.content)
+        for (corrupt in listOf(swapped, "{}", """{"version":1,"retired":{}}""")) {
             store.values[key] = corrupt
             assertFailsWith<IllegalStateException> { keys.registration("Fixture") }
             assertEquals(corrupt, store.values[key])
