@@ -59,6 +59,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.platform.LocalFocusManager
+import kotlinx.coroutines.flow.drop
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -268,6 +271,10 @@ fun SettingsScreen(
     val suggestions by viewModel.suggestions.collectAsStateWithLifecycle()
     LaunchedEffect(gateway, profile) { viewModel.bind(gateway, profile) }
     PlatformBackHandler(enabled = !checkOpen && !phoneToolsOpen && !appIconOpen && !startInstructionOpen && !callTargetOpen && !languageOpen, onBack = onBack)
+    // A page opened over Settings takes the keyboard from the search, so nothing typed there lands in a hidden query.
+    val focus = LocalFocusManager.current
+    val pageOver = phoneToolsOpen || appIconOpen || startInstructionOpen || callTargetOpen || languageOpen
+    LaunchedEffect(pageOver) { if (pageOver) focus.clearFocus() }
     // The desktop lists the sections beside the page; they say here where they start.
     val anchors = remember { mutableStateMapOf<String, Int>() }
     CompositionLocalProvider(LocalSectionAnchors provides anchors.takeIf { isDesktop }) { SettingsView(
@@ -418,6 +425,9 @@ internal fun SettingsView(
         // The settings are many; a search over their names finds one quicker than scrolling, on the phone too.
         val search = rememberTextFieldState()
         val query = search.text.toString()
+        // New words show their matches from the top, not part way down where the page was scrolled to.
+        LaunchedEffect(search, scroll) { snapshotFlow { search.text.toString() }.drop(1).collect { scroll.scrollTo(0) } }
+        val focus = LocalFocusManager.current
         Column(Modifier.widthIn(max = 640.dp).fillMaxSize()) {
             SubpageHeader(stringResource(Res.string.common_settings), onBack = onBack)
             TextField(
@@ -426,6 +436,8 @@ internal fun SettingsView(
                 leadingIcon = Lucide.Search,
                 clearable = true,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                // The list already shows the matches; the keyboard's Search key puts the keyboard away to see them.
+                onKeyboardAction = { focus.clearFocus() },
                 modifier = Modifier.padding(start = 14.dp, end = 14.dp, bottom = 12.dp),
             )
             Column(
@@ -1102,7 +1114,7 @@ internal fun Section(title: String, content: @Composable ColumnScope.() -> Unit)
     val searching = query.isNotEmpty()
     // Searching, a section whose name matches shows whole; any other shows only its rows that match, and none of
     // itself when none do. Its rows are still laid out then, unseen, so it knows when one comes to match.
-    val whole = !searching || title.contains(query, ignoreCase = true)
+    val whole = !searching || settingMatches(query, title)
     var empty by remember { mutableStateOf(false) }
     val hidden = searching && empty
     val shown = LocalSectionsShown.current
@@ -1222,8 +1234,9 @@ internal fun Divider() {
 private fun CallTargetRow(target: CallTarget, faces: BotFaces, onClick: () -> Unit) {
     val bot = target.profile?.let { name -> faces.bots.firstOrNull { it.name == name } ?: Bot(name = name, displayName = target.label) }
     val title = stringResource(Res.string.settings_call_target)
+    val label = bot?.label ?: target.label
     val detail = stringResource(Res.string.settings_call_target_detail)
-    if (!settingShown(title, bot?.label ?: target.label, detail)) return
+    if (!settingShown(title, label, detail)) return
     Row(Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = onClick).padding(horizontal = 14.dp, vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
         if (bot != null) BotAvatar(bot, faces.picture(bot), size = 32.dp)
         else Box(Modifier.size(32.dp).background(Theme[colors][accent], RoundedCornerShape(Theme[radii][radiusSmall])), contentAlignment = Alignment.Center) {
@@ -1231,7 +1244,7 @@ private fun CallTargetRow(target: CallTarget, faces: BotFaces, onClick: () -> Un
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(title, style = Theme[typography][body], color = Theme[colors][text], maxLines = 2, overflow = TextOverflow.Ellipsis)
-            Text(bot?.label ?: target.label, style = Theme[typography][bodySmall], color = Theme[colors][textSecondary], maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(label, style = Theme[typography][bodySmall], color = Theme[colors][textSecondary], maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(detail, style = Theme[typography][bodySmall], color = Theme[colors][textTertiary])
         }
         UnstyledIcon(Lucide.ChevronRight, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(16.dp))
