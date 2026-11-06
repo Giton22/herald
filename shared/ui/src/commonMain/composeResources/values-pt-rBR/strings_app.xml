@@ -363,7 +363,7 @@
     <string name="check_fix_reachable">Verifique o endereço e a porta, e se o servidor é acessível a partir deste celular.</string>
 
     <!-- Imported desktop client certificates. -->
-    <string name="check_fix_client_cert_desktop">Importe para o gateway o certificado de cliente que este servidor pede (um arquivo PKCS#12) e verifique de novo.</string>
+    <string name="check_fix_client_cert_desktop">Importe o certificado de cliente PKCS#12 que este servidor pede e verifique de novo.</string>
     <string name="client_cert_import_title">Importar certificado de cliente</string>
     <string name="client_cert_import">Importar</string>
     <string name="client_cert_importing">Importando…</string>

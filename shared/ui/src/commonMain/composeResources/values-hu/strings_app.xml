@@ -363,7 +363,7 @@
     <string name="check_fix_reachable">Ellenőrizd a címet és a portot, és hogy a szerver elérhető-e erről a telefonról.</string>
 
     <!-- Imported desktop client certificates. -->
-    <string name="check_fix_client_cert_desktop">Importáld az átjáróhoz a klienstanúsítványt, amelyet ez a szerver kér (egy PKCS#12 fájlt), majd ellenőrizd újra.</string>
+    <string name="check_fix_client_cert_desktop">Importáld a PKCS#12 klienstanúsítványt, amelyet ez a szerver kér, majd ellenőrizd újra.</string>
     <string name="client_cert_import_title">Klienstanúsítvány importálása</string>
     <string name="client_cert_import">Importálás</string>
     <string name="client_cert_importing">Importálás…</string>

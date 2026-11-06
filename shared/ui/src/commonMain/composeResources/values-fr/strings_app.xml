@@ -363,7 +363,7 @@
     <string name="check_fix_reachable">Vérifiez l’adresse et le port, et que le serveur est joignable depuis ce téléphone.</string>
 
     <!-- Imported desktop client certificates. -->
-    <string name="check_fix_client_cert_desktop">Importez pour la passerelle le certificat client que ce serveur demande (un fichier PKCS#12), puis vérifiez à nouveau.</string>
+    <string name="check_fix_client_cert_desktop">Importez le certificat client PKCS#12 que ce serveur demande, puis vérifiez à nouveau.</string>
     <string name="client_cert_import_title">Importer un certificat client</string>
     <string name="client_cert_import">Importer</string>
     <string name="client_cert_importing">Importation…</string>
