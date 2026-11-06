@@ -55,8 +55,12 @@ internal suspend fun openDesktopPdf(
     }
 }
 
+/** The runtime's own launcher, which the PDF child needs; a runtime packaged without one can't draw pages. */
+internal fun pdfWorkerLauncher(): File =
+    File(System.getProperty("java.home"), "bin/" + if (File.separatorChar == '\\') "java.exe" else "java")
+
 private fun startPdfWorker(): Process {
-    val java = File(System.getProperty("java.home"), "bin/" + if (File.separatorChar == '\\') "java.exe" else "java")
+    val java = pdfWorkerLauncher()
     // Gradle's test loader carries URLs; installed launchers supply java.class.path directly.
     val paths = linkedSetOf<String>()
     paths.addAll(System.getProperty("java.class.path").split(File.pathSeparator))
