@@ -12,14 +12,14 @@ import kotlinx.serialization.json.JsonObject
 enum class PhoneTool(val id: String, val title: String, val detail: String) {
     Battery("phone_battery", "Battery", "The level, whether it's charging, and the time until full."),
     Network("phone_network", "Network", "Wi-Fi, mobile data or offline, whether it's metered, and a VPN."),
-    Sound("phone_sound", "Sound", "Do Not Disturb, the ringer and volumes. A change asks you first."),
-    Alarms("phone_alarm", "Alarms and timers", "Sets one in your clock app after you allow it."),
+    Sound("phone_sound", "Sound", "Do Not Disturb, the ringer and volumes."),
+    Alarms("phone_alarm", "Alarms and timers", "Sets one in your clock app."),
     ScreenTime("phone_screen_time", "Screen time", "Which apps you used and for how long, screen-on time and unlocks, up to a week back."),
-    Open("phone_open", "Open links, maps and apps", "Opens a link, a place, an app or the share sheet after you allow it."),
-    Clipboard("phone_clipboard", "Copy to the clipboard", "Puts text on your clipboard after you allow it. Never reads what's there."),
+    Open("phone_open", "Open links, maps and apps", "Opens a link, a place, an app or the share sheet."),
+    Clipboard("phone_clipboard", "Copy to the clipboard", "Puts text on your clipboard. Never reads what's there."),
     Location("phone_location", "Location", "Where the phone is and the nearest address, as precisely as you allow. While Kyllene is open, unless you also allow it while closed."),
-    Geofences("phone_geofence", "Watched places", "Arriving at or leaving a place sends its message to the chat it was added from. Adding or removing one asks you first; needs precise location all the time."),
-    Calendar("phone_calendar", "Calendar", "Your events in a time range. Adding or moving one asks you first."),
+    Geofences("phone_geofence", "Watched places", "Arriving at or leaving a place sends its message to the chat it was added from. Needs precise location all the time."),
+    Calendar("phone_calendar", "Calendar", "Your events in a time range; adds or moves an event."),
     Contacts("phone_contacts", "Contacts", "Looks people up by name, number or email: only their names, numbers and emails, a few at a time."),
     Health("phone_health", "Health", "Steps, sleep and heart rate from Health Connect, as much of it as you allow there. While Kyllene is open, unless you also allow it while closed."),
     ShowUi("phone_show_ui", "Screens in the chat (experiment)", "The agent draws a small screen under its reply, with buttons, choices or a form, and waits up to 5 minutes for your tap. Android only."),
@@ -41,6 +41,18 @@ enum class PhoneTool(val id: String, val title: String, val detail: String) {
 /** The tools the agent may use now: the ones switched on, while the Phone tools switch itself is on. */
 fun AppSettings.enabledPhoneTools(): Set<PhoneTool> =
     if (!phoneTools) emptySet() else phoneToolsOn.mapNotNull(PhoneTool::byId).toSet()
+
+/** The tools with an existing write/action confirmation; read operations never ask. */
+val PhoneTool.hasWriteConfirmation: Boolean
+    get() = when (this) {
+        PhoneTool.Sound, PhoneTool.Alarms, PhoneTool.Open, PhoneTool.Clipboard, PhoneTool.Geofences, PhoneTool.Calendar -> true
+        PhoneTool.Battery, PhoneTool.Network, PhoneTool.ScreenTime, PhoneTool.Location,
+        PhoneTool.Contacts, PhoneTool.Health, PhoneTool.ShowUi, PhoneTool.CallMe -> false
+    }
+
+/** Whether this tool's existing write/action prompt is required. Stale overrides for other tools are ignored. */
+fun AppSettings.requiresPhoneToolPermission(tool: PhoneTool): Boolean =
+    tool.hasWriteConfirmation && (phoneToolsAsk[tool.id] ?: true)
 
 /** An approval or a question rings this phone like a call: its own switch, under the Phone tools switch. */
 val AppSettings.ringsForAnswers: Boolean get() = phoneTools && phoneRings

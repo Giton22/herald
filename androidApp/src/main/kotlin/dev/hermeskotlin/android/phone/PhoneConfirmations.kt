@@ -2,6 +2,7 @@ package dev.hermeskotlin.android.phone
 
 import android.annotation.SuppressLint
 import android.app.Activity
+import android.app.KeyguardManager
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -16,8 +17,16 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import dev.hermeskotlin.android.HeraldActivity
 import dev.hermeskotlin.android.R
+import dev.hermeskotlin.core.phone.PhoneTool
 import dev.hermeskotlin.core.phone.PhoneToolException
+import dev.hermeskotlin.core.phone.PhoneToolsBridge
+import dev.hermeskotlin.core.phone.enabledPhoneTools
+import dev.hermeskotlin.core.phone.requiresPhoneToolPermission
+import dev.hermeskotlin.core.settings.SettingsStore
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.cancelAndJoin
@@ -30,14 +39,8 @@ import kotlinx.coroutines.withTimeout
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 
-/**
- * Asks before a phone tool changes anything: a dialog in Herald while it's open, else a notification, says what
- * the agent wants to do, with Allow and Deny. The notification's Allow opens [PhoneActionActivity], which does it
- * from the tap (Android lets an app start an alarm, a link or the share sheet only from something the user did)
- * and closes. Nothing happens unless allowed; swiping the question away is Deny, and it goes when the agent stops
- * waiting.
- */
-class PhoneConfirmations(private val context: Context) {
+/** Asks before a tool's write/action in Kyllene or a notification when its confirmation preference is on. */
+class PhoneConfirmations(private val context: Context, private val settings: SettingsStore) {
 
     internal class Pending(val action: (Activity) -> Unit, val done: CompletableDeferred<Unit>)
 
@@ -93,14 +96,41 @@ class PhoneConfirmations(private val context: Context) {
         }
     }
 
+    /** A permission preference never enables its parent tool. Checked again at the execution boundary. */
+    internal fun checkEnabled(tool: PhoneTool) {
+        if (tool !in settings.settings.value?.enabledPhoneTools().orEmpty()) throw PhoneToolException(PhoneToolsBridge.SWITCHED_OFF)
+    }
+
     /**
-     * Shows [what] (a sentence: "Set an alarm for 7:00") under the title [titleId] and waits. Runs [action] on the
-     * tap of Allow, from an activity; throws [PhoneToolException] when the user denies, doesn't answer before the
-     * agent stops waiting, or can't be asked. Asked in Herald while it's open ([inApp]), else in a notification; one
-     * that's answered either way, and the notification comes and goes as the user leaves Herald and comes back.
+     * Keeps the validated description for a change; opt-out executes without asking, on Main. Android access
+     * and the lock still apply. Launching another activity without a user tap also needs Kyllene visible.
      */
-    suspend fun confirm(what: String, @StringRes titleId: Int = R.string.phone_question_change, action: (Activity) -> Unit) {
-        val title = text(titleId)
+    suspend fun confirm(
+        tool: PhoneTool,
+        what: String,
+        title: String = text(R.string.phone_question_change),
+        needsActivity: Boolean = false,
+        action: (Context) -> Unit,
+    ) = withContext(Dispatchers.Main.immediate) {
+        checkEnabled(tool)
+        val caller = currentCoroutineContext()
+        val required = settings.settings.value?.requiresPhoneToolPermission(tool) != false
+        val guarded: (Context) -> Unit = { from ->
+            caller.ensureActive()
+            checkEnabled(tool)
+            if (context.getSystemService(KeyguardManager::class.java)?.isDeviceLocked == true) {
+                throw PhoneToolException("Unlock the phone before using this tool.")
+            }
+            if (!required && needsActivity && !inApp.value) {
+                throw PhoneToolException("Open Kyllene to use this tool without confirmation; Android restricts opening apps in the background.")
+            }
+            action(from)
+        }
+        if (required) ask(what, title) { guarded(it) } else guarded(context)
+    }
+
+    /** An unanswered or cancelled question never executes; a pending question still needs Allow after opt-out. */
+    private suspend fun ask(what: String, title: String, action: (Activity) -> Unit) {
         val key = "c" + ids.incrementAndGet()
         val pending = Pending(action, CompletableDeferred())
         waiting[key] = pending

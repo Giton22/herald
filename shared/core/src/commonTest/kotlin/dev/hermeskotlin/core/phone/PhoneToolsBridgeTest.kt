@@ -388,8 +388,9 @@ class PhoneToolsBridgeTest {
     }
 
     @Test
-    fun onlySwitchedOnToolsAreReportedAndRun() = runTest {
+    fun onlySwitchedOnToolsAreReportedAndRunEvenWithPermissionOff() = runTest {
         val s = setup(Runner(), on = listOf(PhoneTool.Battery))
+        s.settings.update { it.copy(phoneToolsAsk = mapOf(PhoneTool.Battery.id to false, PhoneTool.Network.id to false)) }
         val plugin = Plugin()
         plugin.call("a".repeat(32), PhoneTool.Battery.id)
         plugin.call("b".repeat(32), PhoneTool.Network.id)
@@ -505,9 +506,10 @@ class PhoneToolsBridgeTest {
     }
 
     @Test
-    fun turningAToolOffStopsAndRefusesItsCall() = runTest {
+    fun turningAToolOffStopsAndRefusesItsCallEvenWithPermissionOff() = runTest {
         val runner = Runner(block = setOf(PhoneTool.Battery))
         val s = setup(runner, on = listOf(PhoneTool.Battery, PhoneTool.Network))
+        s.settings.update { it.copy(phoneToolsAsk = mapOf(PhoneTool.Battery.id to false)) }
         val plugin = Plugin()
         plugin.call("a".repeat(32), PhoneTool.Battery.id)
         connect(s, plugin)
@@ -519,6 +521,22 @@ class PhoneToolsBridgeTest {
         assertEquals(PhoneToolsBridge.SWITCHED_OFF, plugin.error("a".repeat(32)))
         until { plugin.reports.size >= 2 }
         assertEquals(listOf(PhoneTool.Network.id), plugin.reports.last())
+    }
+
+    @Test
+    fun turningMasterOffCancelsPendingWorkEvenWithPermissionOff() = runTest {
+        val runner = Runner(block = setOf(PhoneTool.Battery))
+        val s = setup(runner, on = listOf(PhoneTool.Battery))
+        s.settings.update { it.copy(phoneToolsAsk = mapOf(PhoneTool.Battery.id to false)) }
+        val plugin = Plugin()
+        plugin.call("a".repeat(32), PhoneTool.Battery.id)
+        connect(s, plugin)
+        until { runner.runs.isNotEmpty() }
+        s.settings.update { it.copy(phoneTools = false) }
+        withTimeout(10_000) { assertEquals(PhoneTool.Battery, runner.cancelled.await()) }
+        until { plugin.answers.isNotEmpty() }
+        assertEquals(PhoneToolsBridge.SWITCHED_OFF, plugin.error("a".repeat(32)))
+        assertEquals(1, plugin.answers.size)
     }
 
     @Test

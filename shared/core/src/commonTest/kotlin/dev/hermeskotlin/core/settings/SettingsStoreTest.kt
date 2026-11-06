@@ -15,6 +15,21 @@ import kotlin.test.assertTrue
 
 class SettingsStoreTest {
 
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    @Test
+    fun phoneToolPermissionOverridesSurviveReloadWithoutEnablingTools() = runTest {
+        val disk = InMemoryKeyValueStore()
+        val settings = SettingsStore(disk, backgroundScope)
+        settings.settings.filterNotNull().first()
+        val overrides = mapOf("phone_battery" to true, "phone_sound" to false)
+        settings.update { it.copy(phoneToolsAsk = overrides) }
+        advanceUntilIdle()
+        val restored = SettingsStore(disk, backgroundScope).settings.filterNotNull().first()
+        assertEquals(overrides, restored.phoneToolsAsk)
+        assertEquals(false, restored.phoneTools)
+        assertEquals(emptyList(), restored.phoneToolsOn)
+    }
+
     @Test
     fun callTargetsSurviveLoadingAndSavingAlongsideOtherPreferences() = runTest {
         val disk = InMemoryKeyValueStore()

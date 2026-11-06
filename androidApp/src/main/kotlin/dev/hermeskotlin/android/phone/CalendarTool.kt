@@ -10,6 +10,7 @@ import android.net.Uri
 import android.provider.CalendarContract
 import androidx.core.content.ContextCompat
 import dev.hermeskotlin.android.R
+import dev.hermeskotlin.core.phone.PhoneTool
 import dev.hermeskotlin.core.phone.PhoneToolException
 import dev.hermeskotlin.core.phone.forQuestion
 import dev.hermeskotlin.core.phone.hidden
@@ -30,7 +31,7 @@ import java.util.Locale
 
 /**
  * `phone_calendar`: the phone's own calendars (Android's calendar provider, whichever accounts sync to it). Listing
- * reads; adding and moving ask first, showing what changes. Only single events are moved: a change to one of a
+ * reads; adding and moving describe what changes when confirmation is on. Only single events are moved: a change to one of a
  * repeating series would need the user's say on which ones, and that's for the calendar app.
  */
 internal class CalendarTool(private val context: Context, private val confirmations: PhoneConfirmations) {
@@ -160,7 +161,7 @@ internal class CalendarTool(private val context: Context, private val confirmati
             notes?.let { append("\n").append(words.text(R.string.phone_calendar_notes_line, forQuestion(it))) }
         }
         var id = 0L
-        confirmations.confirm(what, R.string.phone_calendar_add_title) {
+        confirmations.confirm(PhoneTool.Calendar, what, confirmations.text(R.string.phone_calendar_add_title)) {
             val uri = context.contentResolver.insert(CalendarContract.Events.CONTENT_URI, values)
                 ?: throw PhoneToolException("The calendar didn't take the event.")
             id = ContentUris.parseId(uri)
@@ -221,7 +222,7 @@ internal class CalendarTool(private val context: Context, private val confirmati
             if (guests > 0) append(" ").append(words.count(R.plurals.phone_calendar_guests, guests))
             append("\n").append(words.text(R.string.phone_calendar_title_line, forQuestion(event.title)))
         }
-        confirmations.confirm(what, R.string.phone_calendar_move_title) {
+        confirmations.confirm(PhoneTool.Calendar, what, confirmations.text(R.string.phone_calendar_move_title)) {
             if (context.contentResolver.update(uri, values, null, null) != 1) throw PhoneToolException("The calendar didn't take the change.")
         }
         return buildJsonObject {

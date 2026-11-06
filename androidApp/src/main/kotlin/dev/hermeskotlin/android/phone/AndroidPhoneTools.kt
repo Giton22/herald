@@ -23,7 +23,7 @@ import kotlinx.serialization.json.put
 /** The phone tools on Android: each reads or does what the agent asked, through the platform's own APIs. */
 class AndroidPhoneTools(
     private val context: Context,
-    confirmations: PhoneConfirmations,
+    private val confirmations: PhoneConfirmations,
     places: Geofences,
     chats: ChatTargets,
     notifications: ChatNotifications,
@@ -44,6 +44,7 @@ class AndroidPhoneTools(
     private val showUi = ShowUiTool(context, screens, chats)
 
     override suspend fun run(tool: PhoneTool, args: JsonObject, session: String): JsonElement = withContext(Dispatchers.IO) {
+        confirmations.checkEnabled(tool)
         when (tool) {
             PhoneTool.Battery -> battery()
             PhoneTool.Network -> network()

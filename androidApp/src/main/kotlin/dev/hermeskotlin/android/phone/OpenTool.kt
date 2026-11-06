@@ -7,6 +7,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import androidx.core.net.toUri
 import dev.hermeskotlin.android.R
+import dev.hermeskotlin.core.phone.PhoneTool
 import dev.hermeskotlin.core.phone.PhoneToolException
 import dev.hermeskotlin.core.phone.checkLink
 import dev.hermeskotlin.core.phone.forQuestion
@@ -19,7 +20,7 @@ import java.util.Locale
 
 /**
  * `phone_open`: a web link, a place or directions in the maps app, an installed app, or the share sheet with some
- * text, after the user allows it. The question shows exactly what opens: a link's real site first, all of the text
+ * text, when enabled. The question shows exactly what opens: a link's real site first, all of the text
  * to share, and nothing hidden in any of it.
  */
 internal class OpenTool(private val context: Context, private val confirmations: PhoneConfirmations) {
@@ -47,7 +48,7 @@ internal class OpenTool(private val context: Context, private val confirmations:
         val intent = Intent(Intent.ACTION_VIEW, link.url.toUri()).addCategory(Intent.CATEGORY_BROWSABLE).setPackage(browser)
         val secure = if (link.secure) "" else confirmations.text(R.string.phone_open_not_secure)
         start(intent, confirmations.text(R.string.phone_open_link, link.site, secure, shorten(link.url)), "The phone has no browser.")
-        return done("url", "The user allowed it and the link went to the browser.") { put("site", link.host) }
+        return done("url", "The link went to the browser.") { put("site", link.host) }
     }
 
     /** The user's browser: what opens a link no app claims, else the first browser there is. */
@@ -74,7 +75,7 @@ internal class OpenTool(private val context: Context, private val confirmations:
         val intent = if (navigating) directions else Intent(Intent.ACTION_VIEW, "geo:0,0?q=$query".toUri())
         val what = confirmations.text(if (navigating) R.string.phone_open_directions else R.string.phone_open_map, forQuestion(place))
         start(intent, what, "The phone has no maps app.")
-        return done("map", "The user allowed it and the place went to the maps app.") {
+        return done("map", "The place went to the maps app.") {
             put("place", place)
             put("directions", navigating)
             if (navigate && !navigating) put("note_directions", "The maps app shows the place; directions start from there.")
@@ -98,7 +99,7 @@ internal class OpenTool(private val context: Context, private val confirmations:
         val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER).setComponent(component)
             .addFlags(Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
         start(intent, confirmations.text(R.string.phone_open_app, label), "$label can't be opened.")
-        return done("app", "The user allowed it and $label was opened.") { put("app", label) }
+        return done("app", "$label was opened.") { put("app", label) }
     }
 
     private suspend fun share(text: String): JsonObject {
@@ -107,14 +108,14 @@ internal class OpenTool(private val context: Context, private val confirmations:
         val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text)
         if (send.resolveActivity(context.packageManager) == null) throw PhoneToolException("Nothing on the phone can share text.")
         start(Intent.createChooser(send, null), confirmations.text(R.string.phone_open_share, forQuestion(text)), "Nothing on the phone can share text.")
-        return done("share", "The user allowed it and the share sheet opened; they pick where it goes, or close it.") {}
+        return done("share", "The share sheet opened; they pick where it goes, or close it.") {}
     }
 
-    /** Asks, then starts [intent] from the user's tap, in its own task so Back and Recents work as usual. */
+    /** Starts [intent] after the configured confirmation, in its own task so Back and Recents work as usual. */
     private suspend fun start(intent: Intent, what: String, none: String) {
         if (intent.resolveActivity(context.packageManager) == null) throw PhoneToolException(none)
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        confirmations.confirm(what, R.string.phone_open_title) { activity -> activity.startActivity(intent) }
+        confirmations.confirm(PhoneTool.Open, what, confirmations.text(R.string.phone_open_title), needsActivity = true) { activity -> activity.startActivity(intent) }
     }
 
     private fun done(kind: String, note: String, more: JsonObjectBuilder.() -> Unit) = buildJsonObject {

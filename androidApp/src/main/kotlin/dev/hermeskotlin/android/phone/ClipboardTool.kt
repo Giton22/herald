@@ -3,6 +3,7 @@ package dev.hermeskotlin.android.phone
 import android.content.ClipData
 import android.content.ClipboardManager
 import dev.hermeskotlin.android.R
+import dev.hermeskotlin.core.phone.PhoneTool
 import dev.hermeskotlin.core.phone.PhoneToolException
 import dev.hermeskotlin.core.phone.forQuestion
 import dev.hermeskotlin.core.phone.hidden
@@ -11,7 +12,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
 /**
- * `phone_clipboard`: puts the agent's text on the clipboard, ready to paste, after the user allows it. Writing only:
+ * `phone_clipboard`: puts the agent's text on the clipboard, ready to paste, when enabled. Writing only:
  * what's on the clipboard (a password, a code) is never read back to the gateway, and Android wouldn't let an app in
  * the background read it anyway.
  */
@@ -28,7 +29,7 @@ internal class ClipboardTool(private val confirmations: PhoneConfirmations) {
             throw PhoneToolException("text has hidden characters or odd spaces in it.")
         }
         val what = confirmations.text(R.string.phone_clipboard_question, forQuestion(text.replace("\r\n", "\n")))
-        confirmations.confirm(what, R.string.phone_clipboard_title) { activity ->
+        confirmations.confirm(PhoneTool.Clipboard, what, confirmations.text(R.string.phone_clipboard_title)) { activity ->
             val clipboard = activity.getSystemService(ClipboardManager::class.java)
                 ?: throw PhoneToolException("The phone has no clipboard.")
             clipboard.setPrimaryClip(ClipData.newPlainText(confirmations.text(R.string.phone_clipboard_label), text))
@@ -36,7 +37,7 @@ internal class ClipboardTool(private val confirmations: PhoneConfirmations) {
         return buildJsonObject {
             put("copied", true)
             put("characters", length)
-            put("note", "The user allowed it and the text is on the clipboard, ready to paste.")
+            put("note", "The text is on the clipboard, ready to paste.")
         }
     }
 

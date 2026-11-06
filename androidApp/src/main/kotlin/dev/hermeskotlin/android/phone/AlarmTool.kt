@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.provider.AlarmClock
 import dev.hermeskotlin.android.R
+import dev.hermeskotlin.core.phone.PhoneTool
 import dev.hermeskotlin.core.phone.PhoneToolException
 import dev.hermeskotlin.core.phone.hidden
 import kotlinx.serialization.json.JsonArray
@@ -18,7 +19,7 @@ import java.util.Calendar
 import java.util.Locale
 
 /**
- * `phone_alarm`: an alarm or a timer in the phone's clock app, after the user allows it. The clock app keeps it,
+ * `phone_alarm`: an alarm or a timer in the phone's clock app, when enabled. The clock app keeps it,
  * so the user sees and cancels it there like any other.
  */
 internal class AlarmTool(private val context: Context, private val confirmations: PhoneConfirmations) {
@@ -89,7 +90,7 @@ internal class AlarmTool(private val context: Context, private val confirmations
             throw PhoneToolException("The phone has no clock app that takes alarms and timers.")
         }
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        confirmations.confirm(what) { activity -> activity.startActivity(intent) }
+        confirmations.confirm(PhoneTool.Alarms, what, needsActivity = true) { activity -> activity.startActivity(intent) }
     }
 
     private fun days(args: JsonObject): List<String> {
@@ -139,7 +140,7 @@ internal class AlarmTool(private val context: Context, private val confirmations
 
     private companion object {
         /** Android says nothing back from a clock app, so "sent" is all that's known. */
-        const val HANDED_OVER = "The user allowed it and the clock app got it. If the clock app opened instead, the user finishes it there."
+        const val HANDED_OVER = "The clock app got it. If the clock app opened instead, the user finishes it there."
 
         val DAYS = linkedMapOf(
             "mon" to Calendar.MONDAY, "tue" to Calendar.TUESDAY, "wed" to Calendar.WEDNESDAY, "thu" to Calendar.THURSDAY,

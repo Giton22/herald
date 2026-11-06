@@ -29,4 +29,23 @@ class PhoneSwitchesTest {
         val on = AppSettings(phoneTools = true, phoneRings = true, phoneToolsOn = listOf(PhoneTool.Battery.id))
         assertEquals(setOf(PhoneTool.Battery), on.enabledPhoneTools())
     }
+    @Test
+    fun permissionDefaultsKeepExistingConfirmingToolsOn() {
+        val defaults = AppSettings()
+        val changes = setOf(PhoneTool.Sound, PhoneTool.Alarms, PhoneTool.Open, PhoneTool.Clipboard, PhoneTool.Geofences, PhoneTool.Calendar)
+        for (tool in PhoneTool.entries) {
+            assertEquals(tool in changes, defaults.requiresPhoneToolPermission(tool), tool.id)
+        }
+    }
+
+    @Test
+    fun onlyExistingWriteToolsCanOverridePermissionWithoutGrantingUse() {
+        for (tool in PhoneTool.entries) {
+            val ask = AppSettings(phoneToolsAsk = mapOf(tool.id to true))
+            assertEquals(tool in setOf(PhoneTool.Sound, PhoneTool.Alarms, PhoneTool.Open, PhoneTool.Clipboard, PhoneTool.Geofences, PhoneTool.Calendar), ask.requiresPhoneToolPermission(tool), tool.id)
+            assertTrue(ask.enabledPhoneTools().isEmpty())
+            assertFalse(ask.copy(phoneToolsAsk = mapOf(tool.id to false)).requiresPhoneToolPermission(tool))
+        }
+    }
+
 }

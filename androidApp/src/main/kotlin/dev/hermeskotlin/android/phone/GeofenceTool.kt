@@ -7,6 +7,7 @@ import dev.hermeskotlin.android.R
 import dev.hermeskotlin.core.chat.ChatHost
 import dev.hermeskotlin.core.chat.SessionWatcher
 import dev.hermeskotlin.core.gateway.GatewayRepository
+import dev.hermeskotlin.core.phone.PhoneTool
 import dev.hermeskotlin.core.phone.PhoneToolException
 import dev.hermeskotlin.core.phone.WatchedPlace
 import dev.hermeskotlin.core.phone.forQuestion
@@ -49,8 +50,8 @@ class ChatTargets(
 }
 
 /**
- * `phone_geofence`: places the phone watches. Adding one asks first and shows exactly what will be sent and where,
- * and removing one asks too; listing doesn't. Watching needs precise location all the time,
+ * `phone_geofence`: places the phone watches. Adding one shows exactly what will be sent and where when confirmation is on.
+ * Watching needs precise location all the time,
  * since the place matters most while Kyllene is closed.
  */
 internal class GeofenceTool(
@@ -109,9 +110,9 @@ internal class GeofenceTool(
     private suspend fun remove(args: JsonObject, session: String): JsonObject {
         val id = args.string("id") ?: throw PhoneToolException("id is needed: take it from action=list.")
         val place = visible(session).firstOrNull { it.id == id } ?: throw PhoneToolException("No watched place has that id.")
-        // The user allowed the place: only the user takes it back.
+        // The place was added on this phone: only the user takes it back.
         val what = confirmations.text(if (place.arriving) R.string.phone_place_remove_arrive else R.string.phone_place_remove_leave, forQuestion(place.name))
-        confirmations.confirm(what, R.string.phone_place_remove_title) {
+        confirmations.confirm(PhoneTool.Geofences, what, confirmations.text(R.string.phone_place_remove_title)) {
             places.remove(id)
         }
         return buildJsonObject {
@@ -188,11 +189,12 @@ internal class GeofenceTool(
         val chat = target.title?.takeIf { it.isNotBlank() }?.let { confirmations.text(R.string.phone_place_chat, forQuestion(it)) }
             ?: confirmations.text(R.string.phone_place_this_chat)
         confirmations.confirm(
+            PhoneTool.Geofences,
             confirmations.text(
                 if (place.arriving) R.string.phone_place_add_arrive else R.string.phone_place_add_leave,
                 forQuestion(name), where, radius, chat, forQuestion(place.sent),
             ),
-            R.string.phone_place_title,
+            confirmations.text(R.string.phone_place_title),
         ) {
             if (!places.add(place)) throw PhoneToolException("The phone already watches ${Geofences.MAX_PLACES} places. Remove one first.")
         }
@@ -204,7 +206,7 @@ internal class GeofenceTool(
             put("radius_m", radius)
             put(
                 "note",
-                "The user allowed it. The message is sent to this chat as the user when it fires, marked as coming from the " +
+                "The message is sent to this chat as the user when it fires, marked as coming from the " +
                     "place. Android checks the place every few minutes, so it can fire a little late.",
             )
         }

@@ -120,6 +120,7 @@ fun PhoneToolsScreen(onBack: () -> Unit, viewModel: PhoneToolsViewModel = koinVi
             if (on && access.missing(tool) != null) access.request(tool)
         },
         onSetUp = viewModel::setUp,
+        onPermission = viewModel::setPermission,
         phones = phones,
         onMovePhone = viewModel::movePhone,
         onRemovePhone = viewModel::removePhone,
@@ -197,6 +198,7 @@ internal fun PhoneToolsView(
     onQuietFrom: (Int) -> Unit = {},
     onQuietUntil: (Int) -> Unit = {},
     nowMillis: Long = Clock.System.now().toEpochMilliseconds(),
+    onPermission: (PhoneTool, Boolean) -> Unit = { _, _ -> },
 ) {
     var removing by remember { mutableStateOf<KnownPhone?>(null) }
     // Which end of quiet hours is being picked: true for the start.
@@ -239,7 +241,8 @@ internal fun PhoneToolsView(
                 verticalArrangement = Arrangement.spacedBy(22.dp),
             ) {
                 Text(
-                    stringResource(Res.string.phone_intro),
+                    "Tools stay off until you enable them. Reads don't ask. For tools that change the phone, choose " +
+                        "whether changes need approval. Android permissions still apply. A tool you turn off is taken away from the agent at once.",
                     style = Theme[typography][bodySmall],
                     color = Theme[colors][textTertiary],
                     modifier = Modifier.padding(horizontal = 6.dp),
@@ -273,11 +276,16 @@ internal fun PhoneToolsView(
                             val needs = if (on) missing(tool) else null
                             SwitchRow(
                                 title = stringResource(tool.titleRes),
-                                detail = stringResource(needs ?: tool.detailRes),
+                                detail = if (needs != null) stringResource(needs) else when (tool) {
+                                    PhoneTool.Sound, PhoneTool.Alarms, PhoneTool.Open, PhoneTool.Clipboard,
+                                    PhoneTool.Geofences, PhoneTool.Calendar -> tool.detail
+                                    else -> stringResource(tool.detailRes)
+                                },
                                 checked = on,
                                 onCheckedChange = { onTool(tool, it) },
                                 icon = tool.icon,
                             )
+                            PhoneToolPermissionRow(tool, settings, onPermission)
                             if (needs != null) {
                                 Divider()
                                 ActionRow(stringResource(Res.string.phone_allow), Lucide.ShieldCheck) { onAllow(tool) }
