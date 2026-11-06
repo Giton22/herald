@@ -361,4 +361,28 @@
     <string name="check_fix_https">Prüfe, ob die Domain auf den Server zeigt, ihr Zertifikat gültig ist und der Proxy ans Dashboard weiterleitet.</string>
     <string name="check_fix_local_network">Geh ins selbe WLAN oder Netzwerk wie der Server und starte das Dashboard mit --host 0.0.0.0, damit andere Geräte es erreichen.</string>
     <string name="check_fix_reachable">Prüfe Adresse und Port, und ob der Server von diesem Telefon aus erreichbar ist.</string>
+
+    <!-- Imported desktop client certificates. -->
+    <string name="check_fix_client_cert_desktop">Importiere für das Gateway das Client-Zertifikat, das dieser Server verlangt (eine PKCS#12-Datei), und prüfe dann erneut.</string>
+    <string name="client_cert_import_title">Client-Zertifikat importieren</string>
+    <string name="client_cert_import">Importieren</string>
+    <string name="client_cert_importing">Wird importiert…</string>
+    <string name="client_cert_import_detail">Gib das Passwort der gewählten PKCS#12-Datei ein. Ihr Schlüssel wird verschlüsselt für diesen TLS-Hostnamen gespeichert. Gateways mit demselben Hostnamen teilen sich die Zertifikatsauswahl, unabhängig von Port oder Pfad.</string>
+    <string name="client_cert_password">PKCS#12-Passwort</string>
+    <string name="client_cert_invalid">Kyllene konnte dieses Client-Zertifikat nicht öffnen. Prüfe das Passwort und wähle eine PKCS#12-Datei mit genau einem gültigen Client-Zertifikat, dem passenden privaten Schlüssel und der Zertifikatskette.</string>
+    <string name="client_cert_regular_file">Wähle eine normale PKCS#12-Datei. Symbolische Links, Geräte und benannte Pipes lassen sich nicht importieren.</string>
+    <string name="client_cert_read_failed">Diese PKCS#12-Datei ließ sich nicht lesen. Wähle sie erneut und prüfe den Dateizugriff.</string>
+    <string name="client_cert_clear_selection">Auswahl aufheben</string>
+    <string name="connect_cert_kept_desktop">Importierte Schlüssel werden verschlüsselt für diesen TLS-Hostnamen gespeichert. Nach dem Aufheben dieser Auswahl kann noch ein anderes gespeichertes Zertifikat für denselben Hostnamen verwendet werden. Importierte Schlüssel bleiben in den verschlüsselten Einstellungen.</string>
+    <string name="gateways_client_cert_detail_desktop">Kyllene legt „%1$s“ dieses Zertifikat vor, wenn sein Server eines verlangt. Importierte Schlüssel werden verschlüsselt für diesen TLS-Hostnamen gespeichert. Nach dem Aufheben dieser Auswahl kann noch ein anderes gespeichertes Zertifikat für denselben Hostnamen verwendet werden. Importierte Schlüssel bleiben in den verschlüsselten Einstellungen.</string>
+    <string name="client_cert_storage_unavailable">Kyllene konnte seinen Speicherschlüssel nicht abrufen. Entsperre den Schlüsselbund deines Desktops, prüfe, ob sein Secret-Portal verfügbar ist, und versuche es erneut.</string>
+    <string name="client_cert_storage_cancelled">Das Entsperren des Speichers wurde abgebrochen. Versuche es erneut, um ihn zu entsperren; vorhandene Daten wurden beibehalten.</string>
+    <string name="client_cert_storage_corrupt">Kyllene konnte seine verschlüsselten Einstellungen nicht öffnen. Stelle eine funktionierende Sicherung wieder her oder nutze die ursprüngliche App-Identität. Vorhandene Daten wurden beibehalten.</string>
+    <string name="client_cert_storage_version">Dieses Einstellungsformat braucht eine andere Version von Kyllene. Vorhandene Daten wurden beibehalten.</string>
+    <string name="client_cert_storage_read">Kyllene konnte seine Einstellungen nicht lesen, oder die Datei ist größer als 16 MiB. Prüfe den Dateizugriff, bevor du es erneut versuchst.</string>
+    <string name="client_cert_storage_write">Kyllene konnte das Speichern oder Aufräumen seiner Einstellungen nicht abschließen. Vorhandene Kopien wurden beibehalten; prüfe Speicherplatz und Dateizugriff, bevor du es erneut versuchst.</string>
+    <string name="client_cert_storage_uncertain">Kyllene konnte nicht bestätigen, dass seine Einstellungen gespeichert wurden. Prüfe den Dateizugriff und starte dann erneut, oder beende und starte Kyllene neu, bevor du weitere Änderungen vornimmst.</string>
+    <string name="client_cert_storage_changed">Die Einstellungen wurden außerhalb dieses Fensters geändert. Beende Kyllene und starte es neu, um sie vor dem Speichern neu zu laden.</string>
+    <string name="client_cert_storage_legacy">Es wurden widersprüchliche oder unvollständige alte Einstellungen gefunden. Vorhandene Dateien wurden beibehalten. Beende Kyllene und kläre die ältere Kopie, bevor du es erneut versuchst.</string>
+    <string name="client_cert_storage_unsupported">Kyllene konnte seine Flatpak-App-Identität nicht prüfen. Prüfe die Installation, bevor du es erneut versuchst. Eine unverschlüsselte Ausweichlösung gibt es nicht.</string>
 </resources>

@@ -361,4 +361,28 @@
     <string name="check_fix_https">Ellenőrizd, hogy a domain a szerverre mutat-e, a tanúsítvány érvényes-e, és a proxy továbbít-e a vezérlőpultra.</string>
     <string name="check_fix_local_network">Csatlakozz ugyanarra a Wi-Fi-re vagy hálózatra, mint a szerver, és indítsd a vezérlőpultot --host 0.0.0.0 kapcsolóval, hogy más eszközök elérjék.</string>
     <string name="check_fix_reachable">Ellenőrizd a címet és a portot, és hogy a szerver elérhető-e erről a telefonról.</string>
+
+    <!-- Imported desktop client certificates. -->
+    <string name="check_fix_client_cert_desktop">Importáld az átjáróhoz a klienstanúsítványt, amelyet ez a szerver kér (egy PKCS#12 fájlt), majd ellenőrizd újra.</string>
+    <string name="client_cert_import_title">Klienstanúsítvány importálása</string>
+    <string name="client_cert_import">Importálás</string>
+    <string name="client_cert_importing">Importálás…</string>
+    <string name="client_cert_import_detail">Add meg a kiválasztott PKCS#12 fájl jelszavát. A kulcsa titkosítva lesz tárolva ehhez a TLS-gépnévhez. Az azonos gépnevű átjárók a tanúsítványválasztáson is osztoznak, a porttól és az útvonaltól függetlenül.</string>
+    <string name="client_cert_password">PKCS#12 jelszó</string>
+    <string name="client_cert_invalid">A Kyllene nem tudta megnyitni ezt a klienstanúsítványt. Ellenőrizd a jelszót, és válassz egy olyan PKCS#12 fájlt, amelyben egyetlen le nem járt klienstanúsítvány, a hozzá tartozó privát kulcs és a tanúsítványlánc van.</string>
+    <string name="client_cert_regular_file">Válassz egy normál PKCS#12 fájlt. Szimbolikus linkek, eszközök és nevesített csövek nem importálhatók.</string>
+    <string name="client_cert_read_failed">Nem sikerült beolvasni ezt a PKCS#12 fájlt. Válaszd ki újra, és ellenőrizd a fájlhozzáférést.</string>
+    <string name="client_cert_clear_selection">Választás törlése</string>
+    <string name="connect_cert_kept_desktop">Az importált kulcsok titkosítva vannak tárolva ehhez a TLS-gépnévhez. A választás törlése után is használatban maradhat egy másik, ugyanehhez a gépnévhez mentett tanúsítvány. Az importált kulcsok a titkosított beállításokban maradnak.</string>
+    <string name="gateways_client_cert_detail_desktop">A Kyllene ezt a tanúsítványt mutatja be ennek: „%1$s”, amikor a szerver kéri. Az importált kulcsok titkosítva vannak tárolva ehhez a TLS-gépnévhez. A választás törlése után is használatban maradhat egy másik, ugyanehhez a gépnévhez mentett tanúsítvány. Az importált kulcsok a titkosított beállításokban maradnak.</string>
+    <string name="client_cert_storage_unavailable">A Kyllene nem tudta lekérni a tárolókulcsát. Oldd fel az asztali kulcstartót, ellenőrizd, hogy elérhető-e a Secret portálja, majd próbáld újra.</string>
+    <string name="client_cert_storage_cancelled">A tároló feloldása megszakadt. Próbáld újra a feloldáshoz; a meglévő adatok megmaradtak.</string>
+    <string name="client_cert_storage_corrupt">A Kyllene nem tudta megnyitni a titkosított beállításait. Állíts vissza egy működő biztonsági mentést, vagy használd az eredeti alkalmazás-azonosítót. A meglévő adatok megmaradtak.</string>
+    <string name="client_cert_storage_version">Ehhez a beállításformátumhoz a Kyllene egy másik verziója kell. A meglévő adatok megmaradtak.</string>
+    <string name="client_cert_storage_read">A Kyllene nem tudta beolvasni a beállításait, vagy a fájl nagyobb 16 MiB-nál. Ellenőrizd a fájlhozzáférést, mielőtt újra próbálod.</string>
+    <string name="client_cert_storage_write">A Kyllene nem tudta befejezni a beállításai mentését vagy rendbetételét. A meglévő másolatok megmaradtak; ellenőrizd a lemezterületet és a fájlhozzáférést, mielőtt újra próbálod.</string>
+    <string name="client_cert_storage_uncertain">A Kyllene nem tudta megerősíteni, hogy a beállításai mentésre kerültek. Ellenőrizd a fájlhozzáférést, majd indítsd újra, vagy lépj ki és indítsd újra, mielőtt további módosítást végzel.</string>
+    <string name="client_cert_storage_changed">A beállítások ezen az ablakon kívül megváltoztak. Lépj ki, és indítsd újra a Kyllenét, hogy mentés előtt újratöltse őket.</string>
+    <string name="client_cert_storage_legacy">Ütköző vagy befejezetlen régi beállítások kerültek elő. A meglévő fájlok megmaradtak. Lépj ki, és rendezd a régebbi másolatot, mielőtt újra próbálod.</string>
+    <string name="client_cert_storage_unsupported">A Kyllene nem tudta ellenőrizni a Flatpak alkalmazás-azonosítóját. Ellenőrizd a telepítést, mielőtt újra próbálod. Titkosítatlan tartalék megoldás nincs.</string>
 </resources>

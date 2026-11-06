@@ -369,6 +369,7 @@
     <string name="check_fix_reachable">Check the address and port, and that the server is reachable from this phone.</string>
 
     <!-- Imported desktop client certificates. -->
+    <string name="check_fix_client_cert_desktop">Import the client certificate this server asks for (a PKCS#12 file) for the gateway, then check again.</string>
     <string name="client_cert_import_title">Import client certificate</string>
     <string name="client_cert_import">Import</string>
     <string name="client_cert_importing">Importing…</string>

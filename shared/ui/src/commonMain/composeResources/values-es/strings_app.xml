@@ -363,6 +363,7 @@
     <string name="check_fix_reachable">Comprueba la dirección y el puerto, y que el servidor sea accesible desde este teléfono.</string>
 
     <!-- Imported desktop client certificates. -->
+    <string name="check_fix_client_cert_desktop">Importa para el gateway el certificado de cliente que pide este servidor (un archivo PKCS#12) y vuelve a comprobar.</string>
     <string name="client_cert_import_title">Importar certificado de cliente</string>
     <string name="client_cert_import">Importar</string>
     <string name="client_cert_importing">Importando…</string>
