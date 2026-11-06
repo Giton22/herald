@@ -361,6 +361,7 @@
 
     <!-- Imported desktop client certificates. -->
     <string name="check_fix_client_cert_desktop">请导入该服务器要求的 PKCS#12 客户端证书，然后再次检查。</string>
+    <string name="check_fix_client_cert_unsupported">此版本的 Kyllene 无法出示客户端证书。请使用 Android 应用或 Linux Flatpak 连接此服务器。</string>
     <string name="client_cert_import_title">导入客户端证书</string>
     <string name="client_cert_import">导入</string>
     <string name="client_cert_importing">正在导入…</string>

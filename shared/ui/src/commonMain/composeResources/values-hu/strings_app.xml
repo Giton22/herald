@@ -364,6 +364,7 @@
 
     <!-- Imported desktop client certificates. -->
     <string name="check_fix_client_cert_desktop">Importáld a PKCS#12 klienstanúsítványt, amelyet ez a szerver kér, majd ellenőrizd újra.</string>
+    <string name="check_fix_client_cert_unsupported">A Kyllene ezen változata nem tud klienstanúsítványt bemutatni. Ehhez a szerverhez használd az Android-alkalmazást vagy a linuxos Flatpaket.</string>
     <string name="client_cert_import_title">Klienstanúsítvány importálása</string>
     <string name="client_cert_import">Importálás</string>
     <string name="client_cert_importing">Importálás…</string>

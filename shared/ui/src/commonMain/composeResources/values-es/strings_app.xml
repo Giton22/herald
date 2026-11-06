@@ -364,6 +364,7 @@
 
     <!-- Imported desktop client certificates. -->
     <string name="check_fix_client_cert_desktop">Importa el certificado de cliente PKCS#12 que pide este servidor y vuelve a comprobar.</string>
+    <string name="check_fix_client_cert_unsupported">Esta versión de Kyllene no puede presentar certificados de cliente. Usa la app de Android o el Flatpak de Linux para este servidor.</string>
     <string name="client_cert_import_title">Importar certificado de cliente</string>
     <string name="client_cert_import">Importar</string>
     <string name="client_cert_importing">Importando…</string>
