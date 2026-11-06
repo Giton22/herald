@@ -76,6 +76,7 @@
     <string name="chat_pdf_locked">此文件有密码保护。请保存，或分享给会询问密码的应用。</string>
     <string name="chat_pdf_broken">无法作为 PDF 读取：可能已损坏或不完整。保存可获取原文件。</string>
     <string name="chat_pdf_no_room">手机现在没有足够空间打开它。请保存或分享。</string>
+    <string name="chat_pdf_desktop_limit">此 PDF 超出了桌面查看器的限制。请保存后用其他应用打开。</string>
 
     <string name="chat_widget_not_html">此文件不是 HTML 文本。</string>
     <string name="chat_widget_too_big">此小组件超过了 512 KB 的预览上限。</string>

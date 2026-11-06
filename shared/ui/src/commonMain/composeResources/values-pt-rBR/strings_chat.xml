@@ -79,6 +79,7 @@
     <string name="chat_pdf_locked">Está protegido por senha. Salve ou compartilhe com um app que peça a senha.</string>
     <string name="chat_pdf_broken">Não dá para ler como PDF: pode estar danificado ou incompleto. Salvar baixa o arquivo como está.</string>
     <string name="chat_pdf_no_room">O telefone não tem espaço para abrir isso agora. Salve ou compartilhe.</string>
+    <string name="chat_pdf_desktop_limit">Este PDF excede os limites do visualizador do desktop. Salve-o para abrir em outro app.</string>
 
     <string name="chat_widget_not_html">Este arquivo não é texto HTML.</string>
     <string name="chat_widget_too_big">Este widget passa do limite de prévia de 512 KB.</string>
