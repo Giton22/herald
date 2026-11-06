@@ -145,11 +145,13 @@ class FlatpakUpdateControllerTest {
     fun missingTerminalTimesOutWithoutReplayingTheRequest() = runBlocking {
         Fixture(timeoutMillis = 30).use { f ->
             f.startUpdate()
+            val requested = f.latest
             withTimeout(2_000) { f.controller.state.first { it.phase == ManagedUpdatePhase.Failed } }
             assertEquals(ManagedUpdateFailure.Uncertain, f.controller.state.value.failure)
-            assertTrue(f.latest.closed)
+            assertTrue(requested.closed)
+            assertEquals(1, requested.updates)
             f.controller.update()
-            assertEquals(1, f.latest.updates)
+            assertEquals(1, f.monitors.sumOf { it.updates })
             assertEquals(0, f.restarts)
         }
     }
@@ -169,12 +171,14 @@ class FlatpakUpdateControllerTest {
         for (pid in listOf(0L, -1L)) Fixture().use { f ->
             f.startUpdate()
             f.latest.emit(FlatpakUpdateEvent.Progress(2))
-            f.latest.restartPid = pid
+            val spawner = f.latest
+            spawner.restartPid = pid
             f.controller.restart()
             f.controller.restart()
             assertEquals(ManagedUpdateFailure.RestartFailed, f.controller.state.value.failure)
             assertEquals(0, f.restarts)
-            assertEquals(1, f.latest.spawns)
+            assertEquals(1, f.monitors.sumOf { it.spawns })
+            assertEquals(1, spawner.spawns)
         }
         Fixture().use { f ->
             f.startUpdate()
@@ -213,7 +217,7 @@ class FlatpakUpdateControllerTest {
             withTimeout(2_000) { f.controller.state.first { it.phase == ManagedUpdatePhase.Failed } }
             f.controller.restart()
             assertEquals(ManagedUpdateFailure.RestartFailed, f.controller.state.value.failure)
-            assertEquals(1, f.latest.spawns)
+            assertEquals(1, f.monitors.sumOf { it.spawns })
             assertEquals(0, f.restarts)
         }
     }
@@ -224,9 +228,40 @@ class FlatpakUpdateControllerTest {
         f.controller.update()
         assertEquals(ManagedUpdateFailure.Uncertain, f.controller.state.value.failure)
         f.controller.update()
-        assertEquals(2, f.monitors.size)
-        assertEquals(1, f.latest.updates)
+        // Enable, the attempt, then watching again after its failure; an uncertain outcome isn't retried.
+        assertEquals(3, f.monitors.size)
+        assertEquals(1, f.monitors.sumOf { it.updates })
+        assertFalse(f.latest.closed)
         assertEquals(0, f.restarts)
+    }
+
+    @Test
+    fun aCancelledOrFailedUpdateKeepsWatchingForTheNextRelease() {
+        for (end in listOf<(Fixture) -> Unit>({ it.controller.cancel() },
+            { it.latest.emit(FlatpakUpdateEvent.Failure(ManagedUpdateFailure.Denied)) })) Fixture().use { f ->
+            f.startUpdate()
+            val requested = f.latest
+            end(f)
+            assertTrue(requested.closed)
+            val watching = f.latest
+            assertTrue(watching !== requested && !watching.closed)
+            // The outcome stays on screen while the new monitor reports the same release.
+            val outcome = f.controller.state.value
+            watching.emit(FlatpakUpdateEvent.Info(FlatpakUpdateInfo("A", "A", "B")))
+            assertEquals(outcome.phase, f.phase)
+            // Not now, then a newer release: it's offered.
+            f.controller.dismiss()
+            watching.emit(FlatpakUpdateEvent.Info(FlatpakUpdateInfo("A", "A", "C")))
+            assertEquals(ManagedUpdatePhase.Available, f.phase)
+            assertEquals(0, f.restarts)
+        }
+    }
+
+    @Test
+    fun anUnreachablePortalIsNotReopenedInALoop() = Fixture(supported = false).use { f ->
+        f.controller.setEnabled(true)
+        assertEquals(ManagedUpdateFailure.Unavailable, f.controller.state.value.failure)
+        assertEquals(1, f.opens)
     }
 
     @Test
@@ -257,7 +292,9 @@ class FlatpakUpdateControllerTest {
         val monitors = mutableListOf<Monitor>()
         var restarts = 0
         var openGate: CompletableDeferred<Unit>? = null
+        var opens = 0
         val controller = FlatpakUpdateController(scope, open = { emit ->
+            opens++
             if (!supported) null else Monitor(emit).also {
                 monitors += it
                 it.updateError = updateError

@@ -13,6 +13,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
+import java.io.File
+
+/** Every Flatpak sandbox has /.flatpak-info; a host install never does. Updates there come from the Flatpak's origin. */
+internal val inFlatpak: Boolean by lazy { System.getProperty("os.name") == "Linux" && File("/.flatpak-info").isFile }
 
 internal data class FlatpakUpdateInfo(val running: String?, val local: String?, val remote: String?) {
     fun offer(): ManagedUpdateState {
@@ -106,6 +110,7 @@ internal class FlatpakUpdateController(
         val canRestart = state.value.canRestart
         release()
         mutableState.value = ManagedUpdateState(ManagedUpdatePhase.Cancelled, canRestart = canRestart)
+        keepWatching()
     }
 
     fun restart() {
@@ -143,7 +148,17 @@ internal class FlatpakUpdateController(
         mutableState.value = ManagedUpdateState()
     }
 
-    private suspend fun connect(owner: Long, unavailable: ManagedUpdateFailure = ManagedUpdateFailure.Unavailable): FlatpakUpdateMonitor? {
+    /**
+     * Ending an operation closes its monitor; a new one keeps later releases arriving while the outcome stays on screen.
+     * Opening it quietly: a portal that can't be reached now says nothing over the outcome already shown.
+     */
+    private fun keepWatching() {
+        if (!enabled || closed) return
+        val owner = generation
+        scope.launch { connect(owner, unavailable = null) }
+    }
+
+    private suspend fun connect(owner: Long, unavailable: ManagedUpdateFailure? = ManagedUpdateFailure.Unavailable): FlatpakUpdateMonitor? {
         val created = try {
             open { event ->
                 // A queued pre-invocation signal must not become eligible when Update starts later.
@@ -163,7 +178,7 @@ internal class FlatpakUpdateController(
             return null
         }
         monitor = created
-        if (created == null) fail(unavailable)
+        if (created == null && unavailable != null) fail(unavailable)
         return created
     }
 
@@ -172,7 +187,9 @@ internal class FlatpakUpdateController(
             is FlatpakUpdateEvent.Info -> {
                 info = event.info
                 val facts = event.info.offer()
-                if (state.value.phase in listOf(ManagedUpdatePhase.Updating, ManagedUpdatePhase.Restarting)) {
+                // An operation in progress, or the outcome of one, stays until it's dismissed; only Restart can join it.
+                if (state.value.phase in listOf(ManagedUpdatePhase.Updating, ManagedUpdatePhase.Restarting,
+                        ManagedUpdatePhase.Failed, ManagedUpdatePhase.Cancelled)) {
                     mutableState.value = state.value.copy(canRestart = state.value.canRestart || facts.canRestart)
                 } else if (event.info != dismissed) {
                     mutableState.value = facts.copy(canRestart = facts.canRestart || confirmedRestart)
@@ -200,6 +217,8 @@ internal class FlatpakUpdateController(
         val next = ManagedUpdateState(ManagedUpdatePhase.Failed, canRestart = state.value.canRestart, failure = failure)
         release()
         mutableState.value = next
+        // A portal that couldn't be reached stays unwatched: opening it again would only fail again.
+        if (failure != ManagedUpdateFailure.Unavailable) keepWatching()
     }
 
     private fun release() {
