@@ -18,6 +18,7 @@ import androidx.compose.foundation.LocalIndication
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import dev.hermeskotlin.ui.clearOfWindowControls
+import dev.hermeskotlin.ui.hasSpeechPlayback
 import dev.hermeskotlin.ui.hasVoice
 import dev.hermeskotlin.ui.windowControlsHeight
 import dev.hermeskotlin.ui.isDesktop
@@ -476,6 +477,7 @@ fun ChatScreen(
     val dictationNeedsMic = stringResource(Res.string.chat_notice_dictation_mic)
     val noDesktopVoice = stringResource(Res.string.chat_notice_no_desktop_voice)
     val noDesktopDictation = stringResource(Res.string.chat_notice_no_desktop_dictation)
+    val voiceNeedsDecoder = stringResource(Res.string.chat_notice_voice_needs_ffmpeg)
     val nothingWaiting = stringResource(Res.string.chat_notice_nothing_waiting)
     val noticeScope = rememberCoroutineScope()
     LaunchedEffect(notice) {
@@ -505,7 +507,12 @@ fun ChatScreen(
         // Preserve the actual reading position and remember a turn still running while away.
         viewModel.markLooked()
     }
-    LifecycleEventEffect(Lifecycle.Event.ON_START) { viewModel.onScreen(true) }
+    LifecycleEventEffect(Lifecycle.Event.ON_START) {
+        viewModel.onScreen(true)
+        // The way back in sight is the only moment a chat that missed live events asks again: a socket that
+        // never reported a drop leaves the connection Connected, so no attach catches up on its own.
+        viewModel.resync()
+    }
     // A room replacing the chat takes it off screen without a stop; a reply read aloud stops with it, but not
     // with a turn of the phone.
     DisposableEffect(viewModel) {
@@ -530,7 +537,12 @@ fun ChatScreen(
                 // The goal may have been cleared since the menu offered it; an empty sheet would stay up.
                 ChatRequest.OpenControl -> controlOpen = viewModel.state.value.control != null
                 // `/voice` and the like on the desktop, which has no voice yet: say so, as a silent no-op reads as broken.
-                ChatRequest.StartVoice -> if (hasVoice) startVoiceChat(false) else notice = noDesktopVoice
+                // A voice chat answers aloud, so it also needs spoken replies; a call and dictation don't.
+                ChatRequest.StartVoice -> when {
+                    hasSpeechPlayback -> startVoiceChat(false)
+                    hasVoice -> notice = voiceNeedsDecoder
+                    else -> notice = noDesktopVoice
+                }
                 ChatRequest.StartCall -> if (hasVoice) startVoiceChat(true) else notice = noDesktopVoice
                 ChatRequest.StartDictation -> if (hasVoice) toggleDictation() else notice = noDesktopDictation
                 ChatRequest.FocusComposer -> focusComposer++
@@ -1101,7 +1113,7 @@ internal fun ChatView(
                                     onReadLatest = onReadLatest,
                                     reading = readAloud.key,
                                     // The voice chat and dictation have the speaker and the microphone.
-                                    canReadAloud = hasVoice && !voiceOn && !dictation.active,
+                                    canReadAloud = hasSpeechPlayback && !voiceOn && !dictation.active,
                                     found = found,
                                 )
                             }
@@ -1758,7 +1770,7 @@ private fun Greeting(
                         enabled = connected && !dictation.transcribing,
                     )
                 }
-                if (hasVoice) StartPill(Lucide.AudioLines, stringResource(Res.string.chat_voice_chat), onClick = onVoiceChat, enabled = connected)
+                if (hasSpeechPlayback) StartPill(Lucide.AudioLines, stringResource(Res.string.chat_voice_chat), onClick = onVoiceChat, enabled = connected)
             }
         }
     }
@@ -3968,7 +3980,7 @@ private fun Composer(
                         }
                         if (showMic(dictation)) Snug { DictationButton(dictation, onClick = onDictate, enabled = connected) }
                         // Voice chat waits for the task to end, so while one runs its place goes to the ways to send.
-                        if (hasVoice && !state.running) Snug { VoiceChatButton(onClick = onVoiceChat, enabled = connected && !dictation.active) }
+                        if (hasSpeechPlayback && !state.running) Snug { VoiceChatButton(onClick = onVoiceChat, enabled = connected && !dictation.active) }
                         // Stop is on the live task card above; a message typed meanwhile is queued or steers the task.
                         if (state.running && hasText && !editing) {
                             if (command) {
@@ -4109,7 +4121,7 @@ private fun FoldedComposer(
         }
         if (showMic(dictation)) Snug { DictationButton(dictation, onClick = onDictate, enabled = connected) }
         // Stop is on the live task card above, so this stays voice chat, which waits for the task to end.
-        if (hasVoice) Snug { VoiceChatButton(onClick = onVoiceChat, enabled = connected && !dictation.active && !state.running) }
+        if (hasSpeechPlayback) Snug { VoiceChatButton(onClick = onVoiceChat, enabled = connected && !dictation.active && !state.running) }
     }
 }
 

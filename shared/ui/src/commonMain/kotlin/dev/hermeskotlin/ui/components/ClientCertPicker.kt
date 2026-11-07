@@ -2,14 +2,15 @@ package dev.hermeskotlin.ui.components
 
 import androidx.compose.runtime.Composable
 
-/** The system certificate picker behind the client-certificate rows. Results arrive in [rememberClientCertPicker]'s callback. */
+/** The platform certificate picker behind the client-certificate rows. Results arrive in [rememberClientCertPicker]'s callback. */
 interface ClientCertPicker {
+    val available: Boolean get() = true
     fun pick()
 }
 
 /**
- * Remembers the system picker for a client certificate for [host]:[port], which only hints the picker at
- * which certificate to offer. [onPicked] gets the chosen system-store alias, or null when it is dismissed.
+ * Remembers the picker for [host]:[port]. Android selects a system-store alias; secure Linux builds import
+ * an encrypted PKCS#12 identity selected by hostname, like Android. A cancelled picker does not replace a selection.
  */
 @Composable
 expect fun rememberClientCertPicker(
@@ -17,3 +18,7 @@ expect fun rememberClientCertPicker(
     port: Int,
     onPicked: (String?) -> Unit,
 ): ClientCertPicker
+
+/** Whether this build can select or securely import a client identity. */
+@Composable
+expect fun clientCertificatesAvailable(): Boolean

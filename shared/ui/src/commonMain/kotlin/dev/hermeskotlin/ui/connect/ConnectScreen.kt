@@ -21,8 +21,10 @@ import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -163,7 +165,16 @@ internal fun ConnectView(
 ) {
     val result = state.result
     val parsed = GatewayUrl.parseOrNull(url.text.toString())
-    val picker = rememberClientCertPicker(parsed?.host, parsed?.port ?: -1, onPicked = { it?.let(cert.onPick) })
+    // A certificate is picked for a host: typing a path or fixing a typo elsewhere keeps the picker (and an import
+    // under way), and a pick that finishes after the host changed isn't applied to the new one.
+    val host = parsed?.takeIf { !isDesktop || it.value.startsWith("https://") }?.host
+    val port = parsed?.port ?: -1
+    val currentTarget by rememberUpdatedState(host to port)
+    val picker = key(host, port) {
+        rememberClientCertPicker(host, port, onPicked = { alias ->
+            if (alias != null && currentTarget == (host to port)) cert.onPick(alias)
+        })
+    }
     ScreenScaffold {
         ScreenHeader(
             icon = if (onCancel == null) null else Lucide.PlugZap,
@@ -232,8 +243,7 @@ internal fun ConnectView(
             HelpRow(Lucide.KeyRound, stringResource(Res.string.connect_behind_access), accessOpen) { accessOpen = !accessOpen }
             if (accessOpen) AccessTokenFields(access, state.accessError, test)
 
-            // Client certificates come from Android's system store; the desktop has none to pick from yet.
-            if (!isDesktop) {
+            if (picker.available) {
                 var certOpen by rememberSaveable { mutableStateOf(false) }
                 LaunchedEffect(result) {
                     if (result is ProbeResult.ClientCertRequired) certOpen = true
@@ -386,7 +396,7 @@ private fun AccessTokenFields(access: AccessToken, error: AccessTokenProblem?, o
     }
 }
 
-/** A client certificate to present to this address, picked from the system store for proxies that ask for one. */
+/** A client certificate selected for the proxy at this address. */
 @Composable
 private fun ClientCertFields(cert: ClientCert, demanded: Boolean, onPick: () -> Unit) {
     Column(Modifier.padding(start = 4.dp, end = 4.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -395,13 +405,13 @@ private fun ClientCertFields(cert: ClientCert, demanded: Boolean, onPick: () -> 
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 StatusDot(Status.Ok, cert.alias)
                 Button(
-                    text = stringResource(Res.string.connect_forget),
+                    text = stringResource(if (isDesktop) Res.string.client_cert_clear_selection else Res.string.connect_forget),
                     onClick = cert.onClear,
                     variant = ButtonVariant.Ghost,
                     size = ButtonSize.Small,
                 )
             }
-            Hint(stringResource(Res.string.connect_cert_kept))
+            Hint(stringResource(if (isDesktop) Res.string.connect_cert_kept_desktop else Res.string.connect_cert_kept))
         } else {
             Button(
                 text = stringResource(Res.string.connect_pick_cert),

@@ -52,6 +52,7 @@ android-targetSdk = "36"
 android-minSdk = "26"
 
 [libraries]
+pdfbox = { module = "org.apache.pdfbox:pdfbox", version = "3.0.8" }
 markdown-parser = { module = "org.jetbrains:markdown", version.ref = "markdown-parser" }
 jsoup = { module = "org.jsoup:jsoup", version.ref = "jsoup" }
 # Compose Multiplatform

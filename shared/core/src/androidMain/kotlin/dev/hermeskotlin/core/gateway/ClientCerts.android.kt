@@ -2,6 +2,7 @@ package dev.hermeskotlin.core.gateway
 
 import android.content.Context
 import android.security.KeyChain
+import dev.hermeskotlin.core.storage.KeyValueStore
 import io.ktor.client.engine.HttpClientEngine
 import io.ktor.client.engine.okhttp.OkHttp
 import okhttp3.ConnectionPool
@@ -108,7 +109,7 @@ internal class MtlsKeyManager(
  * a connection or resuming a session made with the old one (or none). A connection in use at that moment, such
  * as an open `/api/ws` socket or a call still running, keeps its certificate until it closes.
  */
-internal actual fun mtlsEngine(certs: ClientCertAliases, gateways: GatewayRepository): HttpClientEngine {
+internal actual fun mtlsEngine(certs: ClientCertAliases, gateways: GatewayRepository, store: KeyValueStore): HttpClientEngine {
     val keyManager = MtlsKeyManager(
         resolveAlias = { host -> clientCertAliasFor(host, certs, gateways.list.value.gateways) },
         // MtlsAppContext is read here, on the handshake thread, not at engine-construction time: the engine is

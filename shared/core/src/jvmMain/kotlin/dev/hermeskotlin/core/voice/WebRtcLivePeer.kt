@@ -15,15 +15,21 @@ import dev.onvoid.webrtc.RTCOfferOptions
 import dev.onvoid.webrtc.RTCPeerConnection
 import dev.onvoid.webrtc.RTCPeerConnectionState
 import dev.onvoid.webrtc.RTCRtpReceiver
+import dev.onvoid.webrtc.RTCRtpSender
 import dev.onvoid.webrtc.RTCRtpTransceiver
 import dev.onvoid.webrtc.RTCRtpTransceiverInit
 import dev.onvoid.webrtc.RTCSdpType
 import dev.onvoid.webrtc.RTCSessionDescription
+import dev.onvoid.webrtc.RTCStatsType
 import dev.onvoid.webrtc.SetSessionDescriptionObserver
 import dev.onvoid.webrtc.media.MediaStream
 import dev.onvoid.webrtc.media.MediaType
+import dev.onvoid.webrtc.media.MediaDevices
 import dev.onvoid.webrtc.media.audio.AudioDeviceModule
 import dev.onvoid.webrtc.media.audio.AudioLayer
+import dev.onvoid.webrtc.media.audio.AudioOptions
+import dev.onvoid.webrtc.media.audio.AudioTrack
+import dev.onvoid.webrtc.media.audio.AudioTrackSource
 import java.nio.ByteBuffer
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentLinkedQueue
@@ -38,8 +44,8 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
 
-/** Native signaling only; real media stays disabled until the full-duplex integration. */
-internal class WebRtcLivePeer(private val events: LivePeerEvents) : LivePeer {
+/** One native call owner; dummy audio remains available for transport-only qualification. */
+internal class WebRtcLivePeer(private val events: LivePeerEvents, private val realAudio: Boolean = false) : LiveMediaPeer {
     private val owner = Any()
     private val retired = AtomicBoolean()
     private val initialized = CompletableFuture<Unit>()
@@ -53,12 +59,24 @@ internal class WebRtcLivePeer(private val events: LivePeerEvents) : LivePeer {
     private var peer: RTCPeerConnection? = null
     private var channel: RTCDataChannel? = null
     private var transceiver: RTCRtpTransceiver? = null
+    private var microphone: AudioTrack? = null
+    private var source: AudioTrackSource? = null
+    private var sender: RTCRtpSender? = null
+    private val levels = LiveAudioLevels()
+    private val statsPending = AtomicBoolean()
+    private var lastStatsRequest: Long? = null
     @Volatile private var cleaningThread: Thread? = null
 
     init {
         var failure: Throwable? = null
         try {
-            audio = AudioDeviceModule(AudioLayer.kDummyAudio)
+            audio = AudioDeviceModule(if (realAudio) AudioLayer.kLinuxPulseAudio else AudioLayer.kDummyAudio)
+            if (realAudio) {
+                val capture = MediaDevices.getDefaultAudioCaptureDevice() ?: error("No microphone or speaker is available.")
+                val render = MediaDevices.getDefaultAudioRenderDevice() ?: error("No microphone or speaker is available.")
+                audio!!.setRecordingDevice(capture)
+                audio!!.setPlayoutDevice(render)
+            }
             factory = PeerConnectionFactory(audio)
             peer = factory!!.createPeerConnection(RTCConfiguration().apply { iceServers = emptyList() }, object : PeerConnectionObserver {
                 override fun onIceCandidate(candidate: RTCIceCandidate) = Unit
@@ -77,9 +95,16 @@ internal class WebRtcLivePeer(private val events: LivePeerEvents) : LivePeer {
                 override fun onTrack(track: RTCRtpTransceiver) = callback { track.dispose() }
                 override fun onAddTrack(receiver: RTCRtpReceiver, streams: Array<out MediaStream>) = callback { receiver.dispose() }
             }) ?: error("Couldn't create the call connection.")
-            peer!!.setAudioRecording(false)
-            peer!!.setAudioPlayout(false)
-            transceiver = peer!!.addTransceiver(MediaType.AUDIO, RTCRtpTransceiverInit())
+            peer!!.setAudioRecording(realAudio)
+            peer!!.setAudioPlayout(realAudio)
+            if (realAudio) {
+                // The factory's audio engine processes captured and rendered audio together for AEC.
+                source = factory!!.createAudioSource(AudioOptions().apply {
+                    echoCancellation = true; noiseSuppression = true; autoGainControl = true; highpassFilter = true
+                })
+                microphone = factory!!.createAudioTrack("mic", source!!).apply { isEnabled = false }
+                sender = peer!!.addTrack(microphone!!, listOf("mic"))
+            } else transceiver = peer!!.addTransceiver(MediaType.AUDIO, RTCRtpTransceiverInit())
             val data = peer!!.createDataChannel("oai-events", RTCDataChannelInit()) ?: error("Couldn't create the call event channel.")
             channel = data
             data.registerObserver(object : RTCDataChannelObserver {
@@ -102,7 +127,7 @@ internal class WebRtcLivePeer(private val events: LivePeerEvents) : LivePeer {
         finally { initialized.complete(Unit) }
         failure?.let { primary ->
             try { close() } catch (cleanup: Throwable) { if (cleanup !== primary) primary.addSuppressed(cleanup) }
-            throw IllegalStateException("The call connection isn't available.", primary)
+            throw IllegalStateException(if (realAudio) "The call's microphone or speaker isn't available." else "The call connection isn't available.", primary)
         }
     }
 
@@ -179,6 +204,7 @@ internal class WebRtcLivePeer(private val events: LivePeerEvents) : LivePeer {
 
     private fun retire(failure: Throwable?, notify: Boolean) {
         if (!retired.compareAndSet(false, true)) return
+        levels.close()
         try {
             Dispatchers.IO.dispatch(EmptyCoroutineContext, Runnable { release() })
         } catch (caught: Throwable) { released.complete(caught) }
@@ -199,6 +225,10 @@ internal class WebRtcLivePeer(private val events: LivePeerEvents) : LivePeer {
             synchronized(owner) {
                 attempt { channel?.unregisterObserver() }
                 attempt { channel?.close() }
+                if (realAudio) {
+                    attempt { peer?.setAudioRecording(false) }
+                    attempt { peer?.setAudioPlayout(false) }
+                }
                 // close waits for the signaling callbacks and removes the native observer before returning.
                 attempt { peer?.close() }
                 while (true) {
@@ -207,9 +237,13 @@ internal class WebRtcLivePeer(private val events: LivePeerEvents) : LivePeer {
                 }
                 attempt { channel?.dispose() }
                 attempt { transceiver?.dispose() }
+                attempt { sender?.dispose() }
+                attempt { microphone?.dispose() }
+                attempt { source?.dispose() }
                 attempt { factory?.dispose() }
                 attempt { audio?.dispose() }
                 channel = null; peer = null; transceiver = null; factory = null; audio = null
+                sender = null; microphone = null; source = null
             }
         } catch (caught: Throwable) {
             val primary = failure
@@ -221,6 +255,43 @@ internal class WebRtcLivePeer(private val events: LivePeerEvents) : LivePeer {
     }
 
     override fun retire() { retire(null, false) }
+
+    override fun setMuted(muted: Boolean) {
+        synchronized(owner) {
+            if (!retired.get()) {
+                microphone?.isEnabled = !muted
+                levels.mute(muted)
+            }
+        }
+    }
+    override fun micLevel(): Float { refreshLevels(); return levels.micLevel() }
+    override fun speaking(): Boolean { refreshLevels(); return levels.speaking() }
+
+    private fun refreshLevels() {
+        if (!realAudio || retired.get() || inCallback.get() == true) return
+        var failure: Throwable? = null
+        synchronized(owner) {
+            val time = System.nanoTime()
+            if (retired.get() || lastStatsRequest?.let { time - it < 100_000_000L } == true || !statsPending.compareAndSet(false, true)) return
+            lastStatsRequest = time
+            try {
+                active().getStats { report -> callback {
+                    try {
+                        if (!retired.get()) {
+                            val stats = report.stats.values.filter { it.attributes["kind"] == "audio" }
+                            val mic = stats.firstOrNull { it.type == RTCStatsType.MEDIA_SOURCE }?.attributes?.get("audioLevel") as? Number
+                            val sound = stats.firstOrNull { it.type == RTCStatsType.INBOUND_RTP }?.attributes?.get("audioLevel") as? Number
+                            levels.update(mic?.toDouble(), sound?.toDouble())
+                        }
+                    } finally { statsPending.set(false) }
+                } }
+            } catch (_: Exception) {
+                statsPending.set(false)
+                failure = IllegalStateException("The call couldn't read its audio state.")
+            }
+        }
+        failure?.let { retire(it, true) }
+    }
 
     override fun close() {
         retire()

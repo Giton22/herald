@@ -271,4 +271,20 @@
     <plurals name="settings_sidebar_pages_count">
         <item quantity="other">显示 %1$d 个，共 %2$d 个。</item>
     </plurals>
+    <string name="managed_update_available">此应用的软件源中有可用更新。</string>
+    <string name="managed_update_ready">更新已安装。请在准备好后重启。</string>
+    <string name="managed_update_empty">没有需要安装的更新。</string>
+    <string name="managed_update_cancelled">已取消更新请求。更新可能已经完成，请使用系统更新工具检查。</string>
+    <string name="managed_update_progress">正在更新… %1$d%</string>
+    <string name="managed_update_working">正在处理…</string>
+    <string name="managed_update_denied">系统未允许此次更新。请在隐私设置中允许更新，或使用系统更新工具。</string>
+    <string name="managed_update_system">请使用系统更新工具检查并安装此次更新，包括任何权限变更。</string>
+    <string name="managed_update_uncertain">无法确认更新结果。请先使用系统更新工具检查，再重试。</string>
+    <string name="managed_update_restart_failed">无法确认重启。请完成工作后退出并重新打开 Kyllene。</string>
+    <string name="managed_update_unavailable">此处无法更新应用。请使用系统更新工具。</string>
+    <string name="managed_update_failed">更新失败。请重试或使用系统更新工具。</string>
+    <string name="managed_update_restart">重启</string>
+    <string name="managed_update_restart_title">重启 Kyllene？</string>
+    <string name="managed_update_restart_warning">请结束通话并保存工作。重启将关闭所有窗口，未保存的更改和附件可能会丢失。</string>
+    <string name="managed_update_restart_now">立即重启</string>
 </resources>

@@ -273,4 +273,20 @@
         <item quantity="one">%1$d de %2$d visible.</item>
         <item quantity="other">%1$d de %2$d visibles.</item>
     </plurals>
+    <string name="managed_update_available">Hay una actualización disponible en el origen de software de esta aplicación.</string>
+    <string name="managed_update_ready">Hay una actualización instalada. Reinicia cuando quieras.</string>
+    <string name="managed_update_empty">No había ninguna actualización que instalar.</string>
+    <string name="managed_update_cancelled">Se canceló la solicitud de actualización. Puede que ya haya terminado; compruébalo en las herramientas de actualización del sistema.</string>
+    <string name="managed_update_progress">Actualizando… %1$d %</string>
+    <string name="managed_update_working">Procesando…</string>
+    <string name="managed_update_denied">El sistema no permitió esta actualización. Autoriza las actualizaciones en los ajustes de privacidad o usa las herramientas del sistema.</string>
+    <string name="managed_update_system">Usa las herramientas de actualización del sistema para revisar e instalar esta actualización, incluidos los cambios de permisos.</string>
+    <string name="managed_update_uncertain">Se desconoce el resultado de la actualización. Compruébalo en las herramientas del sistema antes de volver a intentarlo.</string>
+    <string name="managed_update_restart_failed">No se pudo confirmar el reinicio. Termina tu trabajo, cierra Kyllene y vuelve a abrirlo.</string>
+    <string name="managed_update_unavailable">Aquí no están disponibles las actualizaciones de la aplicación. Usa las herramientas de actualización del sistema.</string>
+    <string name="managed_update_failed">La actualización falló. Vuelve a intentarlo o usa las herramientas de actualización del sistema.</string>
+    <string name="managed_update_restart">Reiniciar</string>
+    <string name="managed_update_restart_title">¿Reiniciar Kyllene?</string>
+    <string name="managed_update_restart_warning">Termina las llamadas y guarda tu trabajo. El reinicio cierra todas las ventanas; podrías perder cambios y archivos adjuntos sin guardar.</string>
+    <string name="managed_update_restart_now">Reiniciar ahora</string>
 </resources>

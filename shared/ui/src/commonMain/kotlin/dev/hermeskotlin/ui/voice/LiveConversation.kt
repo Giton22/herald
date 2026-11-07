@@ -302,7 +302,7 @@ internal class LiveConversation(
     private suspend fun answer(id: String, prompt: String, context: String) {
         val sent = session.stopAndSubmit(prompt, voiceLive = VoiceLiveTurn(context)).outcome
         if (sent != SendOutcome.Sent) {
-            speak(id, "Sorry, I couldn't reach Hermes for that request.")
+            speak(id, getString(Res.string.voice_said_unreachable))
             state.update { it.copy(error = session.state.value.error ?: getString(Res.string.voice_error_send_to_hermes)) }
             return
         }
@@ -360,21 +360,22 @@ internal class LiveConversation(
     }
 
     /** Hands the voice the next question or approval [chat] waits on to ask, or says why it can't. */
-    private fun askNext(chat: ChatState) {
+    private suspend fun askNext(chat: ChatState) {
         val request = chat.inputRequests.firstOrNull { VoiceAnswers.canAsk(it) && it.id !in announced } ?: return
         // From a locked phone an approval isn't taken; it's asked once the phone is unlocked.
         if (request is InputRequest.Approval && lock.locked()) {
-            if (request.id !in heldBack) speakAside("Hermes needs your approval. Unlock the phone, and I'll ask you for it.")
+            if (request.id !in heldBack) speakAside(getString(Res.string.voice_said_unlock_for_approval))
             heldBack += request.id
             return
         }
         announced += request.id
         // Several questions at once are too many to take by ear.
-        val prompt = askPrompt(request) ?: return speakAside("Hermes has a few questions for you. They're waiting in the chat.")
+        val prompt = askPrompt(request) ?: return speakAside(getString(Res.string.voice_said_questions_in_chat))
         if (!steered) send(LiveCommands.instructions(nextId("steer"), ASKING_INSTRUCTIONS))
         steered = true
         heard.clear()
         asking = request
+        // Kept in English with the question it leads into: VoiceAnswers asks and understands answers in English only.
         speakAside("Hermes needs an answer before it goes on. $prompt")
     }
 

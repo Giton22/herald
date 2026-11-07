@@ -79,6 +79,7 @@
     <string name="chat_pdf_locked">Está protegido por senha. Salve ou compartilhe com um app que peça a senha.</string>
     <string name="chat_pdf_broken">Não dá para ler como PDF: pode estar danificado ou incompleto. Salvar baixa o arquivo como está.</string>
     <string name="chat_pdf_no_room">O telefone não tem espaço para abrir isso agora. Salve ou compartilhe.</string>
+    <string name="chat_pdf_desktop_limit">Este PDF excede os limites do visualizador do desktop. Salve-o para abrir em outro app.</string>
 
     <string name="chat_widget_not_html">Este arquivo não é texto HTML.</string>
     <string name="chat_widget_too_big">Este widget passa do limite de prévia de 512 KB.</string>
@@ -457,6 +458,7 @@
     <string name="chat_notice_dictation_mic">O ditado precisa do microfone. Permita nas configurações do Android.</string>
     <string name="chat_notice_no_desktop_voice">A conversa por voz ainda não está no desktop.</string>
     <string name="chat_notice_no_desktop_dictation">O ditado ainda não está no desktop.</string>
+    <string name="chat_notice_voice_needs_ffmpeg">O chat de voz precisa do ffmpeg em /usr/bin/ffmpeg para falar as respostas. Instale-o e inicie o chat de voz de novo.</string>
     <string name="chat_notice_nothing_waiting">Nada pendente</string>
     <string name="chat_notice_adopted">Você adotou %1$s</string>
     <string name="chat_notice_prompt_not_sent">O prompt não foi enviado: o Kyllene não conseguiu acessar o Gateway. Ele está na caixa de texto.</string>

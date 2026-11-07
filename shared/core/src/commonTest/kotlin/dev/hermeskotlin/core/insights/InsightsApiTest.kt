@@ -5,6 +5,8 @@ import dev.hermeskotlin.core.network.ApiResult
 import dev.hermeskotlin.core.network.createHttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
+import io.ktor.client.plugins.HttpTimeoutCapability
+import io.ktor.client.plugins.HttpTimeoutConfig
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
@@ -12,6 +14,7 @@ import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertNotNull
 
 class InsightsApiTest {
 
@@ -50,6 +53,25 @@ class InsightsApiTest {
         assertEquals("grok-4.7", report.byModel.single().model)
         assertEquals(65, report.topSkills.single().count)
         assertEquals(815, report.tools.single().count)
+    }
+
+    @Test
+    fun aLongerPeriodMayBeSilentLongerThanTheEnginesReadTimeout() = runTest {
+        val timeouts = mutableMapOf<String?, HttpTimeoutConfig?>()
+        val api = InsightsApi(createHttpClient(MockEngine { request ->
+            timeouts[request.url.parameters["days"]] = request.getCapabilityOrNull(HttpTimeoutCapability)
+            respond(body, HttpStatusCode.OK, json)
+        }))
+
+        for (days in listOf(7, 30, 90)) api.usage(url, days, null)
+
+        // The gateway sends nothing until the report is done: the socket may stay silent as long as the request runs.
+        val waits = listOf("7", "30", "90").map { days ->
+            val timeout = assertNotNull(timeouts[days], days)
+            assertEquals(timeout.requestTimeoutMillis, timeout.socketTimeoutMillis, days)
+            assertNotNull(timeout.requestTimeoutMillis, days)
+        }
+        assertEquals(listOf(15_000L, 45_000L, 100_000L), waits)
     }
 
     @Test

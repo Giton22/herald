@@ -273,4 +273,20 @@
         <item quantity="one">%1$d of %2$d shown.</item>
         <item quantity="other">%1$d of %2$d shown.</item>
     </plurals>
+    <string name="managed_update_available">An update is available from this app’s software source.</string>
+    <string name="managed_update_ready">An update is installed. Restart when you are ready.</string>
+    <string name="managed_update_empty">There was no update to install.</string>
+    <string name="managed_update_cancelled">Update request canceled. It may already have finished; check your system’s update tools.</string>
+    <string name="managed_update_progress">Updating… %1$d%</string>
+    <string name="managed_update_working">Working…</string>
+    <string name="managed_update_denied">Your system didn’t allow this update. Allow updates in privacy settings or use its update tools.</string>
+    <string name="managed_update_system">Use your system’s update tools to review and install this update, including any permission changes.</string>
+    <string name="managed_update_uncertain">The update’s outcome is unknown. Check your system’s update tools before trying again.</string>
+    <string name="managed_update_restart_failed">Restart could not be confirmed. Finish your work, then quit and reopen Kyllene.</string>
+    <string name="managed_update_unavailable">App updates are unavailable here. Use your system’s update tools.</string>
+    <string name="managed_update_failed">The update failed. Try again or use your system’s update tools.</string>
+    <string name="managed_update_restart">Restart</string>
+    <string name="managed_update_restart_title">Restart Kyllene?</string>
+    <string name="managed_update_restart_warning">Finish calls and save your work. Restart closes all windows; unsaved changes and attachments may be lost.</string>
+    <string name="managed_update_restart_now">Restart now</string>
 </resources>
