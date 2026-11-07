@@ -457,6 +457,7 @@
     <string name="chat_notice_dictation_mic">Diktieren braucht das Mikrofon. Erlaube es in den Android-Einstellungen.</string>
     <string name="chat_notice_no_desktop_voice">Sprachchat gibt es auf dem Desktop noch nicht.</string>
     <string name="chat_notice_no_desktop_dictation">Diktieren gibt es auf dem Desktop noch nicht.</string>
+    <string name="chat_notice_voice_needs_ffmpeg">Der Sprachchat braucht ffmpeg unter /usr/bin/ffmpeg, um seine Antworten zu sprechen. Installiere es und starte den Sprachchat dann erneut.</string>
     <string name="chat_notice_nothing_waiting">Nichts wartet</string>
     <string name="chat_notice_adopted">%1$s adoptiert</string>
     <string name="chat_notice_prompt_not_sent">Der Prompt wurde nicht gesendet: Kyllene hat das Gateway nicht erreicht. Er steht im Eingabefeld.</string>

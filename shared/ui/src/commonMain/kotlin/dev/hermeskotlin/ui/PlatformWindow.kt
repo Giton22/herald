@@ -82,8 +82,11 @@ private fun Modifier.smoothEdge(color: Color, shape: Shape): Modifier = drawWith
 
 private const val EDGE_WEIGHT = 1.35f
 
-/** Voice controls need recording and playback; desktop controls stay off until both are available. */
-internal val hasVoice: Boolean get() = !isDesktop
+/** Voice controls are available only where recording and live calls are implemented. */
+internal expect val hasVoice: Boolean
+
+/** Whether spoken replies can play: a voice chat answers aloud, and Read aloud speaks a reply. Implies [hasVoice]. */
+internal expect val hasSpeechPlayback: Boolean
 
 /** Room under a page's list: a phone's keeps its last row clear of the thumb's reach; a desktop's needs only a margin. */
 internal val PageFoot: Dp get() = if (isDesktop) 24.dp else 96.dp
