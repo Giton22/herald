@@ -257,4 +257,20 @@
         <item quantity="one">%1$d de %2$d visível.</item>
         <item quantity="other">%1$d de %2$d visíveis.</item>
     </plurals>
+    <string name="managed_update_available">Uma atualização está disponível na fonte de software deste aplicativo.</string>
+    <string name="managed_update_ready">Uma atualização está instalada. Reinicie quando estiver pronto.</string>
+    <string name="managed_update_empty">Não havia atualização para instalar.</string>
+    <string name="managed_update_cancelled">A solicitação de atualização foi cancelada. Ela pode já ter terminado; confira nas ferramentas de atualização do sistema.</string>
+    <string name="managed_update_progress">Atualizando… %1$d%</string>
+    <string name="managed_update_working">Processando…</string>
+    <string name="managed_update_denied">O sistema não permitiu esta atualização. Autorize atualizações nas configurações de privacidade ou use as ferramentas do sistema.</string>
+    <string name="managed_update_system">Use as ferramentas de atualização do sistema para revisar e instalar esta atualização, incluindo alterações de permissões.</string>
+    <string name="managed_update_uncertain">O resultado da atualização é desconhecido. Confira nas ferramentas do sistema antes de tentar novamente.</string>
+    <string name="managed_update_restart_failed">Não foi possível confirmar a reinicialização. Termine seu trabalho, feche o Kyllene e abra-o novamente.</string>
+    <string name="managed_update_unavailable">As atualizações do aplicativo não estão disponíveis aqui. Use as ferramentas de atualização do sistema.</string>
+    <string name="managed_update_failed">A atualização falhou. Tente novamente ou use as ferramentas de atualização do sistema.</string>
+    <string name="managed_update_restart">Reiniciar</string>
+    <string name="managed_update_restart_title">Reiniciar o Kyllene?</string>
+    <string name="managed_update_restart_warning">Encerre as chamadas e salve seu trabalho. Reiniciar fecha todas as janelas; alterações e anexos não salvos podem ser perdidos.</string>
+    <string name="managed_update_restart_now">Reiniciar agora</string>
 </resources>

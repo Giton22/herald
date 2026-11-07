@@ -257,4 +257,20 @@
         <item quantity="one">%1$d von %2$d sichtbar.</item>
         <item quantity="other">%1$d von %2$d sichtbar.</item>
     </plurals>
+    <string name="managed_update_available">Eine Aktualisierung ist über die Softwarequelle dieser App verfügbar.</string>
+    <string name="managed_update_ready">Eine Aktualisierung ist installiert. Starte neu, wenn du bereit bist.</string>
+    <string name="managed_update_empty">Es gab keine Aktualisierung zu installieren.</string>
+    <string name="managed_update_cancelled">Die Aktualisierung wurde abgebrochen. Sie könnte bereits abgeschlossen sein; prüfe dies in der Aktualisierungsverwaltung des Systems.</string>
+    <string name="managed_update_progress">Aktualisierung… %1$d %</string>
+    <string name="managed_update_working">Wird verarbeitet…</string>
+    <string name="managed_update_denied">Das System hat diese Aktualisierung nicht erlaubt. Erlaube sie in den Datenschutzeinstellungen oder nutze die Aktualisierungsverwaltung des Systems.</string>
+    <string name="managed_update_system">Prüfe und installiere diese Aktualisierung einschließlich möglicher Berechtigungsänderungen über die Aktualisierungsverwaltung des Systems.</string>
+    <string name="managed_update_uncertain">Das Ergebnis der Aktualisierung ist unbekannt. Prüfe es vor einem erneuten Versuch in der Aktualisierungsverwaltung des Systems.</string>
+    <string name="managed_update_restart_failed">Der Neustart konnte nicht bestätigt werden. Beende deine Arbeit, schließe Kyllene und öffne es erneut.</string>
+    <string name="managed_update_unavailable">App-Aktualisierungen sind hier nicht verfügbar. Nutze die Aktualisierungsverwaltung des Systems.</string>
+    <string name="managed_update_failed">Die Aktualisierung ist fehlgeschlagen. Versuche es erneut oder nutze die Aktualisierungsverwaltung des Systems.</string>
+    <string name="managed_update_restart">Neu starten</string>
+    <string name="managed_update_restart_title">Kyllene neu starten?</string>
+    <string name="managed_update_restart_warning">Beende Anrufe und speichere deine Arbeit. Der Neustart schließt alle Fenster; ungespeicherte Änderungen und Anhänge können verloren gehen.</string>
+    <string name="managed_update_restart_now">Jetzt neu starten</string>
 </resources>

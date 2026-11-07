@@ -6,11 +6,21 @@ not extract a DEB or use host Java. Its identity, `app.kyllene.Kyllene.Devel`, i
 separate from other installations. The stable app is `app.kyllene.Kyllene`, after
 the project's domain, kyllene.app.
 
-A Flatpak doesn't update itself from GitHub releases: `flatpak update` and software
-centres take new versions from the remote it was installed from. A bundle installed
-with `flatpak install build/kyllene.flatpak` has no remote and never updates. The
-app's own update check is off in this build (it sets no `-PreleasesRepo`), and it
-should stay off.
+Flatpak updates come from the installed app's signed remote, through the Flatpak
+update portal (version 2 or newer), software centres or `flatpak update`.
+With update checking enabled, the app offers **Update** when the portal reports a
+new commit. Polling can be delayed; silence does not mean the app is up to date.
+The banner shows operation progress; 100% alone does not confirm installation.
+Completion offers a separate **Restart**, with a warning to finish calls and save
+work first. Restart can be deferred. Saved profiles, drafts and settings remain
+in the same app identity; unsaved work and active calls do not migrate.
+Denial and failure stay in the app. Updates requiring new permissions need system
+software tools. There is no GitHub download or browser fallback inside Flatpak.
+A standalone bundle without an origin cannot obtain updates through the portal.
+
+Portal wire tests require Linux and `dbus-daemon`; state tests are portable.
+Run `./gradlew :desktopApp:jvmTest --tests '*FlatpakUpdate*Test'`; Windows/macOS
+contributors can use the Ubuntu workflow for the Linux-only cases.
 
 Each release also carries the stable app as a bundle,
 `kyllene-desktop-<version>_x86_64.flatpak`, for a manual install. The release
