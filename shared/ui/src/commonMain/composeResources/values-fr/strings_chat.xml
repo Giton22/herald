@@ -79,6 +79,7 @@
     <string name="chat_pdf_locked">Il est protégé par un mot de passe. Enregistrez-le, ou partagez-le avec une app qui le demande.</string>
     <string name="chat_pdf_broken">Il ne se lit pas comme un PDF : il est peut-être endommagé ou incomplet. Enregistrer récupère le fichier tel quel.</string>
     <string name="chat_pdf_no_room">Le téléphone n’a pas la place de l’ouvrir pour l’instant. Enregistrez-le ou partagez-le plutôt.</string>
+    <string name="chat_pdf_desktop_limit">Ce PDF dépasse les limites de la visionneuse de bureau. Enregistrez-le pour l’ouvrir ailleurs.</string>
 
     <string name="chat_widget_not_html">Ce fichier n’est pas du texte HTML.</string>
     <string name="chat_widget_too_big">Ce widget dépasse la limite d’aperçu de 512 Ko.</string>

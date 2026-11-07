@@ -79,6 +79,7 @@
     <string name="chat_pdf_locked">Jelszóval védett. Mentsd el, vagy oszd meg egy alkalmazással, amely bekéri a jelszót.</string>
     <string name="chat_pdf_broken">PDF-ként nem olvasható: lehet, hogy sérült vagy hiányos. A Mentés a fájlt úgy tölti le, ahogy van.</string>
     <string name="chat_pdf_no_room">A telefonon most nincs elég hely a megnyitáshoz. Mentsd el vagy oszd meg.</string>
+    <string name="chat_pdf_desktop_limit">Ez a PDF túllépi az asztali megjelenítő korlátait. Mentsd el, és nyisd meg máshol.</string>
 
     <string name="chat_widget_not_html">Ez a fájl nem HTML-szöveg.</string>
     <string name="chat_widget_too_big">Ez a widget túllépi az 512 KB-os előnézeti korlátot.</string>
