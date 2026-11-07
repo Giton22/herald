@@ -475,7 +475,7 @@ Decided on 2026-10-27 (§7, decisions 2 and 3, and §4.4).
   - On a 144-wide screen, the ring screen stacks its lines.
   - The ringtone is played only where the speaker API exists (emery, flint, gabbro). Touch (emery, gabbro) and the glance are guarded by the SDK's API macros.
   - Checked on the emulators for basalt, diorite, chalk, gabbro and emery. Long header titles are cut short on chalk's narrow top.
-- (2) CI has a `pebble` job: `pipx install pebble-tool==5.0.40`, `pebble sdk install latest`, then `pebble build`, uploading `pebbleApp.pbw`. Installing the SDK only prints its terms; it asks nothing. The same recipe was run from scratch, with a clean home directory and Python 3.12. The release job builds the watchapp at the tag's version, without any pre-release suffix, and attaches `kyllene-pebble-$v.pbw` and its SHA-256. `UpdateChecker` only offers `.apk` files; a test makes sure a `.pbw` is never offered.
+- (2) CI has a `pebble` job: `pipx install pebble-tool==5.0.40`, `pebble sdk install 4.33.1` (pinned since 4.44 came out and fails to install with that tool), then `pebble build`, uploading `pebbleApp.pbw`. Installing the SDK only prints its terms; it asks nothing. The same recipe was run from scratch, with a clean home directory and Python 3.12. The release job builds the watchapp at the tag's version, without any pre-release suffix, and attaches `kyllene-pebble-$v.pbw` and its SHA-256. `UpdateChecker` only offers `.apk` files; a test makes sure a `.pbw` is never offered.
 - (3) The README and ROADMAP cover the Pebble watch.
 - (4) Not done: publishing to the Pebble app store is for the maintainers to decide.
 

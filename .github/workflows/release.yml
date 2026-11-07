@@ -64,7 +64,7 @@ jobs:
       - name: Pebble watchapp
         run: |
           pipx install pebble-tool==5.0.40
-          pebble sdk install latest
+          pebble sdk install 4.33.1
           v="${GITHUB_REF_NAME#v}"
           # A Pebble version is numbers only: no -rc1.
           jq --arg v "${v%%-*}" '.version = $v' pebbleApp/package.json > package.json.tmp

@@ -77,16 +77,17 @@ uv tool install --python 3.13 pebble-tool
 ```
 
 ```bash
-pebble sdk install latest
+pebble sdk install 4.33.1
 ```
 
 ```bash
 pebble build
 ```
 
-`build/pebbleApp.pbw` holds every model. Installing the SDK prints Pebble's
-[developer terms](https://developer.repebble.com/legal/sdk-license/). CI builds the watchapp on every pull request,
-and a release attaches it as `kyllene-pebble-<version>.pbw` (see `.github/workflows`).
+`build/pebbleApp.pbw` holds every model. 4.33.1 is the SDK CI uses; pebble-tool 5.0.40 can't install 4.44.
+Installing the SDK prints Pebble's [developer terms](https://developer.repebble.com/legal/sdk-license/). CI builds
+the watchapp on every pull request, and a release attaches it as `kyllene-pebble-<version>.pbw` (see
+`.github/workflows`).
 
 For Kyllene on the phone to take the watch's messages, its package has to be in `companionApp` in
 `package.json`. `dev.herald.android` and `dev.herald.android.dev` (Kyllene Dev) are.

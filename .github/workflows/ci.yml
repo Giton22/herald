@@ -84,8 +84,9 @@ jobs:
             wearApp/build/reports/lint-results-debug.html
           if-no-files-found: ignore
 
-  # The Pebble watchapp, built with Pebble's own tools. pebble-tool runs on Python 3.13 or older (the runner's is
-  # 3.12); installing the SDK only prints its terms (https://developer.repebble.com/legal/sdk-license/), it asks nothing.
+  # The Pebble watchapp, built with Pebble's own tools. Installing the SDK only prints its terms
+  # (https://developer.repebble.com/legal/sdk-license/), it asks nothing. The SDK is pinned like the tool: a newer
+  # "latest" (4.44) fails to install with pebble-tool 5.0.40, and 4.33.1 is the one the watchapp was tried on.
   pebble:
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -95,7 +96,7 @@ jobs:
       - name: Pebble SDK
         run: |
           pipx install pebble-tool==5.0.40
-          pebble sdk install latest
+          pebble sdk install 4.33.1
 
       - name: Build the watchapp
         working-directory: pebbleApp
