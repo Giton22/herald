@@ -72,6 +72,17 @@
     <string name="wallpaper_strong">Forte</string>
     <string name="settings_projects_as_list">Projetos em lista</string>
     <string name="settings_projects_as_list_detail">Mostra os projetos da lista de conversas como um botão que abre uma lista, em vez de uma fileira de chips que rola para o lado.</string>
+    <string name="settings_sidebar_switch">Seletor de Conversas e Bots</string>
+    <string name="settings_sidebar_switch_detail">O seletor no topo da barra lateral. Desativado, a barra lateral mostra só a visualização que você escolher.</string>
+    <string name="settings_sidebar_view">A barra lateral mostra</string>
+    <string name="settings_sidebar_view_detail">Com o seletor oculto, a barra lateral sempre mostra esta visualização.</string>
+    <string name="settings_sidebar_pages">Páginas da barra lateral</string>
+    <string name="settings_sidebar_pages_intro">Os botões acima das suas conversas na barra lateral, como Agendado e Arquivadas. Ocultar um só remove o botão dele.</string>
+    <string name="settings_sidebar_pages_show">Mostrar botões das páginas</string>
+    <string name="settings_sidebar_pages_show_detail">Desativado, a barra lateral não tem nenhum deles e começa pelas suas conversas.</string>
+    <string name="settings_sidebar_pages_each">Páginas</string>
+    <string name="settings_sidebar_pages_off">Ocultas.</string>
+    <string name="settings_sidebar_pages_all">Todas visíveis.</string>
     <string name="settings_running_send">Com uma resposta em andamento, Enviar…</string>
     <string name="settings_running_send_detail">%1$s. Segure Enviar para escolher outro jeito para uma mensagem.</string>
     <string name="running_send_steer">Adiciona à resposta em andamento</string>
@@ -82,6 +93,8 @@
     <string name="running_send_stop_and_send_label">Parar e enviar</string>
     <string name="settings_start_instruction">Instrução inicial</string>
     <string name="settings_start_instruction_none">Nenhuma. Diga algo primeiro a cada nova conversa, como manter as respostas curtas.</string>
+    <string name="settings_use_last_project">Usar o último projeto</string>
+    <string name="settings_use_last_project_detail">Novas conversas começam no projeto da última que você começou aqui, em cada gateway e perfil.</string>
     <string name="settings_show_reasoning">Mostrar raciocínio</string>
     <string name="settings_show_reasoning_detail">O pensamento do modelo, recolhido acima de cada resposta.</string>
     <string name="settings_show_tool_activity">Mostrar atividade das ferramentas</string>
@@ -201,6 +214,14 @@
     <string name="settings_quick_entry">Entrada rápida</string>
     <string name="settings_quick_entry_detail">%1$s em qualquer app abre uma caixinha para perguntar ao Hermes, em uma nova conversa ou na aberta. Por enquanto só no Windows.</string>
     <string name="settings_quick_entry_taken">Outro app está usando essas teclas agora, então a entrada rápida não pode abrir.</string>
+    <string name="settings_quick_entry_detail_portal">Um atalho da área de trabalho abre, em qualquer app, uma caixinha para perguntar ao Hermes, em uma nova conversa ou na aberta.</string>
+    <string name="settings_quick_entry_off">Sua área de trabalho pergunta qual atalho usar quando isto está ativado.</string>
+    <string name="settings_quick_entry_binding">Escolha um atalho na janela de permissão da sua área de trabalho.</string>
+    <string name="settings_quick_entry_bound">Atalho da área de trabalho: %1$s.</string>
+    <string name="settings_quick_entry_desktop_choice">escolhido pela sua área de trabalho</string>
+    <string name="settings_quick_entry_unassigned">Sua área de trabalho não atribuiu nenhuma tecla. Escolha uma nas configurações de atalhos dela.</string>
+    <string name="settings_quick_entry_declined">Nenhum atalho da área de trabalho foi concedido. Desative e ative a entrada rápida para tentar de novo.</string>
+    <string name="settings_quick_entry_unavailable">O portal de atalhos globais desta área de trabalho não está disponível.</string>
     <string name="settings_zoom">Zoom</string>
     <string name="settings_zoom_detail">%1$d%. %2$s e %3$s mudam o zoom em qualquer lugar; %4$s volta para 100%.</string>
     <string name="settings_zoom_smaller">Menor</string>
@@ -232,4 +253,24 @@
         <item quantity="one">%1$d ferramenta ativada.</item>
         <item quantity="other">%1$d ferramentas ativadas.</item>
     </plurals>
+    <plurals name="settings_sidebar_pages_count">
+        <item quantity="one">%1$d de %2$d visível.</item>
+        <item quantity="other">%1$d de %2$d visíveis.</item>
+    </plurals>
+    <string name="managed_update_available">Uma atualização está disponível na fonte de software deste aplicativo.</string>
+    <string name="managed_update_ready">Uma atualização está instalada. Reinicie quando estiver pronto.</string>
+    <string name="managed_update_empty">Não havia atualização para instalar.</string>
+    <string name="managed_update_cancelled">A solicitação de atualização foi cancelada. Ela pode já ter terminado; confira nas ferramentas de atualização do sistema.</string>
+    <string name="managed_update_progress">Atualizando… %1$d%</string>
+    <string name="managed_update_working">Processando…</string>
+    <string name="managed_update_denied">O sistema não permitiu esta atualização. Autorize atualizações nas configurações de privacidade ou use as ferramentas do sistema.</string>
+    <string name="managed_update_system">Use as ferramentas de atualização do sistema para revisar e instalar esta atualização, incluindo alterações de permissões.</string>
+    <string name="managed_update_uncertain">O resultado da atualização é desconhecido. Confira nas ferramentas do sistema antes de tentar novamente.</string>
+    <string name="managed_update_restart_failed">Não foi possível confirmar a reinicialização. Termine seu trabalho, feche o Kyllene e abra-o novamente.</string>
+    <string name="managed_update_unavailable">As atualizações do aplicativo não estão disponíveis aqui. Use as ferramentas de atualização do sistema.</string>
+    <string name="managed_update_failed">A atualização falhou. Tente novamente ou use as ferramentas de atualização do sistema.</string>
+    <string name="managed_update_restart">Reiniciar</string>
+    <string name="managed_update_restart_title">Reiniciar o Kyllene?</string>
+    <string name="managed_update_restart_warning">Encerre as chamadas e salve seu trabalho. Reiniciar fecha todas as janelas; alterações e anexos não salvos podem ser perdidos.</string>
+    <string name="managed_update_restart_now">Reiniciar agora</string>
 </resources>

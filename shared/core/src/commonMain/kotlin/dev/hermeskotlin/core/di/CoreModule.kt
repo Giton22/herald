@@ -86,7 +86,7 @@ val coreModule = module {
     single { NativeTokens(get()) }
     single { ClientCertAliases() }
     // One engine for the REST calls and the /api/ws upgrade, presenting each gateway's client certificate.
-    single { createHttpClient(engine = mtlsEngine(get(), get()), cookies = get<PersistentCookiesStorage>(), access = get(), bearer = get()) }
+    single { createHttpClient(engine = mtlsEngine(get(), get(), get()), cookies = get<PersistentCookiesStorage>(), access = get(), bearer = get()) }
     single { GatewayProbe(get()) }
     single {
         val client = get<HttpClient>()

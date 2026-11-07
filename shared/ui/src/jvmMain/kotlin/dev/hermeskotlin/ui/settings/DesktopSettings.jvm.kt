@@ -4,8 +4,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.ImageBitmap
 import dev.hermeskotlin.core.phone.PhoneTool
-import dev.hermeskotlin.ui.resources.*
-import org.jetbrains.compose.resources.stringResource
+import dev.hermeskotlin.ui.resources.Res
+import dev.hermeskotlin.ui.resources.phone_need_android
 
 /** The desktop keeps the one icon its installer gives it. */
 @Composable
@@ -25,13 +25,10 @@ actual fun deviceHasScreenLock(): Boolean = false
 
 /** The phone tools are the phone's: on the desktop each one says so. */
 @Composable
-actual fun rememberPhoneToolAccess(): PhoneToolAccess {
-    val needsPhone = stringResource(Res.string.desktop_phone_tools_need_phone)
-    return remember(needsPhone) { DesktopPhoneToolAccess(needsPhone) }
-}
+actual fun rememberPhoneToolAccess(): PhoneToolAccess = remember {
+    object : PhoneToolAccess {
+        override fun missing(tool: PhoneTool) = Res.string.phone_need_android
 
-private class DesktopPhoneToolAccess(private val needsPhone: String) : PhoneToolAccess {
-    override fun missing(tool: PhoneTool) = needsPhone
-
-    override fun request(tool: PhoneTool) = Unit
+        override fun request(tool: PhoneTool) = Unit
+    }
 }

@@ -108,7 +108,7 @@ import dev.hermeskotlin.core.config.ConfigCatalog
 import dev.hermeskotlin.core.config.ConfigControl
 import dev.hermeskotlin.core.config.ConfigEntry
 import dev.hermeskotlin.core.config.ConfigSection
-import dev.hermeskotlin.core.config.NOT_SET
+import dev.hermeskotlin.core.config.ConfigSummary
 import dev.hermeskotlin.core.config.editText
 import dev.hermeskotlin.core.config.parseConfigInput
 import dev.hermeskotlin.core.config.summary
@@ -255,7 +255,7 @@ internal fun ConfigView(
                     TwoPaneConfig(state, pane, schema, values, query, actions, onEntry, title = title, note = note, onBack = onBack)
                 } else Column(Modifier.fillMaxSize()) {
                 when (view) {
-                    is ConfigPlace.Section -> SubpageHeader(view.section.label, onBack = { actions.back() }, subtitle = sectionNote(view.section))
+                    is ConfigPlace.Section -> SubpageHeader(sectionLabel(view.section), onBack = { actions.back() }, subtitle = sectionNote(view.section))
                     ConfigPlace.AllSettings -> SubpageHeader(stringResource(Res.string.sessions_config_all), onBack = { actions.back() }, subtitle = stringResource(Res.string.sessions_config_all_detail))
                     else -> SubpageHeader(title, onBack = onBack, subtitle = note ?: stringResource(Res.string.sessions_config_detail)) {
                         IconButton(Lucide.FileCode, contentDescription = stringResource(Res.string.sessions_config_edit_yaml), onClick = { actions.open(ConfigPlace.Yaml) })
@@ -325,7 +325,8 @@ private fun Overview(
     val schema = state.schema ?: return
     val values = state.values ?: return
     val typed = query.text.toString()
-    val results = remember(typed, schema, values) { ConfigCatalog.search(typed, schema, values) }
+    val shown = shownLabels()
+    val results = remember(typed, schema, values, shown) { ConfigCatalog.search(typed, schema, values, shown) }
     val sections = remember(schema, values) { ConfigCatalog.sections.map { it to ConfigCatalog.entries(it, schema, values).size }.filter { it.second > 0 } }
     PageList {
         if (withSearch) item(key = "search") {
@@ -356,7 +357,7 @@ private fun Overview(
         } else {
             item(key = "sections") {
                 NavCard(sections) { (section, count) ->
-                    NavRow(sectionIcon(section.id), section.label, pluralStringResource(Res.plurals.sessions_config_settings, count, count)) { actions.open(ConfigPlace.Section(section)) }
+                    NavRow(sectionIcon(section.id), sectionLabel(section), pluralStringResource(Res.plurals.sessions_config_settings, count, count)) { actions.open(ConfigPlace.Section(section)) }
                 }
             }
             item(key = "more") {
@@ -396,7 +397,7 @@ private fun Categories(schema: ConfigSchema, onOpen: (ConfigSection) -> Unit) {
     PageList {
         item(key = "categories") {
             NavCard(categories) { (section, count) ->
-                NavRow(icon = null, title = section.label, detail = pluralStringResource(Res.plurals.sessions_config_settings, count, count)) { onOpen(section) }
+                NavRow(icon = null, title = sectionLabel(section), detail = pluralStringResource(Res.plurals.sessions_config_settings, count, count)) { onOpen(section) }
             }
         }
     }
@@ -462,7 +463,7 @@ private fun TwoPaneConfig(
                 )
                 Column(Modifier.weight(1f).verticalScrollWithBar().arrowFocus()) {
                     sections.forEach { (section, count) ->
-                        PaneRow(sectionIcon(section.id), section.label, count, selected = typed.isBlank() && !allSettings && picked == section) {
+                        PaneRow(sectionIcon(section.id), sectionLabel(section), count, selected = typed.isBlank() && !allSettings && picked == section) {
                             query.clearText()
                             allSettings = false
                             picked = section
@@ -675,7 +676,7 @@ private fun EntryRow(entry: ConfigEntry, saving: Boolean, showKey: Boolean, onCl
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(entry.label, style = Theme[typography][body], color = Theme[colors][text])
+            Text(entryLabel(entry), style = Theme[typography][body], color = Theme[colors][text])
             if (showKey) {
                 Text(entry.key, style = Theme[typography][code].copy(fontSize = 11.5.sp), color = Theme[colors][textTertiary], maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
@@ -685,9 +686,9 @@ private fun EntryRow(entry: ConfigEntry, saving: Boolean, showKey: Boolean, onCl
             if (!toggle) {
                 val summary = entry.summary()
                 Text(
-                    summary,
+                    summaryText(summary),
                     style = Theme[typography][code].copy(fontSize = 12.5.sp, fontWeight = FontWeight.Medium),
-                    color = if (summary == NOT_SET) Theme[colors][textTertiary] else Theme[colors][accentText],
+                    color = if (summary == ConfigSummary.NotSet) Theme[colors][textTertiary] else Theme[colors][accentText],
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.padding(top = 2.dp),
@@ -725,7 +726,7 @@ internal fun ChoiceSheet(entry: ConfigEntry?, onDismiss: () -> Unit, onPick: (Co
         if (e == null || control == null) return@BottomSheet
         // Null is "not set", like "".
         val current = (e.value as? JsonPrimitive)?.contentOrNull.orEmpty()
-        SheetHeader(e.label, e.description)
+        SheetHeader(entryLabel(e), e.description)
         if (control.searchable) {
             TextField(
                 state = search,
@@ -741,7 +742,7 @@ internal fun ChoiceSheet(entry: ConfigEntry?, onDismiss: () -> Unit, onPick: (Co
         ScrollbarBox { listState ->
             LazyColumn(Modifier.fillMaxWidth().heightIn(max = 420.dp), state = listState) {
                 items(options, key = { "o-$it" }) { option ->
-                    OptionRow(if (option.isEmpty()) NOT_SET else option, selected = option == current, mono = option.isNotEmpty()) { onPick(e, option) }
+                    OptionRow(if (option.isEmpty()) stringResource(Res.string.config_not_set) else option, selected = option == current, mono = option.isNotEmpty()) { onPick(e, option) }
                 }
                 if (control.other) {
                     item(key = "other") { OptionRow(stringResource(Res.string.sessions_config_other), selected = false, mono = false) { onOther(e) } }
@@ -800,7 +801,7 @@ private fun EditDialog(entry: ConfigEntry?, onDismiss: () -> Unit, onSave: (Conf
     Dialog(
         visible = entry != null,
         onDismissRequest = onDismiss,
-        title = e.label,
+        title = entryLabel(e),
         message = when (e.control) {
             ConfigControl.Lines -> listOfNotNull(e.description, stringResource(Res.string.sessions_config_one_per_line)).joinToString(" ")
             else -> e.description
@@ -812,7 +813,7 @@ private fun EditDialog(entry: ConfigEntry?, onDismiss: () -> Unit, onSave: (Conf
     ) {
         TextField(
             state = input,
-            placeholder = NOT_SET,
+            placeholder = stringResource(Res.string.config_not_set),
             singleLine = !multiline,
             maxLines = 10,
             error = error,

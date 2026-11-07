@@ -48,6 +48,9 @@ import dev.hermeskotlin.core.chat.DraftStart
 import dev.hermeskotlin.core.settings.AppSettings
 import dev.hermeskotlin.core.settings.SettingsStore
 import dev.hermeskotlin.core.storage.appDataDir
+import dev.hermeskotlin.ui.update.LocalManagedUpdateOffer
+import dev.hermeskotlin.ui.update.ManagedUpdateOffer
+import dev.hermeskotlin.ui.update.ManagedUpdateState
 import dev.hermeskotlin.core.storage.desktopStorageFolder
 import dev.hermeskotlin.core.storage.prepareDesktopStorage
 import dev.hermeskotlin.core.storage.startDesktopStorageFresh
@@ -88,10 +91,20 @@ private const val TITLE = "Kyllene"
 /** ⌘ stands where Ctrl does elsewhere. */
 private val mac = System.getProperty("os.name").orEmpty().startsWith("Mac")
 
+/**
+ * macOS's own dialogs (+ attach, Export's Save) stay light Aqua unless told otherwise, whatever the screens show:
+ * they follow the system's appearance instead. AWT reads this once as it starts, so it's set before anything else.
+ * Kyllene's own theme can't be read that early: it's in storage that may first ask to be unlocked, with a dialog.
+ */
+internal fun followSystemAppearance(osName: String?) {
+    if (osName.orEmpty().startsWith("Mac")) System.setProperty("apple.awt.application.appearance", "system")
+}
+
 /** A chat in a window of its own; [raise] goes up when it's asked for again. */
 private data class PoppedChat(val target: ChatTarget, val key: Int, val raise: Int = 0)
 
 fun main(args: Array<String>) {
+    followSystemAppearance(System.getProperty("os.name"))
     // An error that ends the app ends the process too: Compose exits only when the app closes normally, and the
     // gateway's socket would otherwise keep Herald running with no window, its tray icon and the one-Herald lock
     // still held, so the next launch could only ask it to come forward. What went wrong goes to crash.log.
@@ -104,7 +117,9 @@ fun main(args: Array<String>) {
     // A `herald://` link Windows started this launch with: a notification's, or one from a browser.
     val launchLink = args.firstOrNull { it.startsWith("${AppLink.DESKTOP_SCHEME}:", ignoreCase = true) }
     // A second launch brings the running Herald forward, with its link, instead of opening another.
-    val instance = SingleInstance.claim(appDataDir, launchLink) ?: exitProcess(0)
+    val flatpak = inFlatpak
+    val restartWait = if (flatpak && args.contentEquals(arrayOf("--restart"))) 30_000L else 0L
+    val instance = SingleInstance.claim(appDataDir, launchLink, restartWait) ?: exitProcess(if (restartWait > 0) 1 else 0)
     val koin = startKoin {
         modules(sharedModules + desktopModule)
         if (!unlockDesktopStorage(
@@ -152,6 +167,17 @@ fun main(args: Array<String>) {
         }
 
         val scope = rememberCoroutineScope()
+        val updates = remember {
+            if (flatpak) FlatpakUpdateController(scope, open = { FlatpakUpdatePortal.open(onEvent = it) },
+                onRestartAccepted = { exitApplication() }) else null
+        }
+        val updateState = updates?.state?.collectAsState()?.value
+        LaunchedEffect(updates, settings.checkForUpdates) { updates?.setEnabled(settings.checkForUpdates) }
+        DisposableEffect(updates) { onDispose { updates?.close() } }
+        val managedUpdate = updates?.let { controller ->
+            ManagedUpdateOffer(updateState ?: ManagedUpdateState(), onUpdate = { controller.update() },
+                onCancel = controller::cancel, onRestart = controller::restart, onDismiss = controller::dismiss)
+        }
         val host = remember { koin.get<ChatHost>() }
 
         /**
@@ -230,12 +256,19 @@ fun main(args: Array<String>) {
             }
         }
         LaunchedEffect(Unit) { DesktopNotifier(koin.get(), settingsStore, focused, post).start(this) }
-        // Ctrl+Shift+Space from any app, while the setting is on.
+        // The global shortcut from any app, while the setting is on.
         DisposableEffect(settings.quickEntry) {
-            val hotkey = if (settings.quickEntry) GlobalHotkey.register { SwingUtilities.invokeLater { quickOpen = true } } else null
+            var disposed = false
+            // Turning it on starts a request at once, so the row says so rather than "when this is on" next to an on switch.
+            QuickEntryHotkey.status = if (System.getProperty("os.name") == "Linux") {
+                QuickEntryHotkey.Status(if (settings.quickEntry) QuickEntryHotkey.State.Binding else QuickEntryHotkey.State.Off)
+            } else null
+            val hotkey = if (settings.quickEntry) GlobalHotkey.register(onStatus = { status ->
+                SwingUtilities.invokeLater { if (!disposed) QuickEntryHotkey.status = status }
+            }) { SwingUtilities.invokeLater { if (!disposed) quickOpen = true } } else null
             // Off where Windows has none for us (another platform) is no news; held by another app, Settings says so.
             QuickEntryHotkey.taken = settings.quickEntry && hotkey == null && System.getProperty("os.name").orEmpty().startsWith("Windows")
-            onDispose { hotkey?.unregister() }
+            onDispose { disposed = true; hotkey?.unregister() }
         }
 
         Tray(
@@ -321,12 +354,14 @@ fun main(args: Array<String>) {
                     }
                 }
                 Box(Modifier.fillMaxSize().keepFocusHeld(focusHeld)) {
-                    CompositionLocalProvider(LocalUpdateInstaller provides DesktopUpdater) {
+                    CompositionLocalProvider(LocalUpdateInstaller provides DesktopUpdater, LocalManagedUpdateOffer provides managedUpdate) {
                         App(
                             appVersion = System.getProperty("herald.version"),
                             releasesRepo = System.getProperty("herald.releasesRepo"),
                             onDarkTheme = { titleBar?.dark(it) },
                             titleBar = titleBar?.forScreens(),
+                            // Signed out of a gateway, or left for another: its chats' windows close, calls and all.
+                            onSessionEnded = { url -> chatWindows.removeAll { it.target.gateway.url == url } },
                         )
                     }
                 }
@@ -370,6 +405,6 @@ fun main(args: Array<String>) {
         )
     }
     // The windows are gone; Chromium's helper processes go with the app, not after it.
-    Jcef.shutdown()
+    try { Jcef.shutdown() } finally { instance.close() }
     exitProcess(0)
 }

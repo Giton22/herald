@@ -4,12 +4,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.ImageBitmap
 import dev.hermeskotlin.core.phone.PhoneTool
+import dev.hermeskotlin.ui.resources.Res
+import dev.hermeskotlin.ui.resources.phone_need_android
 
 /** The phone tools are Android's (SMS, calls, contacts and the like): none of them works on iOS. */
 @Composable
 actual fun rememberPhoneToolAccess(): PhoneToolAccess = remember {
     object : PhoneToolAccess {
-        override fun missing(tool: PhoneTool): String = "Not available on iOS."
+        override fun missing(tool: PhoneTool) = Res.string.phone_need_android
 
         override fun request(tool: PhoneTool) {}
     }

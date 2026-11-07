@@ -4,8 +4,8 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
 
-internal const val PROFILE_CHANGED = "Phone profile changed. Please try again."
-internal const val NOTHING_HEARD = "I didn't hear anything."
+internal val PROFILE_CHANGED = WatchLine.Res(R.string.wear_profile_changed)
+internal val NOTHING_HEARD = WatchLine.Res(R.string.wear_nothing_heard)
 
 /**
  * One recorded ask, as the talk screen and the assistant session both make it: [listening] shows the recording
@@ -26,8 +26,11 @@ internal suspend fun recordAsk(
     } catch (e: CancellationException) {
         // Left the screen: nothing to tell.
         throw e
+    } catch (e: MicrophoneUnavailableException) {
+        listening.value = Listening(error = WatchLine.Res(R.string.wear_microphone_unavailable))
+        return
     } catch (e: Exception) {
-        listening.value = Listening(error = e.message ?: "Couldn't use the microphone.")
+        listening.value = Listening(error = e.message?.let { WatchLine.Raw(it) } ?: WatchLine.Res(R.string.wear_microphone_failed))
         return
     } finally {
         if (listening.value.recording) listening.value = Listening()

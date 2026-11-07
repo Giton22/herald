@@ -23,6 +23,8 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.key.utf16CodePoint
 import dev.hermeskotlin.ui.chat.ChatTarget
+import dev.hermeskotlin.ui.resources.*
+import org.jetbrains.compose.resources.StringResource
 
 /** A keyboard shortcut of the desktop app, as Hermes Desktop binds them. */
 sealed interface Shortcut {
@@ -166,17 +168,17 @@ sealed interface Shortcut {
     }
 }
 
-/** The pages the sidebar opens in its place. */
-enum class SidebarPage(val label: String) {
-    Chats("Chats"),
-    Bots("Bots"),
-    Inbox("Inbox"),
-    Scheduled("Scheduled"),
-    Archived("Archived chats"),
-    Capabilities("Capabilities"),
-    Config("Config"),
-    Plugins("Plugins"),
-    Insights("Insights"),
+/** The pages the sidebar opens in its place; [label] is the name the palette lists it by. */
+enum class SidebarPage(val label: StringResource) {
+    Chats(Res.string.app_page_chats),
+    Bots(Res.string.app_page_bots),
+    Inbox(Res.string.app_page_inbox),
+    Scheduled(Res.string.app_page_scheduled),
+    Archived(Res.string.app_page_archived),
+    Capabilities(Res.string.app_page_capabilities),
+    Config(Res.string.app_page_config),
+    Plugins(Res.string.plugins_title),
+    Insights(Res.string.app_page_insights),
 }
 
 /** The keys of the shortcuts listed in the palette and on the shortcuts page, as the platform writes them. */
@@ -186,43 +188,46 @@ fun keysLabel(keys: String, mac: Boolean = macKeys): String =
         .replace("Ctrl+Shift+Tab", "⌃⇧Tab").replace("Ctrl+Tab", "⌃Tab")
         .replace("Ctrl+Shift+", "⇧⌘").replace("Ctrl+", "⌘").replace("Alt+", "⌥").replace("Shift+", "⇧")
 
-/** The desktop app's shortcuts, by what they're for, as the shortcuts page lists them. */
-val SHORTCUT_GROUPS: List<Pair<String, List<Pair<String, String>>>> = listOf(
-    "Composer" to listOf(
-        "Send" to "Enter",
-        "New line" to "Shift+Enter",
-        "Queue behind the running reply" to "Ctrl+Enter",
-        "Earlier prompts" to "Up / Down",
-        "Stop the reply" to "Esc",
-        "Focus the composer" to "Ctrl+L",
-        "Pick a model" to "Ctrl+Shift+M",
+/**
+ * The desktop app's shortcuts, by what they're for, as the shortcuts page lists them: what each does, from the
+ * catalogue, and its keys. The keys stay as they are; [keysLabel] writes them the platform's way.
+ */
+val SHORTCUT_GROUPS: List<Pair<StringResource, List<Pair<StringResource, String>>>> = listOf(
+    Res.string.app_keys_composer to listOf(
+        Res.string.app_keys_send to "Enter",
+        Res.string.app_keys_new_line to "Shift+Enter",
+        Res.string.app_keys_queue to "Ctrl+Enter",
+        Res.string.app_keys_earlier_prompts to "Up / Down",
+        Res.string.app_keys_stop to "Esc",
+        Res.string.app_keys_focus_composer to "Ctrl+L",
+        Res.string.app_pick_model to "Ctrl+Shift+M",
     ),
-    "Chats" to listOf(
-        "New chat" to "Ctrl+N",
-        "Next chat" to "Ctrl+Tab",
-        "Previous chat" to "Ctrl+Shift+Tab",
-        "Chat 1 to 9 in the list" to "Ctrl+1…9",
-        "Search chats" to "Ctrl+Shift+F",
-        "Find in this chat" to "Ctrl+F",
-        "Hide or show the open file" to "Ctrl+J",
-        "Files and folders in a prompt" to "@file: / @folder:",
-        "Open in a new window" to "Ctrl+Shift+N",
-        "Open a chat in a new window" to "Ctrl+click",
-        "Pin or unpin a chat" to "Shift+click",
-        "Archive a chat" to "Alt+Shift+click",
-        "Scroll a page" to "PageUp / PageDown",
-        "First or latest message" to "Ctrl+Home / Ctrl+End",
-        "Previous or next chat" to "Alt+Up / Alt+Down",
+    Res.string.app_page_chats to listOf(
+        Res.string.app_new_chat to "Ctrl+N",
+        Res.string.app_keys_next_chat to "Ctrl+Tab",
+        Res.string.app_keys_previous_chat to "Ctrl+Shift+Tab",
+        Res.string.app_keys_chat_in_list to "Ctrl+1…9",
+        Res.string.app_search_chats to "Ctrl+Shift+F",
+        Res.string.app_keys_find_in_chat to "Ctrl+F",
+        Res.string.app_keys_toggle_file to "Ctrl+J",
+        Res.string.app_keys_files_in_prompt to "@file: / @folder:",
+        Res.string.app_new_window to "Ctrl+Shift+N",
+        Res.string.app_keys_chat_new_window to "Ctrl+click",
+        Res.string.app_keys_pin to "Shift+click",
+        Res.string.app_keys_archive to "Alt+Shift+click",
+        Res.string.app_keys_scroll_page to "PageUp / PageDown",
+        Res.string.app_keys_first_latest to "Ctrl+Home / Ctrl+End",
+        Res.string.app_keys_step_chats to "Alt+Up / Alt+Down",
     ),
-    "App" to listOf(
-        "Command palette" to "Ctrl+K",
-        "Settings" to "Ctrl+,",
-        "Show or hide the sidebar" to "Ctrl+B",
-        "Zoom in / out / reset" to "Ctrl+= / Ctrl+- / Ctrl+0",
-        "Save a job or config.yaml" to "Ctrl+S",
-        "Close the window" to "Ctrl+W",
-        "Quick entry from anywhere" to "Ctrl+Shift+Space",
-        "These shortcuts" to "Ctrl+/",
+    Res.string.app_keys_app to listOf(
+        Res.string.app_palette_title to "Ctrl+K",
+        Res.string.common_settings to "Ctrl+,",
+        Res.string.app_keys_sidebar to "Ctrl+B",
+        Res.string.app_keys_zoom to "Ctrl+= / Ctrl+- / Ctrl+0",
+        Res.string.app_keys_save to "Ctrl+S",
+        Res.string.app_keys_close_window to "Ctrl+W",
+        Res.string.app_keys_quick_entry to "Ctrl+Shift+Space",
+        Res.string.app_keys_these to "Ctrl+/",
     ),
 )
 
@@ -271,8 +276,11 @@ class ShortcutBus {
     fun fire(shortcut: Shortcut): Boolean = handlers.asReversed().any { it.enabled && it.take(shortcut) }
 }
 
-/** Whether the quick entry's global keys are held by another app, so Settings can say why they do nothing. */
+/** The desktop shortcut's availability, so Settings can explain permission or keys held by another app. */
 object QuickEntryHotkey {
+    enum class State { Off, Binding, Bound, Unassigned, Declined, Unavailable }
+    data class Status(val state: State, val trigger: String? = null)
+    var status by mutableStateOf<Status?>(null)
     var taken by mutableStateOf(false)
 }
 

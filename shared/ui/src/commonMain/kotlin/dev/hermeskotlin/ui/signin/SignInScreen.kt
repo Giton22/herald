@@ -57,6 +57,8 @@ import dev.hermeskotlin.designsystem.typography
 import dev.hermeskotlin.ui.components.ScreenHeader
 import dev.hermeskotlin.ui.components.ScreenScaffold
 import dev.hermeskotlin.ui.isDesktop
+import dev.hermeskotlin.ui.resources.*
+import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 
 @Composable
@@ -116,11 +118,11 @@ internal fun SignInView(
 
         ScreenHeader(
             icon = Lucide.KeyRound,
-            title = "Sign in",
+            title = stringResource(Res.string.signin_title),
             subtitle = when {
-                !methods.password -> "Sign in to $host in your browser, with the account its dashboard uses."
-                methods.browser -> "Use the dashboard username and password configured on $host, or sign in in your browser."
-                else -> "Use the dashboard username and password configured on $host."
+                !methods.password -> stringResource(Res.string.signin_detail_browser, host)
+                methods.browser -> stringResource(Res.string.signin_detail_both, host)
+                else -> stringResource(Res.string.signin_detail_password, host)
             },
         )
 
@@ -134,16 +136,16 @@ internal fun SignInView(
                 TextField(
                     state = username,
                     focusRequester = usernameFocus,
-                    label = "Username",
+                    label = stringResource(Res.string.signin_username),
                     enabled = !state.signingIn,
                     keyboardOptions = KeyboardOptions(autoCorrectEnabled = false, imeAction = ImeAction.Next),
                 )
                 TextField(
                     state = password,
-                    label = "Password",
+                    label = stringResource(Res.string.signin_password),
                     password = true,
                     enabled = !state.signingIn,
-                    error = state.error.takeUnless { methods.browser },
+                    error = state.error.takeUnless { methods.browser }?.let { signInErrorText(it) },
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
                     onKeyboardAction = { onSignIn() },
                 )
@@ -153,7 +155,7 @@ internal fun SignInView(
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             if (methods.password) {
                 Button(
-                    text = if (state.signingIn && !state.waitingForBrowser) "Signing in…" else "Sign in",
+                    text = stringResource(if (state.signingIn && !state.waitingForBrowser) Res.string.signin_signing_in else Res.string.signin_title),
                     onClick = onSignIn,
                     loading = state.signingIn && !state.waitingForBrowser,
                     enabled = !state.waitingForBrowser,
@@ -165,7 +167,7 @@ internal fun SignInView(
             if (methods.browser) {
                 if (methods.password) OrDivider()
                 Button(
-                    text = if (state.waitingForBrowser) "Waiting for the browser…" else "Sign in with browser",
+                    text = stringResource(if (state.waitingForBrowser) Res.string.signin_waiting_browser else Res.string.signin_with_browser),
                     onClick = onSignInWithBrowser,
                     loading = state.waitingForBrowser,
                     enabled = !state.signingIn,
@@ -176,22 +178,22 @@ internal fun SignInView(
                 )
                 if (state.waitingForBrowser) {
                     Text(
-                        "Finish signing in on the page that opened. Kyllene comes back by itself when you're done.",
+                        stringResource(Res.string.signin_finish_in_browser),
                         style = Theme[typography][bodySmall],
                         color = Theme[colors][textSecondary],
                     )
                     Button(
-                        text = "Cancel",
+                        text = stringResource(Res.string.common_cancel),
                         onClick = onCancelBrowser,
                         variant = ButtonVariant.Ghost,
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
-                state.error?.let { Text(it, style = Theme[typography][bodySmall], color = Theme[colors][danger]) }
+                state.error?.let { Text(signInErrorText(it), style = Theme[typography][bodySmall], color = Theme[colors][danger]) }
             }
 
             Button(
-                text = "Use a different gateway",
+                text = stringResource(Res.string.signin_different_gateway),
                 onClick = onChangeGateway,
                 variant = ButtonVariant.Ghost,
                 leadingIcon = Lucide.ArrowLeft,
@@ -208,13 +210,14 @@ internal fun SignInView(
  */
 @Composable
 private fun GatewayChip(host: String) {
+    val spoken = stringResource(Res.string.signin_gateway_chip, host)
     Row(
         Modifier
             .heightIn(min = 32.dp)
             .background(Theme[colors][surface], CircleShape)
             .border(1.dp, Theme[colors][stroke], CircleShape)
             .padding(start = 6.dp, end = 12.dp)
-            .semantics(mergeDescendants = true) { contentDescription = "Gateway $host" },
+            .semantics(mergeDescendants = true) { contentDescription = spoken },
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -231,13 +234,24 @@ private fun GatewayChip(host: String) {
     }
 }
 
+/** Why the sign-in didn't work, in the app's language; the gateway's and the network's own words as they came. */
+@Composable
+private fun signInErrorText(error: SignInError): String = when (error) {
+    SignInError.MissingFields -> stringResource(Res.string.signin_error_missing)
+    SignInError.WrongCredentials -> stringResource(Res.string.signin_error_wrong)
+    SignInError.Rejected -> stringResource(Res.string.signin_error_rejected)
+    SignInError.RateLimited -> stringResource(Res.string.signin_error_rate_limited)
+    is SignInError.Unreachable -> stringResource(Res.string.signin_error_unreachable, error.message)
+    is SignInError.Gateway -> error.message
+}
+
 /** "or" between two hairlines, between the password and the browser. */
 @Composable
 private fun OrDivider() {
     val line = Theme[colors][stroke]
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.weight(1f).height(1.dp).background(line))
-        Text("or", style = Theme[typography][bodySmall].copy(fontSize = 12.5.sp), color = Theme[colors][textMuted])
+        Text(stringResource(Res.string.signin_or), style = Theme[typography][bodySmall].copy(fontSize = 12.5.sp), color = Theme[colors][textMuted])
         Box(Modifier.weight(1f).height(1.dp).background(line))
     }
 }

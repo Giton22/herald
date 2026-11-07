@@ -17,11 +17,15 @@ import dev.hermeskotlin.core.voice.WebRtcSpeaker
 import dev.hermeskotlin.core.voice.LinuxVoiceRecorder
 import dev.hermeskotlin.core.voice.WebRtcMicrophone
 import dev.hermeskotlin.core.voice.LiveCalls
+import dev.hermeskotlin.core.voice.LinuxLiveCall
+import dev.hermeskotlin.core.voice.WebRtcLivePeer
 import dev.hermeskotlin.core.voice.NoDeviceDictation
 import dev.hermeskotlin.core.voice.NoSpeechPlayer
 import dev.hermeskotlin.core.voice.NoVoiceRecorder
 import dev.hermeskotlin.core.voice.SpeechPlayer
 import dev.hermeskotlin.core.voice.VoiceRecorder
+import dev.hermeskotlin.core.voice.desktopSpeechDecoder
+import dev.hermeskotlin.core.voice.nativeDesktopAudio
 import org.koin.core.module.Module
 import org.koin.dsl.module
 import java.io.File
@@ -33,19 +37,19 @@ actual val platformModule: Module = module {
     single { WallpaperStore(FileBlobFile(File(appDataDir, "wallpaper.jpg")), get()) }
     // Native recording and playback are Linux backends; live calls remain separate.
     single<VoiceRecorder> {
-        if (System.getProperty("os.name") == "Linux" && System.getProperty("os.arch") in setOf("amd64", "x86_64", "aarch64")) {
-            LinuxVoiceRecorder(::WebRtcMicrophone)
-        } else NoVoiceRecorder
+        if (nativeDesktopAudio()) LinuxVoiceRecorder(::WebRtcMicrophone) else NoVoiceRecorder
     }
-    // Decoding needs ffmpeg at the runtime's path: the Flatpak runtime has it, a host install may not.
+    // Decoding needs ffmpeg; voice chat and Read aloud check the same two things (hasSpeechPlayback in shared/ui).
     single<SpeechPlayer> {
-        if (System.getProperty("os.name") == "Linux" && System.getProperty("os.arch") in setOf("amd64", "x86_64", "aarch64") &&
-            File("/usr/bin/ffmpeg").canExecute()) {
-            LinuxSpeechPlayer(FfmpegSpeechDecoder(), ::WebRtcSpeaker)
-        } else NoSpeechPlayer
+        if (nativeDesktopAudio() && desktopSpeechDecoder()) LinuxSpeechPlayer(FfmpegSpeechDecoder(), ::WebRtcSpeaker)
+        else NoSpeechPlayer
     }
     single<DeviceDictation> { NoDeviceDictation }
-    single { LiveCalls { null } }
+    single { LiveCalls {
+        if (nativeDesktopAudio()) {
+            LinuxLiveCall { events -> WebRtcLivePeer(events, realAudio = true) }
+        } else null
+    } }
     single { offlineDatabase(appDataDir) }
     single<Sealer> { KeystoreSealer(get()) }
 }

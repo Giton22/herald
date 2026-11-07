@@ -36,6 +36,8 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withTimeoutOrNull
+import dev.hermeskotlin.ui.resources.*
+import org.jetbrains.compose.resources.getString
 
 /**
  * One GPT-Live call in a chat, Desktop's useVoiceLiveConversation: the voice model owns the microphone and
@@ -114,7 +116,7 @@ internal class LiveConversation(
             throw e
         } catch (e: Exception) {
             call.close()
-            return@coroutineScope e.message ?: "Couldn't start the live call."
+            return@coroutineScope e.message ?: getString(Res.string.voice_error_live_start)
         }
         state.update { it.copy(phase = VoicePhase.Listening) }
         val poll = launch {
@@ -208,7 +210,13 @@ internal class LiveConversation(
                         state.update { it.copy(error = event.message) }
                     }
                     is LiveEvent.Closed -> {
-                        ended.complete(if (event.reason == "closed") "The live call ended." else "The live call ended: ${event.reason}")
+                        ended.complete(
+                            if (event.reason == "closed") {
+                                getString(Res.string.voice_error_live_ended)
+                            } else {
+                                getString(Res.string.voice_error_live_ended_because, event.reason)
+                            },
+                        )
                         break
                     }
                     LiveEvent.Started -> {
@@ -218,7 +226,7 @@ internal class LiveConversation(
                     null -> Unit
                 }
             }
-            ended.complete("The live call dropped.")
+            ended.complete(getString(Res.string.voice_error_live_dropped))
         }
         // A call the agent placed: the voice says why first, once it's up (it drops what comes earlier).
         if (opener != null) {
@@ -294,8 +302,8 @@ internal class LiveConversation(
     private suspend fun answer(id: String, prompt: String, context: String) {
         val sent = session.stopAndSubmit(prompt, voiceLive = VoiceLiveTurn(context)).outcome
         if (sent != SendOutcome.Sent) {
-            speak(id, "Sorry, I couldn't reach Hermes for that request.")
-            state.update { it.copy(error = session.state.value.error ?: "Couldn't send that to Hermes.") }
+            speak(id, getString(Res.string.voice_said_unreachable))
+            state.update { it.copy(error = session.state.value.error ?: getString(Res.string.voice_error_send_to_hermes)) }
             return
         }
         // The prompt just sent. A history reload swaps its key for its stored row's; then it's the last prompt.
@@ -352,21 +360,22 @@ internal class LiveConversation(
     }
 
     /** Hands the voice the next question or approval [chat] waits on to ask, or says why it can't. */
-    private fun askNext(chat: ChatState) {
+    private suspend fun askNext(chat: ChatState) {
         val request = chat.inputRequests.firstOrNull { VoiceAnswers.canAsk(it) && it.id !in announced } ?: return
         // From a locked phone an approval isn't taken; it's asked once the phone is unlocked.
         if (request is InputRequest.Approval && lock.locked()) {
-            if (request.id !in heldBack) speakAside("Hermes needs your approval. Unlock the phone, and I'll ask you for it.")
+            if (request.id !in heldBack) speakAside(getString(Res.string.voice_said_unlock_for_approval))
             heldBack += request.id
             return
         }
         announced += request.id
         // Several questions at once are too many to take by ear.
-        val prompt = askPrompt(request) ?: return speakAside("Hermes has a few questions for you. They're waiting in the chat.")
+        val prompt = askPrompt(request) ?: return speakAside(getString(Res.string.voice_said_questions_in_chat))
         if (!steered) send(LiveCommands.instructions(nextId("steer"), ASKING_INSTRUCTIONS))
         steered = true
         heard.clear()
         asking = request
+        // Kept in English with the question it leads into: VoiceAnswers asks and understands answers in English only.
         speakAside("Hermes needs an answer before it goes on. $prompt")
     }
 
@@ -486,7 +495,7 @@ internal class LiveConversation(
         if (!answered) {
             // Still asking: what's said next is another go at the answer, not a request that stops the turn.
             send(LiveCommands.commentary(nextId("say"), id, "The answer couldn't reach Hermes. Ask the user to say it again."))
-            state.update { it.copy(error = session.state.value.error ?: "Couldn't send the answer.") }
+            state.update { it.copy(error = session.state.value.error ?: getString(Res.string.voice_error_send_answer)) }
             return
         }
         send(LiveCommands.thinking(nextId("think"), id, "Hermes has the answer and carries on."))

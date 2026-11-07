@@ -72,6 +72,17 @@
     <string name="wallpaper_strong">Strong</string>
     <string name="settings_projects_as_list">Projects as a list</string>
     <string name="settings_projects_as_list_detail">Show the chat list’s projects as one button that opens a list, instead of a row of chips that scrolls sideways.</string>
+    <string name="settings_sidebar_switch">Chats and Bots switch</string>
+    <string name="settings_sidebar_switch_detail">The switch at the top of the sidebar. Off, the sidebar shows only the view you pick.</string>
+    <string name="settings_sidebar_view">Sidebar shows</string>
+    <string name="settings_sidebar_view_detail">With the switch hidden, the sidebar always shows this.</string>
+    <string name="settings_sidebar_pages">Sidebar pages</string>
+    <string name="settings_sidebar_pages_intro">The buttons above your chats in the sidebar, such as Scheduled and Archived. Hiding one only removes its button.</string>
+    <string name="settings_sidebar_pages_show">Show page buttons</string>
+    <string name="settings_sidebar_pages_show_detail">Off, the sidebar has none of them and starts with your chats.</string>
+    <string name="settings_sidebar_pages_each">Pages</string>
+    <string name="settings_sidebar_pages_off">Hidden.</string>
+    <string name="settings_sidebar_pages_all">All shown.</string>
     <string name="settings_running_send">While a reply is running, Send…</string>
     <string name="settings_running_send_detail">%1$s. Hold Send to pick another way for one message.</string>
     <string name="running_send_steer">Adds it to the running reply</string>
@@ -82,6 +93,8 @@
     <string name="running_send_stop_and_send_label">Stop &amp; send</string>
     <string name="settings_start_instruction">Starting instruction</string>
     <string name="settings_start_instruction_none">None. Tell each new chat something first, like to keep replies short.</string>
+    <string name="settings_use_last_project">Use last project</string>
+    <string name="settings_use_last_project_detail">Start new chats in the project of the last chat you started here, on each gateway and profile.</string>
     <string name="settings_show_reasoning">Show reasoning</string>
     <string name="settings_show_reasoning_detail">The model’s thinking, collapsed above each reply.</string>
     <string name="settings_show_tool_activity">Show tool activity</string>
@@ -201,6 +214,14 @@
     <string name="settings_quick_entry">Quick entry</string>
     <string name="settings_quick_entry_detail">%1$s from any app opens a small box to ask Hermes, in a new chat or the open one. Windows only for now.</string>
     <string name="settings_quick_entry_taken">Another app has these keys now, so it can’t open.</string>
+    <string name="settings_quick_entry_detail_portal">A desktop shortcut opens a small box from any app to ask Hermes, in a new chat or the open one.</string>
+    <string name="settings_quick_entry_off">Your desktop asks which shortcut to use when this is on.</string>
+    <string name="settings_quick_entry_binding">Choose a shortcut in your desktop’s permission dialog.</string>
+    <string name="settings_quick_entry_bound">Desktop shortcut: %1$s.</string>
+    <string name="settings_quick_entry_desktop_choice">chosen by your desktop</string>
+    <string name="settings_quick_entry_unassigned">Your desktop gave it no key. Pick one in its shortcut settings.</string>
+    <string name="settings_quick_entry_declined">No desktop shortcut was granted. Turn Quick entry off and on to try again.</string>
+    <string name="settings_quick_entry_unavailable">This desktop’s global shortcut portal is unavailable.</string>
     <string name="settings_zoom">Zoom</string>
     <string name="settings_zoom_detail">%1$d%. %2$s and %3$s change it anywhere; %4$s goes back to 100%.</string>
     <string name="settings_zoom_smaller">Smaller</string>
@@ -232,4 +253,24 @@
         <item quantity="one">1 tool on.</item>
         <item quantity="other">%1$d tools on.</item>
     </plurals>
+    <plurals name="settings_sidebar_pages_count">
+        <item quantity="one">%1$d of %2$d shown.</item>
+        <item quantity="other">%1$d of %2$d shown.</item>
+    </plurals>
+    <string name="managed_update_available">An update is available from this app’s software source.</string>
+    <string name="managed_update_ready">An update is installed. Restart when you are ready.</string>
+    <string name="managed_update_empty">There was no update to install.</string>
+    <string name="managed_update_cancelled">Update request canceled. It may already have finished; check your system’s update tools.</string>
+    <string name="managed_update_progress">Updating… %1$d%</string>
+    <string name="managed_update_working">Working…</string>
+    <string name="managed_update_denied">Your system didn’t allow this update. Allow updates in privacy settings or use its update tools.</string>
+    <string name="managed_update_system">Use your system’s update tools to review and install this update, including any permission changes.</string>
+    <string name="managed_update_uncertain">The update’s outcome is unknown. Check your system’s update tools before trying again.</string>
+    <string name="managed_update_restart_failed">Restart could not be confirmed. Finish your work, then quit and reopen Kyllene.</string>
+    <string name="managed_update_unavailable">App updates are unavailable here. Use your system’s update tools.</string>
+    <string name="managed_update_failed">The update failed. Try again or use your system’s update tools.</string>
+    <string name="managed_update_restart">Restart</string>
+    <string name="managed_update_restart_title">Restart Kyllene?</string>
+    <string name="managed_update_restart_warning">Finish calls and save your work. Restart closes all windows; unsaved changes and attachments may be lost.</string>
+    <string name="managed_update_restart_now">Restart now</string>
 </resources>

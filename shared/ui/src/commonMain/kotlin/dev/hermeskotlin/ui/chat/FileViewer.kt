@@ -2,6 +2,7 @@ package dev.hermeskotlin.ui.chat
 
 import dev.hermeskotlin.ui.PlatformBackHandler
 import dev.hermeskotlin.ui.isDesktop
+import dev.hermeskotlin.ui.clearOfWindowControls
 import dev.hermeskotlin.ui.fullScreenDialogProperties
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
@@ -132,7 +133,6 @@ import dev.hermeskotlin.designsystem.warningSoft
 import dev.hermeskotlin.designsystem.well
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -187,6 +187,7 @@ sealed interface FileProblem {
     data object PdfLocked : FileProblem
     data object PdfBroken : FileProblem
     data object PdfNoRoom : FileProblem
+    data object PdfDesktopLimit : FileProblem
     data object WidgetNotHtml : FileProblem
     data object WidgetTooBig : FileProblem
     data object WidgetEmpty : FileProblem
@@ -211,6 +212,7 @@ private fun FileProblem.resource(): Pair<StringResource, String?>? = when (this)
     FileProblem.PdfLocked -> Res.string.chat_pdf_locked to null
     FileProblem.PdfBroken -> Res.string.chat_pdf_broken to null
     FileProblem.PdfNoRoom -> Res.string.chat_pdf_no_room to null
+    FileProblem.PdfDesktopLimit -> Res.string.chat_pdf_desktop_limit to null
     FileProblem.WidgetNotHtml -> Res.string.chat_widget_not_html to null
     FileProblem.WidgetTooBig -> Res.string.chat_widget_too_big to null
     FileProblem.WidgetEmpty -> Res.string.chat_widget_empty to null
@@ -332,9 +334,9 @@ internal fun FileViewerPage(
     onOpenFile: (GatewayFile) -> Unit = {},
     onOpenPicture: (ViewerImage) -> Unit = {},
     pictures: LinkedPictures? = null,
+    openPdf: suspend (ByteArray) -> PdfOpen = rememberPdfOpener(),
 ) {
     val kind = file.kind
-    val openPdf = rememberPdfOpener()
     // A PDF's whole bytes once fetched for its pages, so Save and Share don't fetch them again.
     var fetched by remember(file) { mutableStateOf<ByteArray?>(null) }
     val result by produceState(preset ?: if (kind.previewable) FileLoad.Loading else null, file, preset) {
@@ -349,8 +351,8 @@ internal fun FileViewerPage(
             return@produceState
         }
         fetched = (got as FileDownload.Ready).bytes
-        // Opened past a Back tap, so an open document is never dropped unclosed; it closes with the page.
-        when (val opened = withContext(NonCancellable) { openPdf(got.bytes) }) {
+        // Platform openers own cancellation cleanup; an opened document closes with this page.
+        when (val opened = openPdf(got.bytes)) {
             is PdfOpen.Failed -> value = FileLoad.Failed(opened.problem)
             is PdfOpen.Ready -> {
                 if (!isActive) {
@@ -395,7 +397,8 @@ internal fun FileViewerPage(
 
     Column(Modifier.fillMaxSize().background(Theme[colors][background]).windowInsetsPadding(WindowInsets.safeDrawing)) {
         Row(
-            Modifier.fillMaxWidth().padding(start = 4.dp, end = 8.dp, top = 6.dp, bottom = 12.dp),
+            // Full screen on the desktop it's in the title bar's row: Back and Open in app stay clear of its buttons.
+            Modifier.fillMaxWidth().clearOfWindowControls().padding(start = 4.dp, end = 8.dp, top = 6.dp, bottom = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {

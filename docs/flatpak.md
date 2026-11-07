@@ -6,11 +6,21 @@ not extract a DEB or use host Java. Its identity, `app.kyllene.Kyllene.Devel`, i
 separate from other installations. The stable app is `app.kyllene.Kyllene`, after
 the project's domain, kyllene.app.
 
-A Flatpak doesn't update itself from GitHub releases: `flatpak update` and software
-centres take new versions from the remote it was installed from. A bundle installed
-with `flatpak install build/kyllene.flatpak` has no remote and never updates. The
-app's own update check is off in this build (it sets no `-PreleasesRepo`), and it
-should stay off.
+Flatpak updates come from the installed app's signed remote, through the Flatpak
+update portal (version 2 or newer), software centres or `flatpak update`.
+With update checking enabled, the app offers **Update** when the portal reports a
+new commit. Polling can be delayed; silence does not mean the app is up to date.
+The banner shows operation progress; 100% alone does not confirm installation.
+Completion offers a separate **Restart**, with a warning to finish calls and save
+work first. Restart can be deferred. Saved profiles, drafts and settings remain
+in the same app identity; unsaved work and active calls do not migrate.
+Denial and failure stay in the app. Updates requiring new permissions need system
+software tools. There is no GitHub download or browser fallback inside Flatpak.
+A standalone bundle without an origin cannot obtain updates through the portal.
+
+Portal wire tests require Linux and `dbus-daemon`; state tests are portable.
+Run `./gradlew :desktopApp:jvmTest --tests '*FlatpakUpdate*Test'`; Windows/macOS
+contributors can use the Ubuntu workflow for the Linux-only cases.
 
 Each release also carries the stable app as a bundle,
 `kyllene-desktop-<version>_x86_64.flatpak`, for a manual install. The release
@@ -52,11 +62,37 @@ installed by hand updates from it too.
 - **Storage:** the R2 bucket `kyllene-flatpak` (or the `FLATPAK_R2_BUCKET`
   variable), with the custom domain `flatpak.kyllene.app` and an Object Read & Write
   token in the `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY` secrets.
-- **Tests:** the Linux workflow runs `tests/repo_smoke.sh` on every Flatpak build. It
-  publishes three releases to a local server with a throwaway key, and checks that:
-  - a bundle install and a `.flatpakref` install both update with `flatpak update`;
-  - a commit signed with another key is refused, even when the summary is signed
-    with ours.
+- **Tests:** Linux advisory runs JVM/desktop and portable packaging checks on every PR
+  that touches what the desktop app is built from (Android-only PRs skip it),
+  alongside a tiny repository fixture. Full offline builds and installed-app smoke run
+  for packaging, dependency, desktop entry-point and workflow PRs, relevant master
+  pushes, weekly, and via **Run workflow** on any branch. Ordinary shared UI PRs
+  receive package qualification after merge; Linux remains advisory for Android.
+  The SDK font test stays in the full package job.
+- **Release qualification:** the Flatpak build starts alongside Android. Its bundle
+  is attached only after Android's draft exists and JVM/desktop tests, Flatpak contracts, real installed
+  UI smoke, and repository tests pass. Publication reuses that qualified bundle.
+  Repository tests use the real candidate payload on tags and a tiny fixture on PRs.
+  Two isolated user installations share two signed test releases: bundle and
+  `.flatpakref` both update, then both reject a wrong-key commit and retain the
+  previous commit. The two releases use the same payload; this tests delivery/trust,
+  not application-data migration from a historical version. Temporary keys/origins
+  never appear in the downloadable candidate bundle.
+
+Repository tests require Linux, Flatpak, OSTree, GnuPG and Python 3. They do not
+launch the app, download a runtime, or change the caller's installation. Run
+`timeout 300 sh packaging/flatpak/tests/repo_smoke.sh --fixture`, or replace
+`--fixture` with `BUILD_REPO APP BRANCH` to test a built app payload. Windows/macOS
+contributors can run the Ubuntu workflow instead; direct unsupported invocation
+fails before making changes. Installed UI tests additionally need the SDK/runtime,
+Xvfb, xauth, xdotool, Pillow, the desktop portal and an unlocked test keyring.
+
+Keep all selected jobs green when qualifying a Flatpak; a green fast-check job
+alone is not package qualification. Tagged releases perform their own checks on
+that exact source rather than trusting a potentially skipped advisory run.
+Timing targets (4–7 minutes fast, 12–18 package, 15–20 Flatpak release qualification)
+need hosted measurements; they are not guarantees. JVM and packaging now overlap,
+so runner concurrency can increase even when elapsed time decreases.
 
 Install `org.flatpak.Builder`, `org.freedesktop.Sdk//26.08` and its matching
 runtime in the user installation. From the repository root, build and install:
@@ -157,6 +193,64 @@ attacker replacing the entire profile. Run the Linux storage and migration tests
 with `./gradlew :shared:core:jvmTest --tests '*Linux*StoreTest' --tests '*LinuxStorage*Test'`
 and startup contracts with `./gradlew :desktopApp:jvmTest --tests '*StorageStartupTest'`.
 
+Linux Flatpak push registration uses a per-install UUID, two P-256 key pairs and
+independent random topics from the existing signed/encrypted push protocol. Its
+private keys, pinned gateway and identities awaiting unregistration share the
+encrypted settings store; an unavailable or corrupt identity is preserved and
+reported, never silently replaced. It is not available through plaintext desktop
+stores.
+After an uncertain save, identity reads also stop until the encrypted store is
+reopened, so an earlier unbound or retired identity cannot be registered again.
+
+One identity belongs to one gateway. Retirement clears its keys, topics and pin
+together, retaining the old device ID only for that gateway's later unregistration.
+A subsequent registration creates fresh material. Public gateway keys must be valid
+protocol-version-one P-256 points before they are pinned.
+
+This adds registration storage, not push reception or a background service. The
+desktop Notifications anywhere control remains hidden until receiving is supported.
+The existing authenticated registration coordinator and gateway protocol are reused.
+
+### Gateway client certificates
+
+With encrypted Linux Flatpak storage, the existing Connect and gateway menus can
+import a PKCS#12 (`.p12`/`.pfx`) file for an HTTPS gateway. Choose the file through
+the desktop file chooser, then enter its password in the app. Imports are limited
+to 1 MiB and one RSA or EC private key, with a matching, unexpired client
+certificate and a valid supplied chain. Chain checks are offline: no issuer or
+revocation URLs are fetched, and import does not assert that the gateway trusts it.
+The import password is not saved. Other desktop stores do not offer this import;
+Android continues to use its system certificate picker.
+
+Selection matches Android's hostname-only lookup: a pending pick first, otherwise
+the first saved gateway with an alias for that hostname. URL paths and ports do
+not isolate selections: gateways sharing a hostname cannot independently choose
+different certificates. Both REST requests and WebSocket upgrades use this lookup;
+another hostname, redirects and embedded browsers do not receive the identity.
+Normal server trust and hostname checks remain enabled. The Linux client uses HTTP/1.1
+and pools idle connections. Changing a selection drops the idle ones and the cached
+identity, so the next request handshakes with the new selection. As on Android, a
+request already running keeps its connection, which may be reused once afterwards;
+existing WebSockets retain their original identity until they close or reconnect.
+An imported identity is decrypted once per hostname and reopened after its
+certificate expires.
+
+Clearing a gateway's selection removes its alias; another pending or saved alias
+for the same hostname may still apply. It does not delete imported encrypted keys,
+recover space from cancelled imports, erase backups or revoke an existing TLS connection. Failed/cancelled imports keep the previous selection. Storage failures
+must be resolved before retrying; there is no plaintext import fallback.
+
+Run the JVM core suites with `./gradlew :shared:core:jvmTest --tests '*LinuxClientCertificatesTest' --tests '*LinuxMtlsTest'`.
+The synthetic PKCS#12 fixture contains public test-only keys (password `test-only`);
+it must never be used for a real gateway. UI tests run with
+`./gradlew :shared:ui:jvmTest --tests '*ClientCert*Test'`; headless environments can
+set `JAVA_TOOL_OPTIONS=-Djava.awt.headless=true`. Imports accept regular files, not
+symlinks/devices/pipes, and use interruptible channel reads. The named-pipe rejection
+test requires Linux and `mkfifo` from coreutils; it is explicitly skipped elsewhere.
+The password and error area scrolls in short windows while Cancel and Import remain visible.
+Installed qualification must also exercise the real file chooser, password/cancellation,
+restart and both TLS transports.
+
 ### Microphone backend
 
 Linux has a recorder behind the existing `VoiceRecorder` contract, using the default
@@ -166,8 +260,8 @@ microphone and output devices; it is not a per-recording permission prompt.
 Recording begins only when requested, uses bounded PCM buffering, and releases its
 native device on completion, cancellation or failure. It changes no device defaults
 or system volume and writes no temporary recording files.
-The existing desktop voice UI remains disabled until capability and UI integration;
-this backend alone does not enable dictation, spoken replies or live calls.
+The supported Linux desktop exposes the existing voice controls; device dictation
+remains unavailable and uses the existing gateway fallback.
 Unit tests use synthetic PCM. Installed capture, audio quality and live-provider
 behavior require separate qualification; synthetic frames do not prove them.
 
@@ -178,14 +272,16 @@ native audio backend and default output device. Freedesktop 26.08 supplies
 `/usr/bin/ffmpeg`; encoded replies and raw PCM are decoded through pipes to
 48 kHz mono PCM. Only pipe input and selected audio formats are allowed. The
 codec inherits no environment, opens no temporary media files and needs no new
-sandbox permission. Other Linux distributions need that executable separately.
+sandbox permission. A host install needs that executable at exactly
+`/usr/bin/ffmpeg` (no `PATH` lookup). Without it, dictation and calls still
+work, but voice chat and Read aloud are hidden.
 
 Playback buffers are bounded. Hold emits silence without consuming queued audio;
 cancellation or failure retires the owned codec and output device. No system
 volume, mute or device defaults are changed. Unit tests cover lifecycle and codec
 failures. Installed output, physical audio quality and live-provider behavior
-require separate qualification. This backend does not enable the desktop voice
-UI or live calls; those need their own capability and lifecycle integration.
+require separate qualification. The live-call integration uses the same audio
+backend independently of ordinary spoken playback.
 
 ### Live transport backend
 
@@ -203,12 +299,36 @@ non-cancellable callback code can be forced to finish. Native callbacks schedule
 one owned cleanup operation; channel, peer, factory and device releases share the
 same completion path. Explicit owner close waits for that release.
 
-This stage uses dummy audio and no captured track, with recording and playout off.
-The desktop live-call binding and voice controls remain disabled. Real capture,
-rendering, echo cancellation and capability/UI integration are separate work.
-Local peer SDP/event exchange and cleanup do not qualify provider compatibility,
-physical audio quality or interruption. Unit tests cover the transport boundary;
-optimized installed-runtime and media/provider checks require separate validation.
+Transport-only checks can use dummy audio with recording and playout off. The
+Linux live-call binding instead owns a default microphone/output pair and a local
+track through the native audio engine, with echo cancellation, noise suppression,
+gain control and high-pass filtering requested. That configuration does not prove
+acoustic echo handling or interruption; both need a real device/provider session.
+
+The existing shared voice UI, signaling, captions and call lifecycle are reused.
+Mute disables the outgoing track and clears its displayed level. End/cancellation
+retires the connection and its audio resources. Level reports expire rather than
+leaving a stale microphone or speaking indicator; late reports cannot restore a
+retired call. No system mute, volume or device default is changed. Windows, macOS
+and unsupported Linux architectures retain their unavailable voice capability.
+Local peer exchange and unit tests do not qualify provider or physical audio behavior.
+
+## PDF previews
+
+Desktop file previews draw PDF pages inside the existing viewer, with its scroll
+and zoom controls. Password-protected or damaged documents show an explanation;
+Save remains available. PDFBox runs in one child of the bundled Java runtime per
+open document. Closing the viewer, cancellation, or a 15-second operation deadline
+retires that child. A later render after a cancelled zoom or scroll starts a fresh
+child for the same document; closing the viewer is permanent. Input is limited to 64 MiB and 500 pages; each rendered page is
+limited to eight million pixels and 16,384 pixels on either side. The child has a
+256 MiB Java heap limit, so complex documents can exceed its limits sooner.
+
+This contains parser resource use within the application sandbox; the child is
+not a separate security sandbox. It receives document bytes and returns bounded
+page shapes and raw pixels over private pipes. The preview does not execute PDF
+scripts, follow links or fetch external document content. The JVM regression tests
+use synthetic PDFs and worker failure fixtures, without a gateway or credentials.
 
 ## Advisory CI
 
@@ -249,3 +369,23 @@ runtime available. Screenshots and profiles are not uploaded. Xvfb smoke does
 not qualify KDE focus, context menus, portals other than the Secret portal
 through gnome-keyring, voice or live-provider behavior;
 real Bazzite acceptance remains a separate release gate.
+
+### Quick entry shortcut
+
+With **Settings → Desktop → Quick entry** enabled, Linux asks the desktop's
+GlobalShortcuts portal to bind the existing composer. The portal's permission
+dialog chooses the actual shortcut; Ctrl+Shift+Space is a preference, never a
+forced replacement for another app's keys. Settings shows the granted trigger,
+refusal or unavailable portal. After refusing, turn the setting off and on to
+ask again. When the desktop grants it with no key (KDE does once its dialog is
+closed, and remembers that), Settings says so: pick a key in the desktop's own
+shortcut settings, and the row follows. Outside Flatpak the app names itself to
+the portal as `kyllene-Kyllene`, the .deb's desktop entry; a build run without
+that entry installed gets no shortcut. Disabling it or quitting closes the request/session; a portal restart
+recreates the session. A held key opens once until released.
+
+The shortcut opens the current profile's existing composer and does not send a
+prompt. It needs the app running; launcher actions and login startup are separate.
+Window focus follows the existing runtime/compositor rules. The pinned public
+JBR API cannot consume the portal's activation token, so native Wayland activation
+is not guaranteed. In-app shortcuts remain available without this portal.

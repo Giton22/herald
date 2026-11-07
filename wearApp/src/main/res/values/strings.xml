@@ -1,7 +1,114 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Kyllene</string>
+    <string name="app_name" translatable="false">Kyllene</string>
     <string name="tile_label">Call Hermes</string>
     <string name="tile_description">Talk to Hermes, and see its last reply.</string>
     <string name="complication_label">Call Hermes</string>
+
+    <!-- The tile and the complication -->
+    <string name="wear_call_hermes">Call Hermes</string>
+    <!-- %1$s: who the call goes to, a chat or a bot -->
+    <string name="wear_call_target">Call %1$s</string>
+    <!-- The complication's short text: a single short word -->
+    <string name="wear_call_short">Call</string>
+    <string name="wear_start_call">Start a call</string>
+
+    <!-- The phone, at the top edge -->
+    <string name="wear_phone_connected">Connected</string>
+    <string name="wear_phone_reconnecting">Reconnecting</string>
+    <string name="wear_phone_not_connected">Not connected</string>
+    <string name="wear_phone_not_connected_detail">Your phone isn’t connected.</string>
+    <string name="wear_phone_no_app">Kyllene on your phone didn’t answer. Open it there, or update it.</string>
+    <string name="wear_phone_signed_out">Sign in to Kyllene on your phone first.</string>
+    <string name="wear_phone_unreachable">Kyllene can’t reach your gateway. Check it on your phone.</string>
+    <string name="wear_phone_no_answer">Kyllene on your phone didn’t answer. Try again.</string>
+    <string name="wear_phone_changed">Phone changed. Try again.</string>
+    <string name="wear_phone_unreachable_short">Couldn’t reach your phone.</string>
+    <string name="wear_profile_changed">Phone profile changed. Please try again.</string>
+    <string name="wear_profile_changed_short">Phone profile changed. Try again.</string>
+    <string name="wear_update_for_profiles">Update Kyllene on your phone to use profile-aware calls.</string>
+    <string name="wear_update_for_bots">Update Kyllene on your phone to talk to bots.</string>
+    <string name="wear_update_for_bot_calls">Update Kyllene on your phone to call bots.</string>
+    <string name="wear_call_target_changed">Call target changed. Tap Call again.</string>
+    <string name="wear_default_call_target_changed">Default Call Target changed. Tap Call again.</string>
+
+    <!-- Talking -->
+    <string name="wear_new_chat">New chat</string>
+    <string name="wear_chat">Chat</string>
+    <string name="wear_open_chats">Open chats</string>
+    <string name="wear_done_talking">Done talking</string>
+    <string name="wear_stop">Stop</string>
+    <string name="wear_cancel">Cancel</string>
+    <string name="wear_talk_to_hermes">Talk to Hermes</string>
+    <!-- Read out after the orb's label; %1$d: how full the context is, in percent -->
+    <string name="wear_context_full">, context %1$d%% full</string>
+    <string name="wear_ask_hermes">Ask Hermes</string>
+    <string name="wear_listening">Listening… tap when done</string>
+    <string name="wear_checking_phone">Checking your phone…</string>
+    <string name="wear_tap_to_stop">Tap to stop</string>
+    <string name="wear_something_wrong">Something went wrong.</string>
+    <string name="wear_tap_to_talk">Tap to talk</string>
+    <string name="wear_transcribing">Writing it down…</string>
+    <string name="wear_sending">Sending…</string>
+    <string name="wear_waiting_on_phone">Waiting for you on your phone</string>
+    <string name="wear_thinking">Thinking…</string>
+    <!-- What was said, quoted -->
+    <string name="wear_said">“%1$s”</string>
+    <string name="wear_needs_microphone">Kyllene needs the microphone to hear you.</string>
+    <string name="wear_tap_allow_microphone">Tap to allow the microphone.</string>
+    <string name="wear_nothing_heard">I didn’t hear anything.</string>
+    <string name="wear_microphone_failed">Couldn’t use the microphone.</string>
+    <string name="wear_microphone_unavailable">The microphone isn’t available.</string>
+
+    <!-- Calls -->
+    <string name="wear_mute">Mute</string>
+    <string name="wear_unmute">Unmute</string>
+    <string name="wear_volume">Volume</string>
+    <string name="wear_end_call">End call</string>
+    <string name="wear_decline">Decline</string>
+    <string name="wear_answer">Answer</string>
+    <string name="wear_ring_agent">Calling you</string>
+    <string name="wear_ring_approval">Needs your approval</string>
+    <string name="wear_ring_question">Has a question for you</string>
+    <string name="wear_call_starting">Starting…</string>
+    <string name="wear_call_connecting">Connecting…</string>
+    <string name="wear_call_muted">Muted</string>
+    <!-- %1$s: what Hermes is doing, such as a tool's name -->
+    <string name="wear_call_working">Hermes: %1$s</string>
+    <string name="wear_call_thinking">Hermes is on it…</string>
+    <string name="wear_call_live">Live</string>
+    <string name="wear_call_ended">Call ended</string>
+    <string name="wear_call_ended_detail">The call ended.</string>
+    <string name="wear_call_dropped">The call dropped.</string>
+    <string name="wear_call_start_failed">Couldn’t start the call.</string>
+    <string name="wear_call_no_connect">The call didn’t connect.</string>
+    <string name="wear_call_offer_failed">Couldn’t make the call offer.</string>
+    <string name="wear_call_setup_failed">Couldn’t set up the call.</string>
+    <string name="wear_call_events_failed">Couldn’t open the call’s event channel.</string>
+    <string name="wear_call_refused">The call was refused.</string>
+    <string name="wear_channel_calls_name">Calls for an answer</string>
+    <string name="wear_channel_calls_description">Hermes calls when it needs an approval or an answer, or something can’t wait, if the phone rings for it.</string>
+
+    <!-- Chats and bots -->
+    <string name="wear_chats">Chats</string>
+    <string name="wear_bots">Bots</string>
+    <string name="wear_settings">Settings</string>
+    <string name="wear_no_bots">No bots yet.</string>
+    <string name="wear_no_chats">No chats yet.</string>
+    <!-- How long ago a chat was active, as short as a list allows -->
+    <string name="wear_ago_now">now</string>
+    <string name="wear_ago_minutes">%1$dm</string>
+    <string name="wear_ago_hours">%1$dh</string>
+    <string name="wear_ago_days">%1$dd</string>
+    <string name="wear_ago_weeks">%1$dw</string>
+
+    <!-- Settings -->
+    <string name="wear_talk_live">Talk live</string>
+    <string name="wear_talk_live_detail">As a voice call</string>
+    <string name="wear_read_aloud">Read aloud</string>
+    <string name="wear_read_aloud_detail">Every reply</string>
+    <string name="wear_assistant">Assistant</string>
+    <string name="wear_assistant_set">Kyllene answers the button</string>
+    <string name="wear_assistant_refused">Not set. Tap to try again</string>
+    <string name="wear_assistant_unset">Set Kyllene as assistant</string>
 </resources>

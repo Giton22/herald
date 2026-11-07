@@ -18,3 +18,8 @@ internal actual val macKeys: Boolean = false
 
 @Composable
 internal actual fun PlatformTextContextMenu(content: @Composable () -> Unit) = content()
+
+// No recording, playback or live calls on iOS yet.
+internal actual val hasVoice: Boolean = false
+
+internal actual val hasSpeechPlayback: Boolean = false

@@ -18,6 +18,7 @@ import androidx.compose.foundation.LocalIndication
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import dev.hermeskotlin.ui.clearOfWindowControls
+import dev.hermeskotlin.ui.hasSpeechPlayback
 import dev.hermeskotlin.ui.hasVoice
 import dev.hermeskotlin.ui.windowControlsHeight
 import dev.hermeskotlin.ui.isDesktop
@@ -423,6 +424,8 @@ fun ChatScreen(
     onDismissOtherChat: (OtherChatEvent) -> Unit = {},
     /** Goes to the next chat needing the user; false when none does. Null offers no Next. */
     onNextChat: (() -> Boolean)? = null,
+    /** The projects, profiles and gateways an empty new chat can start in instead, from its greeting. */
+    greetingPlaces: GreetingPlaces? = null,
 ) {
     LaunchedEffect(target) { viewModel.open(target) }
     val transcript = viewModel.transcript.collectAsStateWithLifecycle().value
@@ -474,6 +477,7 @@ fun ChatScreen(
     val dictationNeedsMic = stringResource(Res.string.chat_notice_dictation_mic)
     val noDesktopVoice = stringResource(Res.string.chat_notice_no_desktop_voice)
     val noDesktopDictation = stringResource(Res.string.chat_notice_no_desktop_dictation)
+    val voiceNeedsDecoder = stringResource(Res.string.chat_notice_voice_needs_ffmpeg)
     val nothingWaiting = stringResource(Res.string.chat_notice_nothing_waiting)
     val noticeScope = rememberCoroutineScope()
     LaunchedEffect(notice) {
@@ -503,7 +507,12 @@ fun ChatScreen(
         // Preserve the actual reading position and remember a turn still running while away.
         viewModel.markLooked()
     }
-    LifecycleEventEffect(Lifecycle.Event.ON_START) { viewModel.onScreen(true) }
+    LifecycleEventEffect(Lifecycle.Event.ON_START) {
+        viewModel.onScreen(true)
+        // The way back in sight is the only moment a chat that missed live events asks again: a socket that
+        // never reported a drop leaves the connection Connected, so no attach catches up on its own.
+        viewModel.resync()
+    }
     // A room replacing the chat takes it off screen without a stop; a reply read aloud stops with it, but not
     // with a turn of the phone.
     DisposableEffect(viewModel) {
@@ -528,7 +537,12 @@ fun ChatScreen(
                 // The goal may have been cleared since the menu offered it; an empty sheet would stay up.
                 ChatRequest.OpenControl -> controlOpen = viewModel.state.value.control != null
                 // `/voice` and the like on the desktop, which has no voice yet: say so, as a silent no-op reads as broken.
-                ChatRequest.StartVoice -> if (hasVoice) startVoiceChat(false) else notice = noDesktopVoice
+                // A voice chat answers aloud, so it also needs spoken replies; a call and dictation don't.
+                ChatRequest.StartVoice -> when {
+                    hasSpeechPlayback -> startVoiceChat(false)
+                    hasVoice -> notice = voiceNeedsDecoder
+                    else -> notice = noDesktopVoice
+                }
                 ChatRequest.StartCall -> if (hasVoice) startVoiceChat(true) else notice = noDesktopVoice
                 ChatRequest.StartDictation -> if (hasVoice) toggleDictation() else notice = noDesktopDictation
                 ChatRequest.FocusComposer -> focusComposer++
@@ -604,8 +618,8 @@ fun ChatScreen(
             }
         },
         sprite = viewModel.pets.sprite.collectAsStateWithLifecycle().value,
-        // Re-rolled per conversation, kept while a new chat gets its stored id.
-        placeholder = stringResource(remember(target) { (if (target.storedSessionId == null) NEW_CHAT_PROMPTS else FOLLOW_UP_PROMPTS).random() }),
+        // Re-rolled per conversation, kept while a new chat gets its stored id or moves to another project.
+        placeholder = stringResource(remember(target.copy(cwd = null, draft = null)) { (if (target.storedSessionId == null) NEW_CHAT_PROMPTS else FOLLOW_UP_PROMPTS).random() }),
         notice = notice,
         actions = viewModel,
         widgetFiles = transcript.widgetFiles,
@@ -633,6 +647,9 @@ fun ChatScreen(
         wallpaper = rememberChatWallpaper(),
         place = target.gateway.label,
         profile = target.profile,
+        // Only while nothing has been sent: a stored chat stays where it began.
+        places = greetingPlaces?.takeIf { target.storedSessionId == null && state.storedSessionId == null && target.bot == null },
+        cwd = target.cwd,
         sessionsBadge = sessionsBadge,
         otherChatBanner = otherChatBanner,
         onOpenOtherChat = onOpenOtherChat,
@@ -796,6 +813,10 @@ internal fun ChatView(
     place: String? = null,
     /** The profile the chat runs in; null is the launch profile, shown as "default". */
     profile: String? = null,
+    /** On an empty new chat, where else it can start: picked on its greeting. */
+    places: GreetingPlaces? = null,
+    /** The folder a new chat starts in, named on its greeting; null: no project. */
+    cwd: String? = null,
     sessionsBadge: SessionsBadge = SessionsBadge(),
     otherChatBanner: OtherChatEvent? = null,
     onOpenOtherChat: (OtherChatEvent) -> Unit = {},
@@ -1092,7 +1113,7 @@ internal fun ChatView(
                                     onReadLatest = onReadLatest,
                                     reading = readAloud.key,
                                     // The voice chat and dictation have the speaker and the microphone.
-                                    canReadAloud = hasVoice && !voiceOn && !dictation.active,
+                                    canReadAloud = hasSpeechPlayback && !voiceOn && !dictation.active,
                                     found = found,
                                 )
                             }
@@ -1116,6 +1137,8 @@ internal fun ChatView(
                                 canAttach = attachments.size < OutgoingAttachment.MAX_COUNT,
                                 place = place,
                                 profile = profile,
+                                places = places,
+                                cwd = cwd,
                                 overComposer = centred,
                             )
                         }
@@ -1701,6 +1724,10 @@ private fun Greeting(
     canAttach: Boolean,
     place: String?,
     profile: String?,
+    /** Where the new chat can start instead, picked on it; null while it can't move (it has begun, or is a bot's). */
+    places: GreetingPlaces? = null,
+    /** The folder the new chat starts in; null: no project. */
+    cwd: String? = null,
     /** The composer sits right under it, in the middle: it stands on the composer rather than in its own middle. */
     overComposer: Boolean = false,
 ) {
@@ -1709,25 +1736,27 @@ private fun Greeting(
         Column(Modifier.fillMaxWidth().padding(bottom = if (overComposer) 22.dp else 30.dp), verticalArrangement = Arrangement.spacedBy(22.dp)) {
             AppMark(52.dp)
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                // The question keeps its word order per language; the accent word goes where its placeholder is.
-                val question = stringResource(Res.string.chat_greeting_question, ACCENT_MARK).split(ACCENT_MARK)
-                val accented = stringResource(Res.string.chat_greeting_accent)
-                Text(
-                    remember(accentWord, question, accented) {
-                        buildAnnotatedString {
-                            append(question.first())
-                            withStyle(SpanStyle(color = accentWord)) { append(accented) }
-                            append(question.drop(1).joinToString(""))
-                        }
-                    },
-                    style = Theme[typography][display],
-                    color = Theme[colors][textColor],
-                )
-                Text(
-                    greetingPlace(place, profile).text(),
-                    style = Theme[typography][bodySmall],
-                    color = Theme[colors][textTertiary],
-                )
+                // A chat already set to start in a folder names it even while the projects are still loading (or
+                // couldn't be), so a send never goes somewhere the screen didn't say.
+                if (places != null && (places.hasProjects || cwd != null)) {
+                    ProjectQuestion(places, cwd)
+                } else {
+                    // The question keeps its word order per language; the accent word goes where its placeholder is.
+                    val question = stringResource(Res.string.chat_greeting_question, ACCENT_MARK).split(ACCENT_MARK)
+                    val accented = stringResource(Res.string.chat_greeting_accent)
+                    Text(
+                        remember(accentWord, question, accented) {
+                            buildAnnotatedString {
+                                append(question.first())
+                                withStyle(SpanStyle(color = accentWord)) { append(accented) }
+                                append(question.drop(1).joinToString(""))
+                            }
+                        },
+                        style = Theme[typography][display],
+                        color = Theme[colors][textColor],
+                    )
+                }
+                PlaceLine(places, greetingPlace(place, profile).text())
             }
             // Other ways to begin than typing, named rather than left to the composer's icons.
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1741,7 +1770,7 @@ private fun Greeting(
                         enabled = connected && !dictation.transcribing,
                     )
                 }
-                if (hasVoice) StartPill(Lucide.AudioLines, stringResource(Res.string.chat_voice_chat), onClick = onVoiceChat, enabled = connected)
+                if (hasSpeechPlayback) StartPill(Lucide.AudioLines, stringResource(Res.string.chat_voice_chat), onClick = onVoiceChat, enabled = connected)
             }
         }
     }
@@ -3418,10 +3447,10 @@ internal fun Disclosure(
     }
 }
 
-/** The reply's reasoning, folded; live progress is the dock's to show. */
+/** The reply's reasoning, folded; live progress is the dock's to show. Opened, it stays open when the activity is made again. */
 @Composable
-private fun Reasoning(text: String, streaming: Boolean) {
-    var expanded by remember { mutableStateOf(false) }
+internal fun Reasoning(text: String, streaming: Boolean) {
+    var expanded by rememberSaveable { mutableStateOf(false) }
     Disclosure(
         icon = { UnstyledIcon(Lucide.Brain, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(16.dp)) },
         label = stringResource(Res.string.chat_usage_reasoning),
@@ -3436,10 +3465,13 @@ private fun Reasoning(text: String, streaming: Boolean) {
     }
 }
 
-/** The tools the reply used, folded; the one running now is named above the composer instead. */
+/**
+ * The tools the reply used, folded; the one running now is named above the composer instead. Opened, it stays open
+ * when the activity is made again, as on unfolding a foldable.
+ */
 @Composable
-private fun Tools(tools: List<ToolActivity>, messageKey: String) {
-    var expanded by remember { mutableStateOf(false) }
+internal fun Tools(tools: List<ToolActivity>, messageKey: String) {
+    var expanded by rememberSaveable(messageKey) { mutableStateOf(false) }
     val icons = remember(tools) { tools.map { toolIcon(it.name) }.distinct().take(3) }
     val (ranWords, took) = workedLabel(tools)
     val ran = ranWords.text()
@@ -3492,7 +3524,8 @@ private fun Tools(tools: List<ToolActivity>, messageKey: String) {
                     .padding(12.dp),
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    tools.forEach { ToolRow(it, messageKey) }
+                    // Keyed, so a row opened before the activity was made again is restored by its tool, not its place.
+                    tools.forEach { key(it.id) { ToolRow(it, messageKey) } }
                 }
             }
         }
@@ -3501,10 +3534,11 @@ private fun Tools(tools: List<ToolActivity>, messageKey: String) {
 
 /**
  * A running reply's finished steps, newest last: a check (or a cross) in a soft circle, what was done, and
- * how long it took. The step in hand is on the live task card instead. Only the last few show.
+ * how long it took. The step in hand is on the live task card instead. Only the last few show. One opened stays
+ * open when the activity is made again, as on unfolding a foldable.
  */
 @Composable
-private fun LiveSteps(tools: List<ToolActivity>, messageKey: String) {
+internal fun LiveSteps(tools: List<ToolActivity>, messageKey: String) {
     val done = tools.filterNot { it.running }
     if (done.isEmpty()) return
     val shown = done.takeLast(LIVE_STEPS_SHOWN)
@@ -3526,7 +3560,7 @@ private fun LiveSteps(tools: List<ToolActivity>, messageKey: String) {
 @Composable
 private fun LiveStepRow(tool: ToolActivity, messageKey: String) {
     val step = remember(tool) { toolDone(tool) }
-    var open by remember(tool.id) { mutableStateOf(false) }
+    var open by rememberSaveable(tool.id) { mutableStateOf(false) }
     Row(
         Modifier
             .fillMaxWidth()
@@ -3946,7 +3980,7 @@ private fun Composer(
                         }
                         if (showMic(dictation)) Snug { DictationButton(dictation, onClick = onDictate, enabled = connected) }
                         // Voice chat waits for the task to end, so while one runs its place goes to the ways to send.
-                        if (hasVoice && !state.running) Snug { VoiceChatButton(onClick = onVoiceChat, enabled = connected && !dictation.active) }
+                        if (hasSpeechPlayback && !state.running) Snug { VoiceChatButton(onClick = onVoiceChat, enabled = connected && !dictation.active) }
                         // Stop is on the live task card above; a message typed meanwhile is queued or steers the task.
                         if (state.running && hasText && !editing) {
                             if (command) {
@@ -4087,7 +4121,7 @@ private fun FoldedComposer(
         }
         if (showMic(dictation)) Snug { DictationButton(dictation, onClick = onDictate, enabled = connected) }
         // Stop is on the live task card above, so this stays voice chat, which waits for the task to end.
-        if (hasVoice) Snug { VoiceChatButton(onClick = onVoiceChat, enabled = connected && !dictation.active && !state.running) }
+        if (hasSpeechPlayback) Snug { VoiceChatButton(onClick = onVoiceChat, enabled = connected && !dictation.active && !state.running) }
     }
 }
 

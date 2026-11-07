@@ -105,6 +105,8 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.put
 import java.time.Instant
+import dev.hermeskotlin.ui.resources.*
+import org.jetbrains.compose.resources.stringResource
 
 internal actual val drawsAgentScreens: Boolean = true
 
@@ -166,7 +168,7 @@ internal actual fun AgentScreenSurface(
                     }
                     if (surfaces.isEmpty() && screen.messages.any { "\"deleteSurface\"" in it }) {
                         Text(
-                            "The agent closed this screen.",
+                            stringResource(Res.string.android_screen_closed),
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             style = MaterialTheme.typography.bodySmall,
                         )

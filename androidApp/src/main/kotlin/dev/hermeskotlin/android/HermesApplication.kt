@@ -4,9 +4,11 @@ import android.app.Application
 import android.content.Intent
 import android.content.res.Configuration
 import dev.hermeskotlin.android.notify.BotNotifier
+import dev.hermeskotlin.android.notify.ChatNotifications
 import dev.hermeskotlin.android.notify.ChatNotifier
 import dev.hermeskotlin.android.notify.RoomNotifier
 import dev.hermeskotlin.android.notify.WatchNotifier
+import dev.hermeskotlin.android.phone.PhoneConfirmations
 import dev.hermeskotlin.android.notify.notifyModule
 import dev.hermeskotlin.android.phone.Geofences
 import dev.hermeskotlin.android.push.PushListener
@@ -31,6 +33,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import org.koin.android.ext.android.get
 import org.koin.android.ext.koin.androidContext
+import org.koin.core.context.GlobalContext
 import org.koin.core.context.startKoin
 
 class HermesApplication : Application() {
@@ -79,7 +82,10 @@ class HermesApplication : Application() {
             return
         }
         scope.launch(Dispatchers.Main) {
-            settings.settings.filterNotNull().map { it.language }.distinctUntilChanged().collect { applyAppLanguage(this@HermesApplication, it) }
+            settings.settings.filterNotNull().map { it.language }.distinctUntilChanged().collect {
+                applyAppLanguage(this@HermesApplication, it)
+                renameChannels()
+            }
         }
     }
 
@@ -87,5 +93,14 @@ class HermesApplication : Application() {
         super.onConfigurationChanged(newConfig)
         // A change of the phone's own language resets the process's; the picked one goes back over it.
         if (!systemKeepsAppLanguage) get<SettingsStore>().settings.value?.let { applyAppLanguage(this, it.language) }
+        renameChannels()
+    }
+
+    /** A new language: the notification channels take its names, as Settings › Notifications lists them. */
+    private fun renameChannels() {
+        GlobalContext.getOrNull()?.run {
+            get<ChatNotifications>().createChannels()
+            get<PhoneConfirmations>().createChannel()
+        }
     }
 }

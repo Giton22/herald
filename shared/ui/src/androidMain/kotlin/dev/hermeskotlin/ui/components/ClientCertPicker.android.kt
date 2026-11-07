@@ -37,3 +37,6 @@ private tailrec fun Context.findActivity(): Activity? = when (this) {
     is ContextWrapper -> baseContext.findActivity()
     else -> null
 }
+
+@Composable
+actual fun clientCertificatesAvailable(): Boolean = true

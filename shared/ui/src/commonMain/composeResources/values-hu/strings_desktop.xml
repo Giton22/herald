@@ -1,7 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="desktop_open_link">Link megnyitása</string>
-    <string name="desktop_copy_link">Link másolása</string>
 
     <string name="desktop_attach_photos">Fotók csatolása</string>
     <string name="desktop_attach_files">Fájlok csatolása</string>
@@ -21,8 +19,4 @@
 
     <string name="desktop_pdf_unsupported">A PDF-ek még nem nyílnak meg az asztali alkalmazásban. A fájlt elmentheted.</string>
     <string name="desktop_widgets_unsupported">Az asztali alkalmazás ezen buildjében a widgetek nem jelennek meg.</string>
-    <string name="desktop_phone_tools_need_phone">A telefonos eszközök Android telefonon, a Kyllene-ből működnek.</string>
-
-    <string name="desktop_wallpaper_title">Csevegés háttere</string>
-    <string name="desktop_wallpaper_unreadable">Nem sikerült beolvasni ezt a képet.</string>
 </resources>

@@ -243,6 +243,21 @@ class ConnectViewModelTest {
     }
 
     @Test
+    fun anotherPathOnASavedHostTakesThePickOnTheGatewayThatHostUses() = runTest(dispatcher) {
+        // Certificates are per host: a pending pick here would shadow the saved gateway's own.
+        val certs = ClientCertAliases()
+        val gateways = GatewayRepository(InMemoryKeyValueStore())
+        gateways.save(SavedGateway("https://saved.example.com", clientCertAlias = "old-cert"))
+        val vm = viewModel(certs, gateways)
+        vm.url.setTextAndPlaceCursorAtEnd("https://SAVED.example.com/other")
+        vm.onUrlEdited()
+
+        vm.pickClientCert("new-cert")
+        assertEquals("new-cert", gateways.all().find("https://saved.example.com")?.clientCertAlias)
+        assertNull(certs.get("saved.example.com"))
+    }
+
+    @Test
     fun forgettingASavedAddresssCertificateClearsItForGood() = runTest(dispatcher) {
         val gateways = GatewayRepository(InMemoryKeyValueStore())
         gateways.save(SavedGateway("https://saved.example.com", clientCertAlias = "saved-cert"))

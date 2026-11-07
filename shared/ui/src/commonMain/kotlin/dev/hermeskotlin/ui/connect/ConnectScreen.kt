@@ -21,8 +21,10 @@ import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -64,6 +66,7 @@ import com.composeunstyled.UnstyledIcon
 import com.composeunstyled.theme.Theme
 import dev.hermeskotlin.designsystem.rememberHoverIndication
 import dev.hermeskotlin.core.gateway.GatewayUrl
+import dev.hermeskotlin.core.gateway.InvalidGatewayUrlException
 import dev.hermeskotlin.core.gateway.ProbeResult
 import dev.hermeskotlin.core.gateway.SavedGateway
 import dev.hermeskotlin.core.gateway.serverOnlyResults
@@ -95,9 +98,10 @@ import dev.hermeskotlin.ui.components.ScreenHeader
 import dev.hermeskotlin.ui.components.ScreenScaffold
 import dev.hermeskotlin.ui.components.rememberClientCertPicker
 import dev.hermeskotlin.ui.CopyableOnDesktop
-import dev.hermeskotlin.ui.clientCertsShow
 import dev.hermeskotlin.ui.isDesktop
+import dev.hermeskotlin.ui.resources.*
 import kotlinx.coroutines.flow.drop
+import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 
 @Composable
@@ -161,13 +165,21 @@ internal fun ConnectView(
 ) {
     val result = state.result
     val parsed = GatewayUrl.parseOrNull(url.text.toString())
-    val picker = rememberClientCertPicker(parsed?.host, parsed?.port ?: -1, onPicked = { it?.let(cert.onPick) })
+    // A certificate is picked for a host: typing a path or fixing a typo elsewhere keeps the picker (and an import
+    // under way), and a pick that finishes after the host changed isn't applied to the new one.
+    val host = parsed?.takeIf { !isDesktop || it.value.startsWith("https://") }?.host
+    val port = parsed?.port ?: -1
+    val currentTarget by rememberUpdatedState(host to port)
+    val picker = key(host, port) {
+        rememberClientCertPicker(host, port, onPicked = { alias ->
+            if (alias != null && currentTarget == (host to port)) cert.onPick(alias)
+        })
+    }
     ScreenScaffold {
         ScreenHeader(
             icon = if (onCancel == null) null else Lucide.PlugZap,
-            title = if (onCancel == null) "Welcome to Kyllene" else "Add a gateway",
-            subtitle = if (onCancel == null) "Connect to your Hermes Agent gateway. Nothing is sent until you sign in."
-            else "Connect to another Hermes Agent gateway. You stay signed in to the ones you saved.",
+            title = stringResource(if (onCancel == null) Res.string.connect_welcome else Res.string.connect_add_gateway),
+            subtitle = stringResource(if (onCancel == null) Res.string.connect_welcome_detail else Res.string.connect_add_gateway_detail),
         )
 
         // With a keyboard, the page opens ready for the address to be typed.
@@ -186,10 +198,10 @@ internal fun ConnectView(
         TextField(
             state = url,
             focusRequester = urlFocus,
-            label = "Gateway address",
+            label = stringResource(Res.string.connect_address),
             placeholder = "100.64.0.1:9119",
-            supportingText = "Where your hermes dashboard runs: LAN, Tailscale or HTTPS.",
-            error = state.urlError,
+            supportingText = stringResource(Res.string.connect_address_detail),
+            error = state.urlError?.let { urlErrorText(it) },
             leadingIcon = Lucide.Globe,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Go),
             onKeyboardAction = { enter() },
@@ -204,7 +216,7 @@ internal fun ConnectView(
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     ConnectionChecklist(results = result.serverOnlyResults(), running = false)
                     if (result is ProbeResult.Unreachable) {
-                        Hint("If the dashboard isn't running yet, run this on the server:")
+                        Hint(stringResource(Res.string.connect_start_dashboard))
                         CodeLine("hermes dashboard --host 0.0.0.0 --port 9119 --no-open")
                     }
                 }
@@ -213,8 +225,7 @@ internal fun ConnectView(
 
         if (result is ProbeResult.Reachable && result.url.isExposed) {
             Text(
-                "This address isn't private and doesn't use https://, so your password and chats would cross " +
-                    "the internet unencrypted. Use https://, Tailscale or your own network instead.",
+                stringResource(Res.string.connect_exposed),
                 style = Theme[typography][bodySmall],
                 color = Theme[colors][danger],
             )
@@ -222,30 +233,29 @@ internal fun ConnectView(
 
         Column {
             var guideOpen by remember { mutableStateOf(false) }
-            HelpRow(Lucide.CircleHelp, "Which address do I use?", guideOpen) { guideOpen = !guideOpen }
+            HelpRow(Lucide.CircleHelp, stringResource(Res.string.connect_which_address), guideOpen) { guideOpen = !guideOpen }
             if (guideOpen) AddressGuide(Modifier.padding(start = 4.dp, end = 4.dp, bottom = 12.dp))
 
             var accessOpen by rememberSaveable { mutableStateOf(false) }
             LaunchedEffect(result, state.accessError, access.saved) {
                 if (result is ProbeResult.AccessBlocked || state.accessError != null || access.saved) accessOpen = true
             }
-            HelpRow(Lucide.KeyRound, "Behind Cloudflare Access?", accessOpen) { accessOpen = !accessOpen }
+            HelpRow(Lucide.KeyRound, stringResource(Res.string.connect_behind_access), accessOpen) { accessOpen = !accessOpen }
             if (accessOpen) AccessTokenFields(access, state.accessError, test)
 
-            // Client certificates come from Android's system store; the desktop and iOS have none to pick from yet.
-            if (clientCertsShow) {
+            if (picker.available) {
                 var certOpen by rememberSaveable { mutableStateOf(false) }
                 LaunchedEffect(result) {
                     if (result is ProbeResult.ClientCertRequired) certOpen = true
                 }
-                HelpRow(Lucide.ShieldCheck, "Need a client certificate?", certOpen) { certOpen = !certOpen }
+                HelpRow(Lucide.ShieldCheck, stringResource(Res.string.connect_need_cert), certOpen) { certOpen = !certOpen }
                 if (certOpen) ClientCertFields(cert, demanded = result is ProbeResult.ClientCertRequired, onPick = picker::pick)
             }
         }
 
         if (signInReady) {
             Button(
-                text = "Continue to sign in",
+                text = stringResource(Res.string.connect_continue),
                 onClick = { onContinue(result as ProbeResult.Reachable) },
                 trailingIcon = Lucide.ArrowRight,
                 size = ButtonSize.Large,
@@ -255,7 +265,7 @@ internal fun ConnectView(
 
         if (onCancel != null) {
             Button(
-                text = "Back to my gateway",
+                text = stringResource(Res.string.connect_back_to_gateway),
                 onClick = onCancel,
                 variant = ButtonVariant.Ghost,
                 leadingIcon = Lucide.ArrowLeft,
@@ -263,6 +273,20 @@ internal fun ConnectView(
             )
         }
     }
+}
+
+/** Why the address typed isn't one. */
+@Composable
+internal fun urlErrorText(error: InvalidGatewayUrlException): String = when (error.problem) {
+    InvalidGatewayUrlException.Problem.Required -> stringResource(Res.string.connect_url_required)
+    InvalidGatewayUrlException.Problem.Scheme -> stringResource(Res.string.connect_url_scheme, error.detail)
+    InvalidGatewayUrlException.Problem.Invalid -> stringResource(Res.string.connect_url_invalid, error.detail)
+    InvalidGatewayUrlException.Problem.NoHost -> stringResource(Res.string.connect_url_no_host)
+}
+
+@Composable
+private fun accessErrorText(problem: AccessTokenProblem): String = when (problem) {
+    AccessTokenProblem.HalfFilled -> stringResource(Res.string.connect_access_half_filled)
 }
 
 /** The bundled username/password provider (`auth_providers` entry). */
@@ -273,6 +297,7 @@ private const val PASSWORD_PROVIDER = "basic"
 private fun TestButton(testing: Boolean, onClick: () -> Unit) {
     val interaction = remember { MutableInteractionSource() }
     val tint = Theme[colors][text]
+    val spoken = stringResource(if (testing) Res.string.connect_testing_connection else Res.string.connect_test_connection)
     Box(
         Modifier
             .heightIn(min = 48.dp)
@@ -280,7 +305,7 @@ private fun TestButton(testing: Boolean, onClick: () -> Unit) {
             .clickable(interaction, indication = null, enabled = !testing, role = Role.Button, onClick = onClick)
             // "Test" alone doesn't say what's tested once it's read apart from the field.
             .clearAndSetSemantics {
-                contentDescription = if (testing) "Testing the connection" else "Test connection"
+                contentDescription = spoken
                 role = Role.Button
                 if (testing) disabled()
                 onClick { onClick(); true }
@@ -300,7 +325,7 @@ private fun TestButton(testing: Boolean, onClick: () -> Unit) {
             if (testing) Spinner(Modifier.size(14.dp), color = tint)
             else UnstyledIcon(Lucide.PlugZap, contentDescription = null, tint = tint, modifier = Modifier.size(14.dp))
             Text(
-                if (testing) "Testing…" else "Test",
+                stringResource(if (testing) Res.string.connect_testing else Res.string.connect_test),
                 style = Theme[typography][label].copy(fontSize = 13.sp, fontWeight = FontWeight.Medium),
                 color = tint,
                 singleLine = true,
@@ -312,6 +337,7 @@ private fun TestButton(testing: Boolean, onClick: () -> Unit) {
 /** A quiet row that opens help underneath it: an icon, what it's about, and a chevron that turns when open. */
 @Composable
 private fun HelpRow(icon: ImageVector, title: String, open: Boolean, onClick: () -> Unit) {
+    val state = stringResource(if (open) Res.string.app_expanded else Res.string.app_collapsed)
     Row(
         Modifier
             .fillMaxWidth()
@@ -319,7 +345,7 @@ private fun HelpRow(icon: ImageVector, title: String, open: Boolean, onClick: ()
             .clip(RoundedCornerShape(Theme[radii][radiusSmall]))
             .handCursor()
             .clickable(role = Role.Button, onClick = onClick)
-            .semantics { stateDescription = if (open) "Expanded" else "Collapsed" }
+            .semantics { stateDescription = state }
             .padding(horizontal = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -337,66 +363,58 @@ private fun HelpRow(icon: ImageVector, title: String, open: Boolean, onClick: ()
 
 /** A Cloudflare Access service token, sent with every request to this gateway's address. */
 @Composable
-private fun AccessTokenFields(access: AccessToken, error: String?, onTest: () -> Unit) {
+private fun AccessTokenFields(access: AccessToken, error: AccessTokenProblem?, onTest: () -> Unit) {
     Column(Modifier.padding(start = 4.dp, end = 4.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Hint(
-            "If Cloudflare Access protects this address, create a service token in Cloudflare Zero Trust " +
-                "(Access → Service credentials) and add a Service Auth policy for it to the Access application.",
-        )
+        Hint(stringResource(Res.string.connect_access_hint))
         if (access.saved) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                StatusDot(Status.Ok, "A service token is saved for this address")
+                StatusDot(Status.Ok, stringResource(Res.string.connect_access_saved))
                 Button(
-                    text = "Forget",
+                    text = stringResource(Res.string.connect_forget),
                     onClick = access.onForget,
                     variant = ButtonVariant.Ghost,
                     size = ButtonSize.Small,
                 )
             }
-            Hint("Leave the fields blank to keep using it, or enter a new token to replace it.")
+            Hint(stringResource(Res.string.connect_access_keep))
         }
         TextField(
             state = access.clientId,
-            label = "Client ID",
+            label = stringResource(Res.string.connect_client_id),
             placeholder = "….access",
-            error = error,
+            error = error?.let { accessErrorText(it) },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii, imeAction = ImeAction.Next),
         )
         TextField(
             state = access.clientSecret,
-            label = "Client Secret",
+            label = stringResource(Res.string.connect_client_secret),
             password = true,
-            supportingText = "Stored encrypted on this ${if (isDesktop) "computer" else "phone"}, and sent only to this address.",
+            supportingText = stringResource(if (isDesktop) Res.string.connect_client_secret_detail_desktop else Res.string.connect_client_secret_detail),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Go),
             onKeyboardAction = { onTest() },
         )
     }
 }
 
-/** A client certificate to present to this address, picked from the system store for proxies that ask for one. */
+/** A client certificate selected for the proxy at this address. */
 @Composable
 private fun ClientCertFields(cert: ClientCert, demanded: Boolean, onPick: () -> Unit) {
     Column(Modifier.padding(start = 4.dp, end = 4.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Hint(
-            if (demanded) "This server asks for a client certificate before it talks. Pick the one it gave you, " +
-                "then test again."
-            else "If a proxy in front of this address asks for a client certificate, pick it here so the test, " +
-                "the sign-in and the chat all present it.",
-        )
+        Hint(stringResource(if (demanded) Res.string.connect_cert_demanded else Res.string.connect_cert_hint))
         if (cert.alias != null) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 StatusDot(Status.Ok, cert.alias)
                 Button(
-                    text = "Forget",
+                    text = stringResource(if (isDesktop) Res.string.client_cert_clear_selection else Res.string.connect_forget),
                     onClick = cert.onClear,
                     variant = ButtonVariant.Ghost,
                     size = ButtonSize.Small,
                 )
             }
-            Hint("The key itself stays in the system store; only its name is kept, per gateway.")
+            Hint(stringResource(if (isDesktop) Res.string.connect_cert_kept_desktop else Res.string.connect_cert_kept))
         } else {
             Button(
-                text = "Pick certificate",
+                text = stringResource(Res.string.connect_pick_cert),
                 onClick = onPick,
                 variant = ButtonVariant.Secondary,
                 size = ButtonSize.Small,
@@ -418,12 +436,12 @@ private fun ResultCard(result: ProbeResult.Reachable) {
                 }
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text(
-                        status.version?.let { "Hermes $it is reachable" } ?: "Hermes is reachable",
+                        status.version?.let { stringResource(Res.string.connect_reachable_version, it) } ?: stringResource(Res.string.connect_reachable),
                         style = Theme[typography][bodySmall].copy(fontSize = 15.sp, fontWeight = FontWeight.Medium),
                         color = Theme[colors][text],
                     )
                     if (signInReady) {
-                        Text("Sign-in is tested next, then the chat", style = Theme[typography][bodySmall].copy(fontSize = 12.5.sp), color = Theme[colors][textTertiary])
+                        Text(stringResource(Res.string.connect_tested_next), style = Theme[typography][bodySmall].copy(fontSize = 12.5.sp), color = Theme[colors][textTertiary])
                     }
                 }
             }
@@ -435,25 +453,30 @@ private fun ResultCard(result: ProbeResult.Reachable) {
                     .padding(start = 14.dp, end = 14.dp, top = 12.dp, bottom = 14.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                InfoRow("Agent gateway", if (status.gatewayRunning) "Running" else "Stopped")
                 InfoRow(
-                    "Sign-in",
-                    when {
-                        !status.authRequired -> "Not required"
-                        status.supportsPasswordLogin && status.supportsNativeSignIn -> "Password or browser"
-                        status.supportsPasswordLogin -> "Username & password"
-                        status.supportsNativeSignIn -> "In the browser (SSO)"
-                        else -> "Unsupported"
-                    },
+                    stringResource(Res.string.connect_agent_gateway),
+                    stringResource(if (status.gatewayRunning) Res.string.connect_running else Res.string.connect_stopped),
                 )
-                if (status.profiles.isNotEmpty()) InfoRow("Profiles", status.profiles.joinToString())
+                InfoRow(
+                    stringResource(Res.string.check_stage_sign_in),
+                    stringResource(
+                        when {
+                            !status.authRequired -> Res.string.connect_sign_in_not_required
+                            status.supportsPasswordLogin && status.supportsNativeSignIn -> Res.string.connect_sign_in_password_or_browser
+                            status.supportsPasswordLogin -> Res.string.connect_sign_in_password
+                            status.supportsNativeSignIn -> Res.string.connect_sign_in_browser
+                            else -> Res.string.connect_sign_in_unsupported
+                        },
+                    ),
+                )
+                if (status.profiles.isNotEmpty()) InfoRow(stringResource(Res.string.connect_profiles), status.profiles.joinToString())
 
                 if (!result.canSignIn) {
-                    StatusDot(Status.Warning, "No sign-in the app can use", Modifier.padding(top = 4.dp))
-                    Hint("This dashboard offers neither a username/password provider nor browser sign-in. Update Hermes, or configure the username/password provider on the server.")
+                    StatusDot(Status.Warning, stringResource(Res.string.connect_no_sign_in), Modifier.padding(top = 4.dp))
+                    Hint(stringResource(Res.string.connect_no_sign_in_detail))
                 } else if (!status.authRequired) {
-                    StatusDot(Status.Warning, "Auth gate is off", Modifier.padding(top = 4.dp))
-                    Hint("The dashboard is bound to loopback, so other devices won't be allowed to chat. Bind it with --host 0.0.0.0 and configure a password provider.")
+                    StatusDot(Status.Warning, stringResource(Res.string.connect_auth_off), Modifier.padding(top = 4.dp))
+                    Hint(stringResource(Res.string.connect_auth_off_detail))
                 }
             }
         }

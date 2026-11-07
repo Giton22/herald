@@ -39,6 +39,9 @@ kotlin {
         }
         androidMain.get().dependsOn(jvmShared)
         jvmMain.get().dependsOn(jvmShared)
+        val jvmSharedTest by creating { dependsOn(commonTest.get()) }
+        getByName("androidHostTest").dependsOn(jvmSharedTest)
+        jvmTest.get().dependsOn(jvmSharedTest)
         jvmMain.dependencies {
             implementation(libs.sqlite.bundled)
             implementation(libs.jna.platform)

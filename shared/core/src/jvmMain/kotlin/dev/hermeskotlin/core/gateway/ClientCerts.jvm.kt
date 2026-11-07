@@ -1,7 +1,101 @@
 package dev.hermeskotlin.core.gateway
 
+import dev.hermeskotlin.core.storage.KeyValueStore
 import io.ktor.client.engine.HttpClientEngine
 import io.ktor.client.engine.okhttp.OkHttp
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runBlocking
+import okhttp3.ConnectionPool
+import okhttp3.Protocol
+import java.net.InetAddress
+import java.net.Socket
+import java.security.KeyStore
+import java.security.cert.X509Certificate
+import java.util.Date
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicLong
+import javax.net.ssl.KeyManagerFactory
+import javax.net.ssl.SSLContext
+import javax.net.ssl.SSLSocketFactory
+import javax.net.ssl.TrustManagerFactory
+import javax.net.ssl.X509TrustManager
 
-// The desktop has no system certificate store to pick from yet, so it presents no client certificate.
-internal actual fun mtlsEngine(certs: ClientCertAliases, gateways: GatewayRepository): HttpClientEngine = OkHttp.create()
+internal actual fun mtlsEngine(certs: ClientCertAliases, gateways: GatewayRepository, store: KeyValueStore): HttpClientEngine =
+    linuxClientCertificates(store)?.let { desktopMtlsEngine(certs, gateways, it, desktopTrustManager()) } ?: OkHttp.create()
+
+internal fun desktopMtlsEngine(
+    certs: ClientCertAliases,
+    gateways: GatewayRepository,
+    identities: LinuxClientCertificates,
+    trust: X509TrustManager,
+): HttpClientEngine {
+    fun context(keys: KeyStore? = null): SSLContext = SSLContext.getInstance("TLS").apply {
+        val managers = keys?.let {
+            KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm()).apply { init(it, charArrayOf()) }.keyManagers
+        }
+        init(managers ?: emptyArray(), arrayOf(trust), null)
+    }
+    val ordinary = context().socketFactory
+    // The decrypted identity's context per alias and host, until a selection changes or its certificate expires:
+    // opening it reads the encrypted store and checks the key, too much for every connection. A store that can't
+    // answer yet isn't remembered.
+    class Selected(val factory: SSLSocketFactory, val expires: Date)
+    val selected = ConcurrentHashMap<Pair<String, String>, Selected>()
+    val changes = AtomicLong()
+    val pool = ConnectionPool()
+    certs.onChanged {
+        // A new context cannot resume a TLS session authenticated with a previous selection, and no idle
+        // connection made with one is reused. Done before the change returns, so the next request already sees it.
+        changes.incrementAndGet()
+        selected.clear()
+        pool.evictAll()
+    }
+    val sockets = ClientSocketFactory(ordinary) { host, port ->
+        val alias = clientCertAliasFor(host, certs, gateways.list.value.gateways) ?: return@ClientSocketFactory ordinary
+        val key = alias to accessHostKey(host)
+        selected[key]?.takeIf { it.expires.after(Date()) }?.let { return@ClientSocketFactory it.factory }
+        val opened = changes.get()
+        val keys = runBlocking(Dispatchers.IO) { identities.material(alias, host, port) } ?: return@ClientSocketFactory ordinary
+        val factory = context(keys).socketFactory
+        // A handshake that overlapped a change doesn't bring back what the change cleared.
+        val expires = keys.aliases().asSequence().filter(keys::isKeyEntry).mapNotNull { keys.getCertificate(it) as? X509Certificate }.firstOrNull()?.notAfter
+        if (expires != null && changes.get() == opened) selected[key] = Selected(factory, expires)
+        factory
+    }
+    return OkHttp.create {
+        config {
+            sslSocketFactory(sockets, trust)
+            // Idle connections are pooled and dropped when a selection changes. As on Android, a connection busy at
+            // that moment finishes its request and may be pooled afterwards; requests from then on handshake with
+            // the new selection only once it's gone. HTTP/1.1 only, so a busy connection is never shared meanwhile.
+            connectionPool(pool)
+            protocols(listOf(Protocol.HTTP_1_1))
+            followRedirects(false)
+            followSslRedirects(false)
+        }
+    }
+}
+
+/** The actual TLS destination decides the key; host-less socket paths can never guess a selection. */
+private class ClientSocketFactory(
+    private val ordinary: SSLSocketFactory,
+    private val select: (String, Int) -> SSLSocketFactory,
+) : SSLSocketFactory() {
+    override fun getDefaultCipherSuites(): Array<String> = ordinary.defaultCipherSuites
+    override fun getSupportedCipherSuites(): Array<String> = ordinary.supportedCipherSuites
+    override fun createSocket(s: Socket?, host: String, port: Int, autoClose: Boolean): Socket =
+        select(host, port).createSocket(s, host, port, autoClose)
+    override fun createSocket(host: String, port: Int): Socket = select(host, port).createSocket(host, port)
+    override fun createSocket(host: String, port: Int, local: InetAddress?, localPort: Int): Socket =
+        select(host, port).createSocket(host, port, local, localPort)
+    override fun createSocket(host: InetAddress, port: Int): Socket = select(host.hostAddress, port).createSocket(host, port)
+    override fun createSocket(host: InetAddress, port: Int, local: InetAddress?, localPort: Int): Socket =
+        select(host.hostAddress, port).createSocket(host, port, local, localPort)
+    override fun createSocket(): Socket = ordinary.createSocket()
+}
+
+private fun desktopTrustManager(): X509TrustManager =
+    TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm()).run {
+        init(null as KeyStore?)
+        trustManagers.filterIsInstance<X509TrustManager>().single()
+    }

@@ -1,7 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="desktop_open_link">Link öffnen</string>
-    <string name="desktop_copy_link">Link kopieren</string>
 
     <string name="desktop_attach_photos">Fotos anhängen</string>
     <string name="desktop_attach_files">Dateien anhängen</string>
@@ -21,8 +19,4 @@
 
     <string name="desktop_pdf_unsupported">PDFs öffnen sich in der Desktop-App noch nicht. Du kannst die Datei speichern.</string>
     <string name="desktop_widgets_unsupported">Widgets werden in diesem Build der Desktop-App nicht angezeigt.</string>
-    <string name="desktop_phone_tools_need_phone">Telefon-Tools funktionieren mit Kyllene auf einem Android-Telefon.</string>
-
-    <string name="desktop_wallpaper_title">Chat-Hintergrund</string>
-    <string name="desktop_wallpaper_unreadable">Dieses Bild konnte nicht gelesen werden.</string>
 </resources>

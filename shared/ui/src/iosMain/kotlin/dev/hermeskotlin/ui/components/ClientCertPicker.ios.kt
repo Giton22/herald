@@ -3,7 +3,10 @@ package dev.hermeskotlin.ui.components
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 
-// No certificate picker on iOS yet: the Connect screen leaves the client-certificate rows out (clientCertsShow).
+// No certificate picker on iOS yet: unavailable, so the Connect screen leaves the client-certificate rows out.
+@Composable
+actual fun clientCertificatesAvailable(): Boolean = false
+
 @Composable
 actual fun rememberClientCertPicker(
     host: String?,
@@ -11,6 +14,8 @@ actual fun rememberClientCertPicker(
     onPicked: (String?) -> Unit,
 ): ClientCertPicker = remember {
     object : ClientCertPicker {
-        override fun pick() = onPicked(null)
+        override val available = false
+
+        override fun pick() = Unit
     }
 }

@@ -2,6 +2,7 @@ package dev.hermeskotlin.wear
 
 import android.app.Application
 import android.content.Context
+import android.content.res.Configuration
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -17,6 +18,12 @@ class HeraldWatch : Application() {
     override fun onCreate() {
         super.onCreate()
         callDisplay.refresh()
+    }
+
+    /** A new language: the call channel takes its name, as the watch's notification settings list it. */
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        rings.createChannel()
     }
 
     val speech by lazy { SpeechOut(this) }

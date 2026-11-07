@@ -1,5 +1,6 @@
 package dev.hermeskotlin.core.gateway
 
+import dev.hermeskotlin.core.storage.KeyValueStore
 import io.ktor.client.engine.HttpClientEngine
 import kotlin.concurrent.Volatile
 
@@ -60,4 +61,4 @@ fun clientCertAliasFor(host: String, pending: ClientCertAliases, saved: List<Sav
 }
 
 /** The platform engine behind gateway traffic, presenting each gateway's client certificate when it has one. */
-internal expect fun mtlsEngine(certs: ClientCertAliases, gateways: GatewayRepository): HttpClientEngine
+internal expect fun mtlsEngine(certs: ClientCertAliases, gateways: GatewayRepository, store: KeyValueStore): HttpClientEngine
