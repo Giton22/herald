@@ -389,3 +389,19 @@ prompt. It needs the app running; launcher actions and login startup are separat
 Window focus follows the existing runtime/compositor rules. The pinned public
 JBR API cannot consume the portal's activation token, so native Wayland activation
 is not guaranteed. In-app shortcuts remain available without this portal.
+
+## Call launcher action
+
+The Linux application menu's **Call Hermes** action opens the existing voice-chat
+route. It calls the destination selected in **Default Call Target** for the
+current gateway, using the shared target lookup, cancellation and connection cue.
+It routes the request to the existing instance instead of starting a second
+application.
+An unavailable target reports the existing call error rather than choosing another
+destination. If signed out, the request waits for sign-in through the usual flow.
+The action starts a call and may use the microphone and configured voice provider.
+
+The equivalent explicit invocation is `flatpak run
+app.kyllene.Kyllene.Devel herald://voice-chat`. Native launcher activation
+and live-provider behavior require installed Linux validation; packaging tests
+and shared routing tests alone do not establish that acceptance.

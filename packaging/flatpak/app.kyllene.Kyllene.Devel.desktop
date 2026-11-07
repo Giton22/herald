@@ -6,3 +6,8 @@ Exec=kyllene %u
 Icon=app.kyllene.Kyllene.Devel
 Terminal=false
 Categories=Network;Chat;
+Actions=Call;
+
+[Desktop Action Call]
+Name=Call Hermes
+Exec=kyllene herald://voice-chat
