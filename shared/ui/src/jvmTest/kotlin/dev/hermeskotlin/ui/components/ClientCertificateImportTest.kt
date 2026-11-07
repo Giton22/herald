@@ -32,7 +32,7 @@ import kotlin.test.assertEquals
 
 @OptIn(ExperimentalTestApi::class)
 class ClientCertificateImportTest {
-    @Test fun untranslatedCertificateCopyFallsBackWhileSharedButtonsStayLocalized() = runComposeUiTest {
+    @Test fun certificateCopyAndSharedButtonsFollowTheAppLanguage() = runComposeUiTest {
         val locale = Locale.getDefault()
         try {
             setContent {
@@ -42,8 +42,8 @@ class ClientCertificateImportTest {
                     }
                 }
             }
-            onNodeWithText("Import client certificate").assertExists()
-            onNodeWithText("PKCS#12 password").assertExists()
+            onNodeWithText("Importer un certificat client").assertExists()
+            onNodeWithText("Mot de passe PKCS#12").assertExists()
             onNodeWithText("Annuler").assertExists()
         } finally {
             applyAppLanguage(null)
