@@ -123,6 +123,9 @@ internal class LinuxKeyValueStore(
         val committed = state
         if (ready && committed != null) committed.values[key] else load().values[key]
     }
+    // Identity state must reject a blocked store rather than return an earlier cached snapshot.
+    internal suspend fun getChecked(key: String): String? = mutex.withLock { load().values[key] }
+
     override suspend fun put(key: String, value: String) = mutex.withLock {
         val previous = load()
         commit(Snapshot(previous.values + (key to value), previous.key, previous.token, previous.digest, previous.legacyDigest))
