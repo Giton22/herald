@@ -40,6 +40,8 @@ import dev.hermeskotlin.ui.isDesktop
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -89,6 +91,7 @@ import dev.hermeskotlin.designsystem.textTertiary
 import dev.hermeskotlin.designsystem.typography
 import dev.hermeskotlin.ui.GatewayChoices
 import dev.hermeskotlin.ui.components.rememberClientCertPicker
+import dev.hermeskotlin.ui.components.clientCertificatesAvailable
 import dev.hermeskotlin.ui.resources.*
 import org.jetbrains.compose.resources.stringResource
 
@@ -263,8 +266,7 @@ private fun GatewayRow(
             items = {
                 if (!primary) MenuAction(makePrimary, Lucide.Star, onClick = { menuOpen = false; onSetPrimary() })
                 MenuAction(rename, Lucide.Pencil, onClick = { menuOpen = false; onRename() })
-                // Client certificates come from Android's system store; the desktop has none to pick from yet.
-                if (!isDesktop) MenuAction(stringResource(Res.string.gateways_client_cert), Lucide.ShieldCheck, onClick = { menuOpen = false; onClientCert() })
+                if (clientCertificatesAvailable() && (!isDesktop || gateway.url.startsWith("https://"))) MenuAction(stringResource(Res.string.gateways_client_cert), Lucide.ShieldCheck, onClick = { menuOpen = false; onClientCert() })
                 MenuAction(remove, Lucide.Trash2, onClick = { menuOpen = false; onRemove() })
             },
         ) {
@@ -325,7 +327,7 @@ private fun RemoveGatewayDialog(gateway: SavedGateway?, onDismiss: () -> Unit, o
 
 /**
  * The client certificate to present to [gateway], for proxies that ask for one (`ssl_verify_client`).
- * Picking opens the system store; only the chosen name is kept, the key never leaves the store.
+ * Android picks a system identity; secure Linux builds import it for this gateway's TLS hostname.
  */
 @Composable
 private fun ClientCertDialog(gateway: SavedGateway?, onDismiss: () -> Unit, onSet: (SavedGateway, String?) -> Unit) {
@@ -333,17 +335,21 @@ private fun ClientCertDialog(gateway: SavedGateway?, onDismiss: () -> Unit, onSe
     if (gateway != null) shown = gateway
     val g = shown ?: return
     val parsed = GatewayUrl.parseOrNull(g.url)
-    val picker = rememberClientCertPicker(parsed?.host, parsed?.port ?: -1, onPicked = { alias ->
-        if (alias != null) {
-            onDismiss()
-            onSet(g, alias)
-        }
-    })
+    val current by rememberUpdatedState(gateway)
+    val picker = key(g.url, gateway != null) {
+        val host = parsed?.takeIf { !isDesktop || it.value.startsWith("https://") }?.host
+        rememberClientCertPicker(host, parsed?.port ?: -1, onPicked = { alias ->
+            if (alias != null && current?.url == g.url) {
+                onDismiss()
+                onSet(g, alias)
+            }
+        })
+    }
     Dialog(
         visible = gateway != null,
         onDismissRequest = onDismiss,
         title = stringResource(Res.string.gateways_client_cert),
-        message = stringResource(Res.string.gateways_client_cert_detail, g.label),
+        message = stringResource(if (isDesktop) Res.string.gateways_client_cert_detail_desktop else Res.string.gateways_client_cert_detail, g.label),
         actions = {
             Button(stringResource(Res.string.common_cancel), onClick = onDismiss, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
             Button(stringResource(if (g.clientCertAlias == null) Res.string.gateways_pick else Res.string.gateways_change), onClick = picker::pick, size = ButtonSize.Small)
@@ -360,7 +366,7 @@ private fun ClientCertDialog(gateway: SavedGateway?, onDismiss: () -> Unit, onSe
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false),
                 )
-                Button(stringResource(Res.string.gateways_clear), onClick = { onDismiss(); onSet(g, null) }, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
+                Button(stringResource(if (isDesktop) Res.string.client_cert_clear_selection else Res.string.gateways_clear), onClick = { onDismiss(); onSet(g, null) }, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
             }
         }
     }

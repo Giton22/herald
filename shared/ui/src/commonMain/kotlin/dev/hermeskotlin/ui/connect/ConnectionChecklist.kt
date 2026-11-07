@@ -1,6 +1,7 @@
 package dev.hermeskotlin.ui.connect
 
 import dev.hermeskotlin.ui.isDesktop
+import dev.hermeskotlin.ui.components.clientCertificatesAvailable
 import dev.hermeskotlin.ui.CopyableOnDesktop
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -244,7 +245,12 @@ internal fun checkNoteText(note: CheckNote): String {
         CheckNote.Kind.FixAccessTokenOrProxy -> Res.string.check_fix_access_token_or_proxy
         CheckNote.Kind.FixAllowUpgrades -> Res.string.check_fix_allow_upgrades
         CheckNote.Kind.FixAllowUpgradesOrRetry -> Res.string.check_fix_allow_upgrades_or_retry
-        CheckNote.Kind.FixClientCert -> Res.string.check_fix_client_cert
+        // Android picks a system-store alias; the Linux Flatpak imports a PKCS#12 file; other desktops have neither.
+        CheckNote.Kind.FixClientCert -> when {
+            !isDesktop -> Res.string.check_fix_client_cert
+            clientCertificatesAvailable() -> Res.string.check_fix_client_cert_desktop
+            else -> Res.string.check_fix_client_cert_unsupported
+        }
         CheckNote.Kind.FixDashboardPort -> Res.string.check_fix_dashboard_port
         CheckNote.Kind.FixCheckAccessToken -> Res.string.check_fix_check_access_token
         CheckNote.Kind.FixAddAccessToken -> Res.string.check_fix_add_access_token

@@ -361,4 +361,29 @@
     <string name="check_fix_https">Vérifiez que le domaine pointe vers le serveur, que son certificat est valide et que le proxy transmet au tableau de bord.</string>
     <string name="check_fix_local_network">Rejoignez le même Wi-Fi ou réseau que le serveur, et lancez le tableau de bord avec --host 0.0.0.0 pour que les autres appareils le joignent.</string>
     <string name="check_fix_reachable">Vérifiez l’adresse et le port, et que le serveur est joignable depuis ce téléphone.</string>
+
+    <!-- Imported desktop client certificates. -->
+    <string name="check_fix_client_cert_desktop">Importez le certificat client PKCS#12 que ce serveur demande, puis vérifiez à nouveau.</string>
+    <string name="check_fix_client_cert_unsupported">Cette version de Kyllene ne peut pas présenter de certificat client. Utilisez l’app Android ou le Flatpak Linux pour ce serveur.</string>
+    <string name="client_cert_import_title">Importer un certificat client</string>
+    <string name="client_cert_import">Importer</string>
+    <string name="client_cert_importing">Importation…</string>
+    <string name="client_cert_import_detail">Saisissez le mot de passe du fichier PKCS#12 choisi. Sa clé sera stockée chiffrée pour ce nom d’hôte TLS. Les passerelles qui partagent ce nom d’hôte partagent aussi le choix du certificat, quels que soient le port ou le chemin.</string>
+    <string name="client_cert_password">Mot de passe PKCS#12</string>
+    <string name="client_cert_invalid">Kyllene n’a pas pu ouvrir ce certificat client. Vérifiez le mot de passe et choisissez un fichier PKCS#12 contenant un seul certificat client non expiré, sa clé privée et sa chaîne de certificats.</string>
+    <string name="client_cert_regular_file">Choisissez un fichier PKCS#12 ordinaire. Les liens symboliques, les périphériques et les tubes nommés ne peuvent pas être importés.</string>
+    <string name="client_cert_read_failed">Impossible de lire ce fichier PKCS#12. Choisissez-le à nouveau et vérifiez l’accès au fichier.</string>
+    <string name="client_cert_clear_selection">Effacer le choix</string>
+    <string name="connect_cert_kept_desktop">Les clés importées sont stockées chiffrées pour ce nom d’hôte TLS. Après avoir effacé ce choix, un autre certificat enregistré pour le même nom d’hôte peut encore servir. Les clés importées restent dans les réglages chiffrés.</string>
+    <string name="gateways_client_cert_detail_desktop">Kyllene présente ce certificat à « %1$s » quand son serveur en demande un. Les clés importées sont stockées chiffrées pour ce nom d’hôte TLS. Après avoir effacé ce choix, un autre certificat enregistré pour le même nom d’hôte peut encore servir. Les clés importées restent dans les réglages chiffrés.</string>
+    <string name="client_cert_storage_unavailable">Kyllene n’a pas pu obtenir sa clé de stockage. Déverrouillez le trousseau de votre bureau et vérifiez que son portail Secret est disponible, puis réessayez.</string>
+    <string name="client_cert_storage_cancelled">Le déverrouillage du stockage a été annulé. Réessayez pour le déverrouiller ; les données existantes ont été conservées.</string>
+    <string name="client_cert_storage_corrupt">Kyllene n’a pas pu ouvrir ses réglages chiffrés. Restaurez une sauvegarde saine ou utilisez l’identité d’application d’origine. Les données existantes ont été conservées.</string>
+    <string name="client_cert_storage_version">Ce format de réglages demande une autre version de Kyllene. Les données existantes ont été conservées.</string>
+    <string name="client_cert_storage_read">Kyllene n’a pas pu lire ses réglages, ou le fichier dépasse 16 Mio. Vérifiez l’accès au fichier avant de réessayer.</string>
+    <string name="client_cert_storage_write">Kyllene n’a pas pu finir d’enregistrer ou de nettoyer ses réglages. Les copies existantes ont été conservées ; vérifiez l’espace disque et l’accès au fichier avant de réessayer.</string>
+    <string name="client_cert_storage_uncertain">Kyllene n’a pas pu confirmer l’enregistrement de ses réglages. Vérifiez l’accès au fichier, puis relancez le démarrage ou quittez et redémarrez avant d’autres changements.</string>
+    <string name="client_cert_storage_changed">Les réglages ont changé hors de cette fenêtre. Quittez et redémarrez Kyllene pour les recharger avant d’enregistrer.</string>
+    <string name="client_cert_storage_legacy">Des réglages anciens contradictoires ou inachevés ont été trouvés. Les fichiers existants ont été conservés. Quittez et réglez l’ancienne copie avant de réessayer.</string>
+    <string name="client_cert_storage_unsupported">Kyllene n’a pas pu vérifier son identité d’application Flatpak. Vérifiez l’installation avant de réessayer. Aucune solution de repli non chiffrée n’est disponible.</string>
 </resources>

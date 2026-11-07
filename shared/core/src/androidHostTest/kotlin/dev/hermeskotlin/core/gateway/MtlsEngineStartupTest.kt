@@ -18,7 +18,7 @@ class MtlsEngineStartupTest {
         val previous = MtlsAppContext.context
         MtlsAppContext.context = null
         try {
-            val engine = mtlsEngine(ClientCertAliases(), GatewayRepository(InMemoryKeyValueStore()))
+            val engine = mtlsEngine(ClientCertAliases(), GatewayRepository(InMemoryKeyValueStore()), InMemoryKeyValueStore())
             engine.close()
         } finally {
             MtlsAppContext.context = previous

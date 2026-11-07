@@ -201,6 +201,46 @@ This adds registration storage, not push reception or a background service. The
 desktop Notifications anywhere control remains hidden until receiving is supported.
 The existing authenticated registration coordinator and gateway protocol are reused.
 
+### Gateway client certificates
+
+With encrypted Linux Flatpak storage, the existing Connect and gateway menus can
+import a PKCS#12 (`.p12`/`.pfx`) file for an HTTPS gateway. Choose the file through
+the desktop file chooser, then enter its password in the app. Imports are limited
+to 1 MiB and one RSA or EC private key, with a matching, unexpired client
+certificate and a valid supplied chain. Chain checks are offline: no issuer or
+revocation URLs are fetched, and import does not assert that the gateway trusts it.
+The import password is not saved. Other desktop stores do not offer this import;
+Android continues to use its system certificate picker.
+
+Selection matches Android's hostname-only lookup: a pending pick first, otherwise
+the first saved gateway with an alias for that hostname. URL paths and ports do
+not isolate selections: gateways sharing a hostname cannot independently choose
+different certificates. Both REST requests and WebSocket upgrades use this lookup;
+another hostname, redirects and embedded browsers do not receive the identity.
+Normal server trust and hostname checks remain enabled. The Linux client uses HTTP/1.1
+and pools idle connections. Changing a selection drops the idle ones and the cached
+identity, so the next request handshakes with the new selection. As on Android, a
+request already running keeps its connection, which may be reused once afterwards;
+existing WebSockets retain their original identity until they close or reconnect.
+An imported identity is decrypted once per hostname and reopened after its
+certificate expires.
+
+Clearing a gateway's selection removes its alias; another pending or saved alias
+for the same hostname may still apply. It does not delete imported encrypted keys,
+recover space from cancelled imports, erase backups or revoke an existing TLS connection. Failed/cancelled imports keep the previous selection. Storage failures
+must be resolved before retrying; there is no plaintext import fallback.
+
+Run the JVM core suites with `./gradlew :shared:core:jvmTest --tests '*LinuxClientCertificatesTest' --tests '*LinuxMtlsTest'`.
+The synthetic PKCS#12 fixture contains public test-only keys (password `test-only`);
+it must never be used for a real gateway. UI tests run with
+`./gradlew :shared:ui:jvmTest --tests '*ClientCert*Test'`; headless environments can
+set `JAVA_TOOL_OPTIONS=-Djava.awt.headless=true`. Imports accept regular files, not
+symlinks/devices/pipes, and use interruptible channel reads. The named-pipe rejection
+test requires Linux and `mkfifo` from coreutils; it is explicitly skipped elsewhere.
+The password and error area scrolls in short windows while Cancel and Import remain visible.
+Installed qualification must also exercise the real file chooser, password/cancellation,
+restart and both TLS transports.
+
 ### Microphone backend
 
 Linux has a recorder behind the existing `VoiceRecorder` contract, using the default
