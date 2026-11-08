@@ -1,0 +1,61 @@
+# A push to master that changes website/ deploys it to kyllene.app: the Cloudflare Pages project `kyllene`, whose
+# production branch is master. Actions → Website → Run workflow deploys master again, e.g. after a failed deploy.
+#
+# Repo secrets (Settings → Secrets and variables → Actions):
+#   CLOUDFLARE_API_TOKEN    a Cloudflare API token with Account → Cloudflare Pages → Edit, on the account with the project
+#   CLOUDFLARE_ACCOUNT_ID   that account's ID (the dashboard's Workers & Pages overview shows it)
+name: Website
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "website/**"
+      - ".github/workflows/website.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One deploy at a time, in push order: the last one is what stays live.
+concurrency:
+  group: website
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    # A manual run from another branch would put that branch live: --branch master is production.
+    if: github.ref == 'refs/heads/master'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Deploy to Cloudflare Pages
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "::error::CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID aren't set, so kyllene.app wasn't deployed"
+            exit 1
+          fi
+          npx --yes wrangler@3.114.0 pages deploy website --project-name kyllene --branch master \
+            --commit-hash "$GITHUB_SHA" --commit-message "$(git log -1 --format=%s)"
+
+      # The Flatpak install link must be served, with the type a software centre opens (see _worker.js), and be the
+      # file in this commit. A new deployment can take a few seconds to reach every edge.
+      - name: Check kyllene.app
+        run: |
+          for file in kyllene.flatpakref kyllene.flatpakrepo; do
+            for try in $(seq 12); do
+              type="$(curl -fsS -o "$RUNNER_TEMP/$file" -w '%{content_type}' "https://kyllene.app/$file" || true)"
+              if cmp -s "$RUNNER_TEMP/$file" "website/$file"; then break; fi
+              [ "$try" = 12 ] && { echo "::error::kyllene.app/$file isn't the file in this commit"; exit 1; }
+              sleep 5
+            done
+            case "$type" in application/vnd.flatpak.*) echo "$file: $type" ;;
+              *) echo "::error::kyllene.app/$file is served as $type"; exit 1 ;; esac
+          done
