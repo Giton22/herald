@@ -110,7 +110,9 @@ jobs:
 
       - name: Check the published repository
         run: |
-          flatpak remote-add --user --gpg-import=<(gpg --dearmor < packaging/flatpak/kyllene-repo.asc) \
+          # A file, not <(…): flatpak finds no key in a pipe ("GPGME: No data").
+          gpg --dearmor < packaging/flatpak/kyllene-repo.asc > "$RUNNER_TEMP/kyllene-repo.gpg"
+          flatpak remote-add --user --gpg-import="$RUNNER_TEMP/kyllene-repo.gpg" \
             kyllene https://flatpak.kyllene.app/repo/
           flatpak remote-ls --user --app kyllene
           flatpak remote-info --user kyllene app.kyllene.Kyllene//stable
