@@ -77,6 +77,7 @@ the app talks to your gateway directly.
 - Several saved gateways, each kept signed in
 - An encrypted offline copy of recent chats, readable while the gateway can't be reached
 - App lock with fingerprint, face or screen lock
+- Wear OS and Pebble watches: talk to Hermes, pick a chat, and ring along with the phone when the agent needs you
 
 The full feature list, and what's planned, is in the [roadmap](docs/ROADMAP.md).
 
@@ -103,6 +104,11 @@ The full feature list, and what's planned, is in the [roadmap](docs/ROADMAP.md).
    the `arm64-v8a` build; the release notes say which fits other devices.
 2. Open it, and allow installing from your browser when Android asks.
 3. Kyllene tells you when a new release is out. Install it over the old one; your sign-in and settings stay.
+
+**Pebble watch:** download `kyllene-pebble-<version>.pbw` from the same release and open it on the phone; the Pebble
+app installs it on the watch. It works on every Pebble with a microphone (Pebble Time, Time Round, Pebble 2,
+Pebble 2 Duo, Time 2 and Round 2) and talks through Kyllene on the phone, which needs no setup beyond being signed in.
+What it does, and how, is in [docs/pebble.md](docs/pebble.md).
 
 ## Requirements
 
@@ -186,6 +192,8 @@ shared/designsystem  design tokens and components on Compose Unstyled
 shared/ui            screens and view models (commonMain)
 androidApp           Android host: Application, Activity, notifications, manifest
 desktopApp           desktop host (experimental): the window, Escape as back
+wearApp              Wear OS companion
+pebbleApp            Pebble watchapp, in C (built with pebble-tool: `cd pebbleApp && pebble build`)
 ```
 
 The gateway protocol notes are in [docs/hermes-protocol-research.md](docs/hermes-protocol-research.md).
@@ -217,7 +225,8 @@ The scene names are the `PreviewScene` values in `HeraldPreviews.kt`, such as `R
 
 Pushing a tag such as `v0.3.0` runs the tests, builds APKs signed with the release key and attaches
 them, each with its SHA-256, to a draft release: a universal APK and one per ABI, about a third of its
-size. Publishing the draft makes it the update the app offers. The version comes from the tag
+size. The Wear OS app and the Pebble watchapp (`.pbw`) go with them. Publishing the draft makes it the update
+the app offers. The version comes from the tag
 (`1.2.3` → version code `10203`), so tags must only go up.
 
 The workflow needs these repository secrets: `ANDROID_KEYSTORE_BASE64` (the keystore, base64-encoded),

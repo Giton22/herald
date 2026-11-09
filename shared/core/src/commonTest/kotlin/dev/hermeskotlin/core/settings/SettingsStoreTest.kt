@@ -83,6 +83,24 @@ class SettingsStoreTest {
     }
 
     @Test
+    fun aPebbleTalksButAnswersOnlyOnceAllowedAndNotWhileSwitchedOff() = runTest {
+        val disk = InMemoryKeyValueStore()
+        // Settings saved before the Pebble existed.
+        disk.put("settings.v1", """{"theme":"Dark"}""")
+        val first = SettingsStore(disk, backgroundScope)
+        val before = first.settings.filterNotNull().first()
+        assertEquals(true, before.pebble)
+        assertEquals(false, before.answersOnPebble)
+
+        first.update { it.copy(pebbleAnswers = true) }
+        advanceUntilIdle()
+        val allowed = SettingsStore(disk, backgroundScope).settings.filterNotNull().first()
+        assertEquals(true, allowed.answersOnPebble)
+        // Switched off, the watch answers nothing, whatever answering there says.
+        assertEquals(false, allowed.copy(pebble = false).answersOnPebble)
+    }
+
+    @Test
     fun languageFollowsTheSystemUntilPickedAndBackAgain() = runTest {
         val disk = InMemoryKeyValueStore()
         // Settings saved before the option existed follow the system.

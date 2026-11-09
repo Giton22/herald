@@ -26,6 +26,7 @@ import dev.hermeskotlin.android.HeraldActivity
 import dev.hermeskotlin.android.R
 import dev.hermeskotlin.core.chat.ApprovalChoice
 import dev.hermeskotlin.core.chat.InputRequest
+import dev.hermeskotlin.core.chat.choicesAway
 import dev.hermeskotlin.core.connection.ConnectionState
 import dev.hermeskotlin.core.inbox.InboxNotice
 import dev.hermeskotlin.core.inbox.InboxNotices
@@ -159,8 +160,56 @@ class ChatNotifications(
          */
         fun ring(call: Ringing): Boolean
 
-        /** The call for [requestId] stopped ringing here. */
+        /**
+         * The call for [requestId] stopped ringing here. A watch that ended it was dropped from those it rang first,
+         * so it isn't told.
+         */
         fun stop(requestId: String)
+
+        /** Request [requestId] is answered or over, wherever it shows. */
+        fun gone(requestId: String) = Unit
+
+        /**
+         * Whether the phone's call for [requestId] shows on the watch, now that [by] wants it [show]n (none of its
+         * watches said it rings), or not (one did, late), or has no watch ringing for it any more and wants neither
+         * (null); null to leave it as it is.
+         */
+        fun showsCall(requestId: String, show: Boolean?, by: AlsoRings): Boolean? = show
+    }
+
+    /** Each of [rings] rings along: the Wear OS watches and the Pebbles. */
+    class AllRings(private val rings: List<AlsoRings>) : AlsoRings {
+        /** A call's [ringing]: those of [rings] whose watches may still ring, and whether one asked for the call. */
+        private class Ringers(val those: MutableSet<AlsoRings>, var asked: Boolean = false)
+
+        private val ringing = mutableMapOf<String, Ringers>()
+
+        override fun ring(call: Ringing): Boolean {
+            // Every one is asked, whatever the others say.
+            val those = rings.filter { it.ring(call) }
+            if (those.isNotEmpty()) synchronized(ringing) { ringing[call.id] = Ringers(those.toMutableSet()) }
+            return those.isNotEmpty()
+        }
+
+        override fun stop(requestId: String) {
+            synchronized(ringing) { ringing.remove(requestId) }
+            rings.forEach { it.stop(requestId) }
+        }
+
+        override fun gone(requestId: String) = rings.forEach { it.gone(requestId) }
+
+        // Shown once every one ringing gave up and one asked for it: a watch ringing itself doesn't show the phone's
+        // call too, and one picked up there (to answer on the phone) doesn't hold it back from the others.
+        override fun showsCall(requestId: String, show: Boolean?, by: AlsoRings): Boolean? = synchronized(ringing) {
+            val now = ringing[requestId] ?: return@synchronized null
+            if (show == false) {
+                now.those += by
+                return@synchronized false
+            }
+            now.those -= by
+            if (show == true) now.asked = true
+            if (now.those.isEmpty() && now.asked) true else null
+        }
     }
 
     var alsoRings: AlsoRings? = null
@@ -252,7 +301,7 @@ class ChatNotifications(
                     .setContentText(request.command.ifBlank { request.description })
                     .setStyle(NotificationCompat.BigTextStyle().bigText(body))
                 // "Always" is too big a decision for a notification; it stays in the app.
-                request.choices.filter { it != ApprovalChoice.Always }.forEach { choice ->
+                request.choicesAway.forEach { choice ->
                     builder.addAction(
                         NotificationCompat.Action.Builder(
                             0,
@@ -310,6 +359,7 @@ class ChatNotifications(
     fun cancelRequest(id: String) {
         stopRinging(id)
         manager.cancel(id, REQUEST_ID)
+        alsoRings?.gone(id)
     }
 
     /**
@@ -358,16 +408,18 @@ class ChatNotifications(
     }
 
     /**
-     * Whether this phone's call for [requestId] shows on the watch too: it does once Herald there didn't say it
-     * rings, and stops again should it say so late. Ringing on as it is, from where it got to.
+     * Whether this phone's call for [requestId] shows on the watch too, as [by] [want]s: it does once Kyllene didn't
+     * say it rings on any watch rung for it ([AlsoRings.showsCall]), and stops again should one say so late. Ringing
+     * on as it is, from where it got to.
      */
     @SuppressLint("MissingPermission") // It's only ever posted when canPost.
-    fun showOnWatch(requestId: String, show: Boolean) {
+    fun showOnWatch(requestId: String, want: Boolean?, by: AlsoRings) {
         if (Looper.myLooper() != Looper.getMainLooper()) {
-            main.post { showOnWatch(requestId, show) }
+            main.post { showOnWatch(requestId, want, by) }
             return
         }
         val call = _ringing.value[requestId] ?: return
+        val show = alsoRings?.showsCall(requestId, want, by) ?: return
         manager.notify(requestId, CALL_ID, callNotification(call, localOnly = !show, again = true))
         // Answered meanwhile, off this thread: it's not put back.
         if (requestId !in _ringing.value) manager.cancel(requestId, CALL_ID)
@@ -452,7 +504,7 @@ class ChatNotifications(
             main.post { answeredOnWatch(requestId) }
             return
         }
-        val call = stopRinging(requestId, toldWatch = true) ?: return
+        val call = stopRinging(requestId) ?: return
         call.request?.let { postRequest(call.storedSessionId, call.title, it, quiet = true) }
         call.agent?.let { agent ->
             call.storedSessionId?.let { openers.put(it, agent.reason) }
@@ -466,7 +518,7 @@ class ChatNotifications(
             main.post { declinedOnWatch(requestId) }
             return
         }
-        val call = stopRinging(requestId, toldWatch = true) ?: return
+        val call = stopRinging(requestId) ?: return
         call.request?.let { postRequest(call.storedSessionId, call.title, it) }
         call.agent?.end(CallOutcome.Declined)
     }
@@ -479,8 +531,8 @@ class ChatNotifications(
         stopRinging(requestId)
     }
 
-    /** [toldWatch]: the watch ended it, so it isn't told to stop. */
-    private fun stopRinging(requestId: String, toldWatch: Boolean = false): Ringing? {
+    /** Every watch still ringing stops too ([AlsoRings.stop]). */
+    private fun stopRinging(requestId: String): Ringing? {
         manager.cancel(requestId, CALL_ID)
         var call: Ringing? = null
         _ringing.update {
@@ -489,7 +541,7 @@ class ChatNotifications(
         }
         call?.let {
             main.removeCallbacksAndMessages(it.timer)
-            if (!toldWatch) alsoRings?.stop(requestId)
+            alsoRings?.stop(requestId)
         }
         return call
     }

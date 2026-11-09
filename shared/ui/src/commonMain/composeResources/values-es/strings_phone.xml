@@ -28,7 +28,7 @@
     <string name="phone_rings_talk_title">Hablar al responder</string>
     <string name="phone_rings_talk_detail">Al responder, Hermes se pone al teléfono: pregunta con sus palabras, respondes por voz y puedes seguir hablando. Desactivado, Responder abre el chat.</string>
     <string name="phone_watch_rings_title">Que suene también el reloj</string>
-    <string name="phone_watch_rings_detail">Kyllene en tu reloj también suena. Responde allí y Hermes pregunta en una llamada desde el reloj. Solo si tu Gateway habla en directo.</string>
+    <string name="phone_watch_rings_detail">Kyllene en tu reloj también suena. En un reloj Wear OS, Responder inicia una llamada desde el reloj, si tu Gateway habla en directo. En un Pebble, Responder muestra la pregunta allí si Responder en el Pebble está activado; si no, responde en el teléfono.</string>
     <string name="phone_quiet_title">Horas de silencio</string>
     <string name="phone_quiet_empty">Empiezan y terminan a las %1$s, así que aún no hay silencio: elige otra hora.</string>
     <string name="phone_quiet_window">Nada suena de %1$s a %2$s.</string>

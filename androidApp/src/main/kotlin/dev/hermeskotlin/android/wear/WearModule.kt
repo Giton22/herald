@@ -1,5 +1,9 @@
 package dev.hermeskotlin.android.wear
 
+import dev.hermeskotlin.android.pebble.PebbleOutbox
+import dev.hermeskotlin.android.pebble.PebbleRequests
+import dev.hermeskotlin.android.pebble.PebbleRinger
+import dev.hermeskotlin.android.pebble.RoutingOutbox
 import dev.hermeskotlin.core.wear.WatchOutbox
 import dev.hermeskotlin.core.wear.WatchRelay
 import dev.hermeskotlin.ui.voice.WatchCalls
@@ -8,9 +12,15 @@ import org.koin.android.ext.koin.androidContext
 import org.koin.core.module.dsl.viewModelOf
 import org.koin.dsl.module
 
-/** The watch companion's phone side: the relay to Hermes, its live calls, the Data Layer under them, its request notifications and the accent it follows. */
+/**
+ * The watch companion's phone side: the relay to Hermes, its live calls, the Data Layer and the Pebble link under them,
+ * its request notifications and the accent it follows.
+ */
 val wearModule = module {
-    single<WatchOutbox> { PhoneOutbox(androidContext()) }
+    single { PebbleOutbox(androidContext(), get(), get(), get()) }
+    single<WatchOutbox> { RoutingOutbox(PhoneOutbox(androidContext()), get()) }
+    single { PebbleRequests(get(), get(), get(), get(), get()) }
+    single { PebbleRinger(androidContext(), get(), get(), get(), get()) }
     single { WatchRelay(get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
     single { WatchCalls(get(), get(), get(), get(), get()) }
     single { WearRequests(get(), get()) }

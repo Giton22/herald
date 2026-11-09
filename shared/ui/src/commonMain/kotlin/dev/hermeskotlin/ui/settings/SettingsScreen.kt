@@ -138,6 +138,7 @@ import com.composables.icons.lucide.Send
 import com.composables.icons.lucide.ShieldAlert
 import com.composables.icons.lucide.Smartphone
 import com.composables.icons.lucide.Sun
+import com.composables.icons.lucide.Watch
 import com.composables.icons.lucide.WrapText
 import com.composables.icons.lucide.Wrench
 import com.composeunstyled.Text
@@ -272,15 +273,16 @@ fun SettingsScreen(
     var sidebarPagesOpen by remember { mutableStateOf(false) }
     // Saveable, and open again after a pick redraws the screens, so a new language shows on the page it was picked on.
     var languageOpen by rememberSaveable { mutableStateOf(LanguagePageReturn.take()) }
+    var connectedDevicesOpen by remember { mutableStateOf(false) }
     // Read again when the App icon page closes, so its row names the icon just applied.
     val appIcons = key(appIconOpen) { rememberAppIcons() }
     val language = rememberLanguageChoice()
     val suggestions by viewModel.suggestions.collectAsStateWithLifecycle()
     LaunchedEffect(gateway, profile) { viewModel.bind(gateway, profile) }
-    PlatformBackHandler(enabled = !checkOpen && !phoneToolsOpen && !appIconOpen && !startInstructionOpen && !callTargetOpen && !languageOpen && !sidebarPagesOpen, onBack = onBack)
+    PlatformBackHandler(enabled = !checkOpen && !phoneToolsOpen && !appIconOpen && !startInstructionOpen && !callTargetOpen && !languageOpen && !connectedDevicesOpen && !sidebarPagesOpen, onBack = onBack)
     // A page opened over Settings takes the keyboard from the search, so nothing typed there lands in a hidden query.
     val focus = LocalFocusManager.current
-    val pageOver = phoneToolsOpen || appIconOpen || startInstructionOpen || callTargetOpen || languageOpen || sidebarPagesOpen
+    val pageOver = phoneToolsOpen || appIconOpen || startInstructionOpen || callTargetOpen || languageOpen || connectedDevicesOpen || sidebarPagesOpen
     LaunchedEffect(pageOver) { if (pageOver) focus.clearFocus() }
     // The desktop lists the sections beside the page; they say here where they start.
     val anchors = remember { mutableStateMapOf<String, Int>() }
@@ -312,6 +314,7 @@ fun SettingsScreen(
         language = appLanguage(language.picked),
         onOpenLanguage = { languageOpen = true },
         onOpenStartInstruction = { startInstructionOpen = true },
+        onOpenConnectedDevices = { connectedDevicesOpen = true },
         onOpenSidebarPages = { sidebarPagesOpen = true },
         suggestions = suggestions,
         onInstallSuggestions = viewModel::installSuggestions,
@@ -328,6 +331,9 @@ fun SettingsScreen(
             onChange = { text -> viewModel.update { it.copy(startInstruction = text) } },
             onBack = { startInstructionOpen = false },
         )
+    }
+    if (connectedDevicesOpen) {
+        ConnectedDevicesScreen(settings, onUpdate = viewModel::update, onBack = { connectedDevicesOpen = false })
     }
     if (appIconOpen) AppIconScreen(onBack = { appIconOpen = false })
     if (sidebarPagesOpen) SidebarPagesScreen(settings, viewModel::update, onBack = { sidebarPagesOpen = false })
@@ -417,6 +423,7 @@ internal fun SettingsView(
     language: AppLanguage? = null,
     onOpenLanguage: () -> Unit = {},
     onOpenStartInstruction: () -> Unit = {},
+    onOpenConnectedDevices: () -> Unit = {},
     onOpenSidebarPages: () -> Unit = {},
     /** Where the Next Prompt plugin behind Suggested replies stands on the gateway. */
     suggestions: SuggestionsPlugin = SuggestionsPlugin.Checking,
@@ -891,6 +898,13 @@ internal fun SettingsView(
                         detail = phoneToolsSummary(settings),
                         icon = Lucide.Smartphone,
                         onClick = onOpenPhoneTools,
+                    )
+                    Divider()
+                    NavRow(
+                        title = stringResource(Res.string.settings_connected_devices),
+                        detail = connectedDevicesSummary(settings),
+                        icon = Lucide.Watch,
+                        onClick = onOpenConnectedDevices,
                     )
                 }
 
