@@ -34,14 +34,6 @@ class RequestAnswers(
         NotConnected,
     }
 
-    /** Request [requestId] as it waits; null once it's answered or its turn is over. */
-    fun find(requestId: String): InputRequest? {
-        for (chat in listOfNotNull(host.session.value, relay.session.value)) {
-            chat.state.value.inputRequests.firstOrNull { it.id == requestId }?.let { return it }
-        }
-        return watcher.find(requestId)?.second
-    }
-
     /** Gives request [requestId] the answer [result] makes of it; its notification goes once it's answered or gone. */
     suspend fun answer(requestId: String, result: (InputRequest) -> JsonObject?): Outcome {
         // The open chat's, else the watch's chat's.
