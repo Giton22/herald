@@ -26,6 +26,8 @@ static Answering s_answering;
 // An answer went and its outcome hasn't come.
 static bool s_sending;
 static char s_status[128];
+// The choices open over the window, for the request s_id held when they opened.
+static ActionMenu *s_menu;
 
 static void prv_copy(char *to, size_t size, const char *from) {
   strncpy(to, from ? from : "", size - 1);
@@ -81,7 +83,15 @@ static void prv_dictate(ActionMenu *menu, const ActionMenuItem *item, void *cont
 }
 
 static void prv_menu_closed(ActionMenu *menu, const ActionMenuItem *performed, void *context) {
+  if (s_menu == menu) s_menu = NULL;
   action_menu_hierarchy_destroy(action_menu_get_root_level(menu), NULL, NULL);
+}
+
+// The choices and the dictation opened for the request on screen go: what's picked or said there would answer
+// another one.
+static void prv_forget_answering(void) {
+  if (s_menu) action_menu_close(s_menu, false);
+  dictate_forget(prv_dictated);
 }
 
 static void prv_select(ClickRecognizerRef recognizer, void *context) {
@@ -95,7 +105,7 @@ static void prv_select(ClickRecognizerRef recognizer, void *context) {
     .align = ActionMenuAlignCenter,
     .did_close = prv_menu_closed,
   };
-  action_menu_open(&config);
+  s_menu = action_menu_open(&config);
 }
 
 static void prv_click_config(void *context) {
@@ -135,7 +145,7 @@ static void prv_unload(Window *window) {
   scroll_layer_destroy(s_scroll_layer);
   text_layer_destroy(s_status_layer);
   layer_destroy(s_header_layer);
-  dictate_forget(prv_dictated);
+  prv_forget_answering();
   window_destroy(s_window);
   s_window = NULL;
 }
@@ -166,6 +176,7 @@ void request_show(const LinkRequest *request, GColor fill, GColor on_fill) {
     prv_redraw();
     return;
   }
+  prv_forget_answering();
   s_sending = false;
   s_status[0] = '\0';
   if (!s_window) {
