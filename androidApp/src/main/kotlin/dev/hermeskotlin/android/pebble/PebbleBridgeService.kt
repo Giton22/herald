@@ -58,7 +58,8 @@ class PebbleBridgeService : BasePebbleListenerService() {
         val incoming = PebbleLink.decode(dict) ?: return ReceiveResult.Ack
         // By type number: R8 renames the classes in a release build.
         Log.d(TAG, "From the Pebble: type ${dict[PebbleKeys.TYPE]}")
-        if (settings.settings.value?.pebble == false) {
+        // Waited for: the watch's first message often starts Kyllene, before the stored settings are read.
+        if (!settings.settings.filterNotNull().first().pebble) {
             // Switched off in Settings: the watch says so instead of waiting on an answer.
             outbox.watch(node).message(PebbleLink.off())
             return ReceiveResult.Ack
