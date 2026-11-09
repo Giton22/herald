@@ -21,7 +21,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
@@ -70,7 +69,7 @@ fun SignInScreen(
     viewModel: SignInViewModel = koinViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    val uriHandler = LocalUriHandler.current
+    val openSignInPage = rememberSignInBrowser(onCancelled = viewModel::cancelBrowser)
 
     // One view model serves every gateway's sign-in screen, so it starts over when the gateway changes. A
     // browser sign-in still running goes on across a rotation, and only ever signs its own gateway in.
@@ -90,7 +89,7 @@ fun SignInScreen(
         username = viewModel.username,
         password = viewModel.password,
         onSignIn = { viewModel.signIn(gateway) },
-        onSignInWithBrowser = { viewModel.signInWithBrowser(gateway) { uriHandler.openUri(it) } },
+        onSignInWithBrowser = { viewModel.signInWithBrowser(gateway, openSignInPage) },
         onCancelBrowser = viewModel::cancelBrowser,
         onChangeGateway = onChangeGateway,
     )

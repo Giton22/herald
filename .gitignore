@@ -14,3 +14,8 @@ captures/
 # Local release signing (see androidApp/build.gradle.kts)
 keystore.properties
 *.jks
+
+# iOS: XcodeGen writes the project from iosApp/project.yml
+iosApp/*.xcodeproj/
+iosApp/build/
+xcuserdata/

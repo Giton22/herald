@@ -1,6 +1,5 @@
 package dev.hermeskotlin.core.auth
 
-import io.ktor.http.parseQueryString
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
@@ -76,8 +75,7 @@ class LoopbackHttpReceiver(private val returnUri: String?) : LoopbackReceiver {
             )
             out.write(bytes)
             out.flush()
-            val parameters = parseQueryString(target.substringAfter('?', ""))
-            return parameters.names().associateWith { parameters[it].orEmpty() }
+            return callbackQuery(target)
         }
 
         override fun close() = server.close()
