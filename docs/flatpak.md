@@ -394,14 +394,11 @@ is not guaranteed. In-app shortcuts remain available without this portal.
 
 The Linux application menu's **Call Hermes** action opens the existing voice-chat
 route. It calls the destination selected in **Default Call Target** for the
-current gateway, using the shared target lookup, cancellation and connection cue.
-It routes the request to the existing instance instead of starting a second
-application.
+current gateway, using the shared target lookup and cancellation. While the app
+runs, the launch hands the request to its window instead of opening a second one.
 An unavailable target reports the existing call error rather than choosing another
 destination. If signed out, the request waits for sign-in through the usual flow.
 The action starts a call and may use the microphone and configured voice provider.
 
 The equivalent explicit invocation is `flatpak run
-app.kyllene.Kyllene.Devel herald://voice-chat`. Native launcher activation
-and live-provider behavior require installed Linux validation; packaging tests
-and shared routing tests alone do not establish that acceptance.
+app.kyllene.Kyllene.Devel herald://voice-chat`.
