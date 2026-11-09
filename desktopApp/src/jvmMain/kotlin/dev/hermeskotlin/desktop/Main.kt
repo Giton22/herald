@@ -146,13 +146,15 @@ fun main(args: Array<String>) {
         val focused = remember { MutableStateFlow(false) }
         var quickOpen by remember { mutableStateOf(false) }
         var quickRaise by remember { mutableStateOf(0) }
-        var launcherRaise by remember { mutableStateOf(0) }
+        // Bumped by every show(): once the window is visible, Linux asks the window manager to activate it.
+        var windowRaise by remember { mutableStateOf(0) }
         val tray = rememberTrayState()
         // The chat the last notification was about, which a click on it opens.
         var lastNotice by remember { mutableStateOf<DesktopNotice?>(null) }
 
         fun show() {
             windowShown = true
+            windowRaise++
             frame?.let {
                 if (it.extendedState and Frame.ICONIFIED != 0) it.extendedState = it.extendedState and Frame.ICONIFIED.inv()
                 // Raised once Compose has made it visible again, after this pass: a hidden window can't come forward.
@@ -186,10 +188,7 @@ fun main(args: Array<String>) {
             }
             if (handleQuickEntryLink(link) { quickOpen = true; quickRaise++ }) return
             show()
-            AppLink.parse(link)?.let { action ->
-                if (action == AppLink.NewChat) launcherRaise++
-                links.follow(action)
-            }
+            AppLink.parse(link)?.let(links::follow)
         }
 
         LaunchedEffect(Unit) {
@@ -308,8 +307,8 @@ fun main(args: Array<String>) {
         ) {
             dialogOwner = window
             frame = window
-            LaunchedEffect(launcherRaise) {
-                if (launcherRaise != 0) SwingUtilities.invokeLater { LinuxWindowActivation.request(window) }
+            LaunchedEffect(windowRaise) {
+                if (windowRaise != 0) SwingUtilities.invokeLater { LinuxWindowActivation.request(window) }
             }
             // Narrow enough for Windows' snap layouts (a third of a screen), where the sidebar folds into a drawer;
             // past that, things would only be cut off.
