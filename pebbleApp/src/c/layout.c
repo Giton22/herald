@@ -1,5 +1,8 @@
 #include "layout.h"
 
+// Taller than the longest reply (PebbleLink.MAX_REPLY_BYTES) on the narrowest screen, within a frame's int16 height.
+#define MEASURE_H 30000
+
 #ifdef PBL_ROUND
 static int prv_sqrt(int n) {
   int root = 0;
@@ -47,15 +50,22 @@ static void prv_flow(TextLayer *layer, ScrollLayer *scroll) {
 #endif
 }
 
-int layout_fit(TextLayer *layer, ScrollLayer *scroll, int x, int y, int w) {
+int layout_fit(TextLayer *layer, GFont font, ScrollLayer *scroll, int x, int y, int w) {
   const char *text = text_layer_get_text(layer);
   if (!text || !text[0]) {
     layer_set_frame(text_layer_get_layer(layer), GRect(x, y, w, 0));
     return 0;
   }
-  layer_set_frame(text_layer_get_layer(layer), GRect(x, y, w, 2000));
-  prv_flow(layer, scroll);
-  int h = text_layer_get_content_size(layer).h + 6;
+  // Measured on a new layer, as tall as any reply gets: one already drawn keeps the size its text took when drawn,
+  // inside the scroll layer's window, and would be cut to that.
+  TextLayer *probe = text_layer_create(GRect(x, y, w, MEASURE_H));
+  text_layer_set_font(probe, font);
+  text_layer_set_text(probe, text);
+  scroll_layer_add_child(scroll, text_layer_get_layer(probe));
+  prv_flow(probe, scroll);
+  int h = text_layer_get_content_size(probe).h + 6;
+  layer_remove_from_parent(text_layer_get_layer(probe));
+  text_layer_destroy(probe);
   layer_set_frame(text_layer_get_layer(layer), GRect(x, y, w, h));
   prv_flow(layer, scroll);
   return h;

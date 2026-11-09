@@ -7,6 +7,7 @@
 #define PAD 6
 #define HEADER_H LAYOUT_HEADER_H
 #define STATUS_H 24
+#define DETAIL_FONT FONT_KEY_GOTHIC_24
 
 static Window *s_window;
 static Layer *s_header_layer;
@@ -59,7 +60,7 @@ static void prv_redraw(void) {
   text_layer_set_text(s_detail_layer, body);
   GRect bounds = layer_get_bounds(scroll_layer_get_layer(s_scroll_layer));
   int w = bounds.size.w - PAD * 2;
-  int h = layout_fit(s_detail_layer, s_scroll_layer, PAD, 4, w);
+  int h = layout_fit(s_detail_layer, fonts_get_system_font(DETAIL_FONT), s_scroll_layer, PAD, 4, w);
   scroll_layer_set_content_size(s_scroll_layer, GSize(bounds.size.w, h + 16));
 }
 
@@ -134,7 +135,7 @@ static void prv_load(Window *window) {
   scroll_layer_set_click_config_onto_window(s_scroll_layer, window);
   scroll_layer_set_callbacks(s_scroll_layer, (ScrollLayerCallbacks) { .click_config_provider = prv_click_config });
   s_detail_layer = text_layer_create(GRect(PAD, 4, bounds.size.w - PAD * 2, 0));
-  text_layer_set_font(s_detail_layer, fonts_get_system_font(FONT_KEY_GOTHIC_24));
+  text_layer_set_font(s_detail_layer, fonts_get_system_font(DETAIL_FONT));
   scroll_layer_add_child(s_scroll_layer, text_layer_get_layer(s_detail_layer));
   layer_add_child(root, scroll_layer_get_layer(s_scroll_layer));
   prv_redraw();

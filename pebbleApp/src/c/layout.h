@@ -16,5 +16,5 @@ int layout_inset(GRect screen, int top, int height, int pad);
 void layout_draw_header(GContext *ctx, GRect bounds, const char *title, GColor fill, GColor on_fill, int right_room);
 
 // Places [layer], in [scroll], at [x], [y], [w] wide and as tall as its text: on a round screen the text follows the
-// screen's edge, a page at a time. Its height, 0 for no text.
-int layout_fit(TextLayer *layer, ScrollLayer *scroll, int x, int y, int w);
+// screen's edge, a page at a time. [font] is the layer's. Its height, 0 for no text.
+int layout_fit(TextLayer *layer, GFont font, ScrollLayer *scroll, int x, int y, int w);

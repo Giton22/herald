@@ -17,6 +17,8 @@
 #define HEADER_H LAYOUT_HEADER_H
 #define ACTIVITY_H 24
 #define PAD 6
+#define SAID_FONT FONT_KEY_GOTHIC_18_BOLD
+#define REPLY_FONT FONT_KEY_GOTHIC_24
 // A quick launch opens straight into dictation, once the window is up.
 #define QUICK_DICTATE_MS 400
 // How long the launcher says Kyllene's working, after it closed mid-turn.
@@ -186,9 +188,9 @@ static void prv_layout(void) {
   GRect bounds = layer_get_bounds(scroll_layer_get_layer(s_scroll_layer));
   int w = bounds.size.w - PAD * 2;
   int y = 4;
-  int said = layout_fit(s_said_layer, s_scroll_layer, PAD, y, w);
+  int said = layout_fit(s_said_layer, fonts_get_system_font(SAID_FONT), s_scroll_layer, PAD, y, w);
   if (said) y += said + 2;
-  int h = layout_fit(s_reply_layer, s_scroll_layer, PAD, y, w);
+  int h = layout_fit(s_reply_layer, fonts_get_system_font(REPLY_FONT), s_scroll_layer, PAD, y, w);
   scroll_layer_set_content_size(s_scroll_layer, GSize(bounds.size.w, y + h + 12));
 }
 
@@ -543,12 +545,12 @@ static void prv_window_load(Window *window) {
   scroll_layer_set_callbacks(s_scroll_layer, (ScrollLayerCallbacks) { .click_config_provider = prv_click_config });
 
   s_said_layer = text_layer_create(GRect(PAD, 4, bounds.size.w - PAD * 2, 0));
-  text_layer_set_font(s_said_layer, fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD));
+  text_layer_set_font(s_said_layer, fonts_get_system_font(SAID_FONT));
   text_layer_set_text_color(s_said_layer, PBL_IF_COLOR_ELSE(GColorDarkGray, GColorBlack));
   scroll_layer_add_child(s_scroll_layer, text_layer_get_layer(s_said_layer));
 
   s_reply_layer = text_layer_create(GRect(PAD, 4, bounds.size.w - PAD * 2, 0));
-  text_layer_set_font(s_reply_layer, fonts_get_system_font(FONT_KEY_GOTHIC_24));
+  text_layer_set_font(s_reply_layer, fonts_get_system_font(REPLY_FONT));
   scroll_layer_add_child(s_scroll_layer, text_layer_get_layer(s_reply_layer));
   layer_add_child(root, scroll_layer_get_layer(s_scroll_layer));
 
