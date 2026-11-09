@@ -2265,7 +2265,8 @@ class ChatSession(
         liveRuntimeId(client)?.let { return@withLock it }
         _state.update { it.copy(attachment = Attachment.Attaching) }
         val picks = _state.value
-        val instruction = startInstruction()
+        // The session authority seeds no new chat (its create takes no `messages`); the chat goes without.
+        val instruction = startInstruction().takeUnless { client.sessionAuthority }
         val result = client.request(
             "session.create",
             buildJsonObject {

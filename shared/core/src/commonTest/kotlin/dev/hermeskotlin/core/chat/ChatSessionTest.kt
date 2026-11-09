@@ -71,8 +71,9 @@ class ChatSessionTest {
      * A gateway answering each call with the canned result for its method (`{}` otherwise, [SILENT] never answers;
      * see [FakeGateway.answer]). Started but not waited on: a chat started next sees the link come up.
      */
-    private suspend fun gateway(scope: CoroutineScope, results: Map<String, String>, reconnects: Boolean) =
+    private suspend fun gateway(scope: CoroutineScope, results: Map<String, String>, reconnects: Boolean, ready: String? = null) =
         FakeGateway(scope, reconnects).also { gateway = it }.apply {
+            ready?.let { frame -> this.ready = { frame } }
             answer = { call -> (results[call.method] ?: "{}").takeIf { it != SILENT } }
             http = { request ->
                 val other = storedSessions.entries.firstOrNull { request.url.encodedPath == "/api/sessions/${it.key}/messages" }
@@ -87,8 +88,8 @@ class ChatSessionTest {
             start(awaitConnected = false)
         }
 
-    private suspend fun setup(scope: CoroutineScope, results: Map<String, String>): Pair<GatewayConnection, FakeTransport> =
-        gateway(scope, results, reconnects = false).let { it.connection to it.socket }
+    private suspend fun setup(scope: CoroutineScope, results: Map<String, String>, ready: String? = null): Pair<GatewayConnection, FakeTransport> =
+        gateway(scope, results, reconnects = false, ready).let { it.connection to it.socket }
 
     /** Like [setup], but every connect opens a fresh transport, so a dropped link comes back; the latest is last. */
     private suspend fun reconnectingSetup(scope: CoroutineScope, results: Map<String, String>): Pair<GatewayConnection, List<FakeTransport>> =
@@ -226,6 +227,34 @@ class ChatSessionTest {
         assertTrue(content.endsWith("\n\nI'm on my phone: keep replies short."), content)
         // The prompt itself goes as usual; the instruction isn't in it or on screen.
         assertEquals("hi", transport.awaitSent { it.isCall("prompt.submit") }.param("text"))
+        assertEquals(listOf("hi"), chat.state.value.messages.map { it.textOf() })
+    }
+
+    @Test
+    fun aNewChatOnTheSessionAuthorityIsCreatedAsItTakesIt() = runTest {
+        // The gateway-hosted Webapp runs its chats on the session authority, whose create has no `messages` and
+        // whose prompt.submit needs a submission id (gateway/session_controls.py).
+        val (connection, transport) = setup(
+            backgroundScope,
+            mapOf(
+                "session.create" to """{"session_id":"local-1","stored_session_id":"local-1","info":{}}""",
+                "prompt.submit" to """{"status":"queued"}""",
+            ),
+            ready = """{"jsonrpc":"2.0","method":"event","params":{"type":"gateway.ready","payload":{"session_authority":true}}}""",
+        )
+        connection.state.first { it is ConnectionState.Connected }
+        val chat = ChatSession(url, null, null, connection, SessionsApi(client()), backgroundScope, startInstruction = { "Keep replies short." })
+        chat.start()
+
+        assertTrue(chat.send("hi"))
+
+        val create = transport.awaitSent { it.isCall("session.create") }["params"]!!.jsonObject
+        assertEquals("gui", create["source"]?.jsonPrimitive?.content)
+        assertNull(create["cols"])
+        assertNull(create["messages"])
+        val submit = transport.awaitSent { it.isCall("prompt.submit") }
+        assertEquals("local-1", submit.param("session_id"))
+        assertNotNull(submit.param("submission_id"))
         assertEquals(listOf("hi"), chat.state.value.messages.map { it.textOf() })
     }
 
