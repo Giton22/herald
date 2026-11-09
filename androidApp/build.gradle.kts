@@ -124,5 +124,7 @@ dependencies {
     // The watch companion's link to Herald's Wear OS app (wearApp).
     implementation(libs.play.services.wearable)
     implementation(libs.kotlinx.coroutines.play.services)
+    // The Pebble companion's link to Kyllene's Pebble watchapp (pebbleApp), through the Pebble phone app.
+    implementation(libs.pebblekit2.client)
     debugImplementation(libs.compose.ui.tooling)
 }

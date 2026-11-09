@@ -28,7 +28,7 @@
     <string name="phone_rings_talk_title">Beszélgetés fogadáskor</string>
     <string name="phone_rings_talk_detail">Fogadáskor a Hermes a vonalba lép: a saját szavaival kérdez, te hanggal válaszolsz, és tovább is beszélgethetsz. Kikapcsolva a Fogadás megnyitja a csevegést.</string>
     <string name="phone_watch_rings_title">Az óra is csörögjön</string>
-    <string name="phone_watch_rings_detail">Az órádon lévő Kyllene is csörög. Fogadd ott, és a Hermes az órán át kérdez. Csak ha a Gateway-ed tud élőben beszélni.</string>
+    <string name="phone_watch_rings_detail">Az órádon lévő Kyllene is csörög. Wear OS órán a fogadás hívást indít az óráról, ha a Gateway-ed tud élőben beszélni. Pebble-ön a fogadás ott mutatja a kérdést, ha a Válaszolás a Pebble-ön be van kapcsolva; különben válaszolj a telefonon.</string>
     <string name="phone_quiet_title">Csendes órák</string>
     <string name="phone_quiet_empty">%1$s-kor kezdődik és ér véget, így még nincs csend: válassz másik időpontot.</string>
     <string name="phone_quiet_window">%1$s és %2$s között semmi sem csörög.</string>
