@@ -91,6 +91,8 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [x] Re-attach (`session.resume`) and refetch the transcript after a reconnect; rebuild a running turn from `inflight`
 - [x] Exact event replay after reconnect (`session.events.since`): the last applied `seq` is tracked per runtime session and the missed events go through the same reducer, overlap with live frames dropped by seq; a gap in the live stream is filled the same way. A truncated ring, another `replay_epoch` or an older gateway fall back to the transcript refetch and `inflight`. The chat shows "Reconnecting…" / "Waiting for network…" while the link is down
 - [x] Connection-state indicator in the UI (connecting, connected, retrying with countdown, refused, session expired)
+- [x] Gateways that run their chats on the session authority (`gateway.ready` `session_authority`, such as the gateway-hosted Webapp on :9120): new chats and sends go in the shape its contracts take (`source: "gui"`, no `cols`, `reasoning`/`service_tier` for the picks, a `request_id` and a `submission_id`), and every request about a named profile's chat carries that profile, which routes it to the connection holding the chat. Such a gateway seeds no new chat, so the start instruction is left out there
+- [ ] The rest on session-authority gateways: titled chats (threads, Bot Chat) without `session.title`, stop, steer and approvals with `execution_generation`, edit-and-resend as a `rewind`, and the start instruction
 
 ### 3. Sessions
 - [x] Session list with title, preview, model, last-active time, source, message count, and pinned/archived state (`GET /api/sessions?order=recent`, paged; same REST endpoint Desktop uses because the WS `session.list` row has no model or last-active time)

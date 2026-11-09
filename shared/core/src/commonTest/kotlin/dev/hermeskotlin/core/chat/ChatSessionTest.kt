@@ -71,8 +71,9 @@ class ChatSessionTest {
      * A gateway answering each call with the canned result for its method (`{}` otherwise, [SILENT] never answers;
      * see [FakeGateway.answer]). Started but not waited on: a chat started next sees the link come up.
      */
-    private suspend fun gateway(scope: CoroutineScope, results: Map<String, String>, reconnects: Boolean) =
+    private suspend fun gateway(scope: CoroutineScope, results: Map<String, String>, reconnects: Boolean, ready: String? = null) =
         FakeGateway(scope, reconnects).also { gateway = it }.apply {
+            ready?.let { frame -> this.ready = { frame } }
             answer = { call -> (results[call.method] ?: "{}").takeIf { it != SILENT } }
             http = { request ->
                 val other = storedSessions.entries.firstOrNull { request.url.encodedPath == "/api/sessions/${it.key}/messages" }
@@ -87,12 +88,16 @@ class ChatSessionTest {
             start(awaitConnected = false)
         }
 
-    private suspend fun setup(scope: CoroutineScope, results: Map<String, String>): Pair<GatewayConnection, FakeTransport> =
-        gateway(scope, results, reconnects = false).let { it.connection to it.socket }
+    private suspend fun setup(scope: CoroutineScope, results: Map<String, String>, ready: String? = null): Pair<GatewayConnection, FakeTransport> =
+        gateway(scope, results, reconnects = false, ready).let { it.connection to it.socket }
 
     /** Like [setup], but every connect opens a fresh transport, so a dropped link comes back; the latest is last. */
-    private suspend fun reconnectingSetup(scope: CoroutineScope, results: Map<String, String>): Pair<GatewayConnection, List<FakeTransport>> =
-        gateway(scope, results, reconnects = true).let { it.connection to it.sockets }
+    private suspend fun reconnectingSetup(
+        scope: CoroutineScope,
+        results: Map<String, String>,
+        ready: String? = null,
+    ): Pair<GatewayConnection, List<FakeTransport>> =
+        gateway(scope, results, reconnects = true, ready).let { it.connection to it.sockets }
 
     private fun ChatMessage.textOf() = when (this) {
         is ChatMessage.User -> text
@@ -230,6 +235,34 @@ class ChatSessionTest {
     }
 
     @Test
+    fun aNewChatOnTheSessionAuthorityIsCreatedAsItTakesIt() = runTest {
+        // The gateway-hosted Webapp runs its chats on the session authority, whose create has no `messages` and
+        // whose prompt.submit needs a submission id (gateway/session_controls.py).
+        val (connection, transport) = setup(
+            backgroundScope,
+            mapOf(
+                "session.create" to """{"session_id":"local-1","stored_session_id":"local-1","info":{}}""",
+                "prompt.submit" to """{"status":"queued"}""",
+            ),
+            ready = AUTHORITY_READY,
+        )
+        connection.state.first { it is ConnectionState.Connected }
+        val chat = ChatSession(url, null, null, connection, SessionsApi(client()), backgroundScope, startInstruction = { "Keep replies short." })
+        chat.start()
+
+        assertTrue(chat.send("hi"))
+
+        val create = transport.awaitSent { it.isCall("session.create") }["params"]!!.jsonObject
+        assertEquals("gui", create["source"]?.jsonPrimitive?.content)
+        assertNull(create["cols"])
+        assertNull(create["messages"])
+        val submit = transport.awaitSent { it.isCall("prompt.submit") }
+        assertEquals("local-1", submit.param("session_id"))
+        assertNotNull(submit.param("submission_id"))
+        assertEquals(listOf("hi"), chat.state.value.messages.map { it.textOf() })
+    }
+
+    @Test
     fun aNewChatWithoutAStartingInstructionSeedsNothing() = runTest {
         val (connection, transport) = setup(
             backgroundScope,
@@ -269,6 +302,34 @@ class ChatSessionTest {
         assertEquals(SendOutcome.Unsettled, sending.await())
 
         // The seeded row was stored on create, so the next link resumes it instead of making a second chat.
+        chat.state.first { it.runtimeSessionId != null && transports.last() !== dropped }
+        assertTrue(transports.last().sent.value.any { it.isCall("session.resume") })
+        assertEquals(1, transports.sumOf { socket -> socket.sent.value.count { it.isCall("session.create") } })
+    }
+
+    @Test
+    fun aNewChatOnTheSessionAuthorityResumesItsRowOnReconnect() = runTest {
+        val (connection, transports) = reconnectingSetup(
+            backgroundScope,
+            mapOf(
+                "session.create" to """{"session_id":"rt9","stored_session_id":"stored-1","info":{}}""",
+                "session.resume" to """{"session_id":"rt9","running":false}""",
+                "prompt.submit" to SILENT,
+            ),
+            ready = AUTHORITY_READY,
+        )
+        connection.state.first { it is ConnectionState.Connected }
+        val chat = ChatSession(url, null, null, connection, SessionsApi(client()), backgroundScope, startInstruction = { null })
+        chat.start()
+        historyFails = true
+        val sending = backgroundScope.async { chat.submit("deploy it") }
+        transports.last().awaitSent { it.isCall("prompt.submit") }
+        val dropped = transports.last()
+        dropped.serverClose(1006)
+        assertEquals(SendOutcome.Unsettled, sending.await())
+
+        // The authority stored the row on create (hermes_state_local.py commit_local_session), so the next link
+        // resumes it instead of leaving it empty and making a second chat.
         chat.state.first { it.runtimeSessionId != null && transports.last() !== dropped }
         assertTrue(transports.last().sent.value.any { it.isCall("session.resume") })
         assertEquals(1, transports.sumOf { socket -> socket.sent.value.count { it.isCall("session.create") } })
@@ -2420,6 +2481,10 @@ class ChatSessionTest {
 
     private companion object {
         const val SILENT = "silent"
+
+        /** A gateway whose chats run on the session authority (the gateway-hosted Webapp listener). */
+        const val AUTHORITY_READY =
+            """{"jsonrpc":"2.0","method":"event","params":{"type":"gateway.ready","payload":{"session_authority":true}}}"""
     }
 
     @Test

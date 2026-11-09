@@ -2284,7 +2284,8 @@ class ChatSession(
             },
         ) as? JsonObject ?: error("Empty session.create reply")
         val runtimeId = result.string("session_id") ?: error("session.create returned no session_id")
-        if (!instruction.isNullOrBlank()) rowExists = true
+        // The session authority stores every new chat's row on create, so a send after a lost link resumes it.
+        if (client.sessionAuthority || !instruction.isNullOrBlank()) rowExists = true
         streamMutex.withLock {
             lastSeq = null
             seqRuntime = runtimeId

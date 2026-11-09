@@ -135,6 +135,15 @@ class JsonRpcClient(
     /** Completed with the `gateway.ready` payload. */
     val ready = CompletableDeferred<JsonObject>()
 
+    /**
+     * The gateway runs this socket's chats on its session authority (`gateway.ready` `session_authority`), which
+     * takes requests in its own shape; [request] rewrites them ([AuthorityRequests]). Known once [ready] is.
+     */
+    @kotlin.concurrent.Volatile var sessionAuthority = false
+        private set
+
+    private val authorityRequests = AuthorityRequests()
+
     suspend fun run(): Nothing = coroutineScope {
         try {
             transport.incoming.collect { text ->
@@ -161,6 +170,12 @@ class JsonRpcClient(
     }
 
     suspend fun request(method: String, params: JsonObject = JsonObject(emptyMap()), timeoutMs: Long = 30_000): JsonElement {
+        if (!sessionAuthority) return call(method, params, timeoutMs)
+        val sent = authorityRequests.prepare(method, params)
+        return call(method, sent, timeoutMs).also { authorityRequests.answered(method, sent, it) }
+    }
+
+    private suspend fun call(method: String, params: JsonObject, timeoutMs: Long): JsonElement {
         // Nothing will answer on a link that is gone; say so now rather than after the timeout.
         closedWith?.let { throw it }
         val deferred = CompletableDeferred<JsonElement>()
@@ -242,6 +257,7 @@ class JsonRpcClient(
                 }
             }
             if (readyPayload["heartbeat"]?.jsonPrimitive?.booleanOrNull == true) startHeartbeat(scope)
+            sessionAuthority = (readyPayload["session_authority"] as? JsonPrimitive)?.booleanOrNull == true
             ready.complete(readyPayload)
         }
         _events.emit(
