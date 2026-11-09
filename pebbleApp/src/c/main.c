@@ -11,6 +11,7 @@
 static void prv_send_failed(int type) {
   talk_on_send_failed(type);
   ring_on_send_failed(type);
+  request_on_send_failed(type);
 }
 
 int main(void) {

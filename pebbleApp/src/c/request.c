@@ -203,3 +203,12 @@ void request_end(const char *request_id, const char *error) {
   if (s_sending) vibes_short_pulse();
   window_stack_remove(s_window, true);
 }
+
+void request_on_send_failed(int type) {
+  if (type != LINK_ANSWER || !s_window || !s_sending) return;
+  // The answer never reached the phone, so no outcome will come: it can be tried again.
+  s_sending = false;
+  prv_copy(s_status, sizeof(s_status), "Couldn't reach Kyllene on your phone.");
+  vibes_double_pulse();
+  prv_redraw();
+}
