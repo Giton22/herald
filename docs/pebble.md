@@ -477,7 +477,7 @@ Decided on 2026-10-27 (§7, decisions 2 and 3, and §4.4).
   - Checked on the emulators for basalt, diorite, chalk, gabbro and emery. Long header titles are cut short on chalk's narrow top.
 - (2) CI has a `pebble` job: `pipx install pebble-tool==5.0.40`, `pebble sdk install 4.33.1` (pinned since 4.44 came out and fails to install with that tool), then `pebble build`, uploading `pebbleApp.pbw`. Installing the SDK only prints its terms; it asks nothing. The same recipe was run from scratch, with a clean home directory and Python 3.12. The release job builds the watchapp at the tag's version, without any pre-release suffix, and attaches `kyllene-pebble-$v.pbw` and its SHA-256. `UpdateChecker` only offers `.apk` files; a test makes sure a `.pbw` is never offered.
 - (3) The README and ROADMAP cover the Pebble watch.
-- (4) Not done: publishing to the Pebble app store is for the maintainers to decide.
+- (4) The listing is the maintainers' to make: whose account owns it, and so its UUID, is theirs to decide. Once it exists, `pebble-appstore.yml` sends each published release's `.pbw` to it (setup in [the watchapp's README](../pebbleApp/README.md#pebble-appstore)). Tried against a local stand-in for the store: an upload to a listed UUID, the version taken from the tag rather than `package.json`, and a refusal to create a listing for an unlisted one. Not tried against the real store, sign-in included.
 
 ### Phase 6: stretch (each a spike first)
 
