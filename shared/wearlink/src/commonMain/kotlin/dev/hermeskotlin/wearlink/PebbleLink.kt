@@ -239,6 +239,9 @@ object PebbleLink {
     /** The ask a chat's last exchange comes as: never one the watch made, so it's never taken for a running turn. */
     fun historyAskId(chatId: String): String = "h:$chatId"
 
+    /** Whether [askId] is a chat's last exchange ([historyAskId]), not a turn the watch asked for. */
+    fun isHistoryAsk(askId: String): Boolean = askId.startsWith("h:")
+
     /** [chatId]'s last exchange as a finished turn: what was [said], and the [reply]. */
     fun history(chatId: String, title: String?, said: String?, reply: String, scope: WatchScope? = null): ReplyUpdate =
         ReplyUpdate(historyAskId(chatId), ReplyPhase.Done, chatId = chatId, title = title, heard = said, text = reply, scope = scope)

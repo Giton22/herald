@@ -87,7 +87,28 @@ class PebbleWatchTest {
     }
 
     @Test
-    fun aLongReplyGoesInChunksThatEachFit() = pebbleTest { fake, watch ->
+    fun aReplyRewrittenPartWayGoesAgainFromWhereItChanged() = pebbleTest { fake, watch ->
+        // A link still open shows its marks; closed, they go, and only the text from there on is sent again.
+        watch.reply(update(1, "See [the docs"))
+        advanceUntilIdle()
+        watch.reply(update(2, "See [the docs](https://example.com) now"))
+        advanceUntilIdle()
+        assertEquals(4 to "the docs now", fake.replies.last().let { it.offset to it.chunk })
+        assertEquals("See the docs now", fake.text)
+    }
+
+    @Test
+    fun aReplyThatLostItsEndIsCutOnTheWatch() = pebbleTest { fake, watch ->
+        watch.reply(update(1, "Done *"))
+        advanceUntilIdle()
+        watch.reply(update(2, "Done"))
+        advanceUntilIdle()
+        assertEquals(4 to "", fake.replies.last().let { it.offset to it.chunk })
+        assertEquals("Done", fake.text)
+    }
+
+    @Test
+    fun aLongReplyGoesInChunksThatEachFit()= pebbleTest { fake, watch ->
         val long = "word ".repeat(700).trim()
         watch.reply(update(1, long, ReplyPhase.Done))
         advanceUntilIdle()
@@ -179,7 +200,34 @@ class PebbleWatchTest {
     }
 
     @Test
-    fun aNewAskStartsTheWatchsTextOver() = pebbleTest { fake, watch ->
+    fun aMessageThatNeverGoesDoesntHoldTheRest() = pebbleTest { fake, watch ->
+        // Every try at the first chat fails; the second still goes, without waiting for something else to send.
+        repeat(3) { fake.answers.addLast(PebbleSent.Failed) }
+        val first: PebbleDict = mapOf(PebbleKeys.TYPE to PebbleValue.Num(PebbleTypes.CHAT_ITEM), PebbleKeys.INDEX to PebbleValue.Num(0))
+        val second: PebbleDict = mapOf(PebbleKeys.TYPE to PebbleValue.Num(PebbleTypes.CHAT_ITEM), PebbleKeys.INDEX to PebbleValue.Num(1))
+        watch.message(first)
+        watch.message(second)
+        advanceUntilIdle()
+        assertEquals(listOf(first, first, first, second), fake.sent)
+    }
+
+    @Test
+    fun aChatsLastExchangeIsntToldElsewhere() = pebbleTest { fake, watch ->
+        // Asked for as the app opened, and ready after it closed: old news, not a turn that ended.
+        val history = PebbleLink.history("chat-1", "A chat", "What's new?", "Nothing much.")
+        watch.closed()
+        watch.reply(history)
+        advanceUntilIdle()
+        assertEquals(emptyList(), fake.toldElsewhere)
+        assertTrue(fake.sent.isEmpty())
+        // It still shows once the app is open again.
+        watch.opened()
+        advanceUntilIdle()
+        assertEquals("Nothing much.", fake.text)
+    }
+
+    @Test
+    fun aNewAskStartsTheWatchsTextOver()= pebbleTest { fake, watch ->
         watch.reply(update(5, "Old answer", ReplyPhase.Done))
         advanceUntilIdle()
         watch.reply(update(1, "", ReplyPhase.Sending, askId = "p2"))

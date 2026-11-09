@@ -52,7 +52,7 @@ static void prv_draw_row(GContext *ctx, const Layer *cell, MenuIndex *index, voi
   }
   const Chat *chat = &s_chats[index->row - 1];
   char subtitle[32];
-  bool here = strcmp(chat->id, s_current) == 0;
+  bool here = chat->id[0] && strcmp(chat->id, s_current) == 0;
   snprintf(subtitle, sizeof(subtitle), "%s%s%s", here ? "Talking here" : "", here && chat->ago[0] ? " - " : "", chat->ago);
   menu_cell_basic_draw(ctx, cell, chat->title[0] ? chat->title : "Untitled", subtitle[0] ? subtitle : NULL, NULL);
 }
@@ -64,7 +64,8 @@ static int16_t prv_row_height(MenuLayer *menu, MenuIndex *index, void *data) {
 static void prv_select(MenuLayer *menu, MenuIndex *index, void *data) {
   if (index->row == 0) {
     s_picked("", "", "");
-  } else if (!s_loading && !s_error[0] && index->row - 1 < s_count) {
+  } else if (!s_loading && !s_error[0] && index->row - 1 < s_count && s_chats[index->row - 1].id[0]) {
+    // A row whose chat never came has no id, which would pick a new chat.
     s_picked(s_chats[index->row - 1].id, s_chats[index->row - 1].title, s_scope);
   } else {
     return;
@@ -118,6 +119,8 @@ void chats_open(const char *current, GColor fill, GColor on_fill, ChatPicked pic
   s_on_fill = on_fill;
   prv_copy(s_current, sizeof(s_current), current);
   s_count = 0;
+  // An item that never comes leaves an empty row, not a chat from the list before.
+  memset(s_chats, 0, sizeof(s_chats));
   s_error[0] = '\0';
   s_loading = link_chats_request();
   if (!s_loading) prv_copy(s_error, sizeof(s_error), "Couldn't ask your phone. Try again.");

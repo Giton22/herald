@@ -195,7 +195,7 @@ The Wear JSON protocol stays untouched. `PebbleOutbox` **decodes the JSON for ea
   - Each piece is computed against what the watch **acknowledged** (PebbleKit's `Success`), never against the last update built. A lost piece is just part of the next one.
   - The watch sets its text's length to `TEXT_OFFSET`, then appends the piece. That makes a piece sent twice harmless, and offset 0 a replace. (A C inbox handler can't NACK; the ACK is automatic.)
   - Only an offset past the watch's length is wrong (it restarted unseen): it sends `RESYNC`, and the phone sends the reply again from 0.
-  - A text that changed other than by growing goes again from 0, as pieces that each fit the inbox.
+  - A text that changed other than by growing (a mark closing later in the stream rewrote what came before) goes again from where it changed, as pieces that each fit the inbox: the first cuts the watch's text there.
   - One message is in flight at a time; while streaming, at most one every 800 ms. Only *unsent* updates are dropped, the latest `SEQ` winning. An update that changes nothing the watch shows (only its `SEQ`) isn't sent.
   - Failures: `FailedTimeout`/`FailedWatchNacked` are tried 3 times; `FailedDifferentAppOpen`/`FailedWatchNotConnected` stop all sending until the app opens again, and queued messages (status, chats) are dropped, since the watch asks again on opening.
 - **Plain text:** strip markdown (code fences, headings, links) before sending. The watch draws plain text in a `ScrollLayer`.

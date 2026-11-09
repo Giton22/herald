@@ -23,7 +23,7 @@ enum class PebbleSent {
  * Kyllene is the app open on it, and only about 2 KB at once, so:
  *
  * - The turn's updates ([reply]) aren't each sent whole. The newest one wins, and the watch gets only what it lacks:
- *   the reply's text from the end of what the watch acknowledged, a chunk at a time, or all of it again from 0 when
+ *   the reply's text from the end of what the watch acknowledged, a chunk at a time, or again from where it changed when
  *   it changed other than by growing. Updates while streaming go at most every [gapMs].
  * - Other messages ([message]: the status, the chats) go first, in order. While the app is closed they're dropped:
  *   the watch asks again when it opens.
@@ -149,6 +149,8 @@ class PebbleWatch(
     private fun endedWhileClosed() {
         val update = latest ?: return
         if (update.phase != ReplyPhase.Done && update.phase != ReplyPhase.Failed) return
+        // A chat's last exchange is old news, not a turn that ended: it goes again when the app opens.
+        if (PebbleLink.isHistoryAsk(update.askId)) return
         if (update.askId == toldElsewhere || update.askId == stoppedAsk) return
         if (shownAsk == update.askId && shownState?.phase == update.phase) return
         toldElsewhere = update.askId
@@ -168,10 +170,12 @@ class PebbleWatch(
             if (!open) return
             val message = queue.firstOrNull()
             if (message != null) {
-                val sent = deliver(message)
-                // Given up on: dropped, so one message that never goes can't hold the rest.
-                if (open) queue.removeFirst()
-                if (!sent) return
+                deliver(message)
+                // The app closed under it: the queue went with it.
+                if (!open) return
+                // Sent or given up on: dropped either way, and the rest go on, so one message that never goes
+                // can't hold them.
+                queue.removeFirst()
                 continue
             }
             val next = nextReply() ?: return
@@ -196,11 +200,14 @@ class PebbleWatch(
         val update = latest ?: return null
         val plain = clipUtf8(plainText(update.text), PebbleLink.MAX_REPLY_BYTES)
         val sameAsk = update.askId == shownAsk
-        val kept = if (sameAsk && plain.startsWith(shownText)) shownText else ""
+        // What the watch has that still stands: all of it while the reply only grows, and up to where it changed
+        // when a mark closing later in the stream (a link, an emphasis) rewrote what came before.
+        val kept = if (sameAsk) plain.commonPrefixWith(shownText) else ""
         val chunk = takeUtf8(plain, PebbleLink.CHUNK_BYTES, from = kept.length)
-        val replaces = kept.isEmpty() && shownText.isNotEmpty()
+        // The watch has text past what stands: a message cuts it there, even with nothing to add.
+        val cuts = kept.length < shownText.length
         val stateChanged = !sameAsk || shownState != update.withoutText()
-        if (chunk.isEmpty() && !replaces && !stateChanged) return null
+        if (chunk.isEmpty() && !cuts && !stateChanged) return null
         val dict = PebbleLink.reply(update, offset = utf8Size(kept), chunk = chunk, total = utf8Size(plain))
         val shown = kept + chunk
         val terminal = update.phase == ReplyPhase.Done || update.phase == ReplyPhase.Failed
