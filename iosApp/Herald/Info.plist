@@ -31,10 +31,16 @@
 		<key>NSAllowsArbitraryLoads</key>
 		<true/>
 	</dict>
+	<key>NSCameraUsageDescription</key>
+	<string>Herald uses the camera when you take a photo to send to your agent.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>App lock uses Face ID to open Herald.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Herald connects to the Hermes gateway you choose, which can be on your local network.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Herald records your voice when you dictate a message or talk to your agent.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Herald saves pictures from your chats to Photos when you ask it to.</string>
 	<key>UILaunchScreen</key>
 	<dict/>
 	<key>UIRequiredDeviceCapabilities</key>
