@@ -27,7 +27,9 @@ fun watchView(request: InputRequest): WatchRequestView = when (request) {
     is InputRequest.Clarify -> {
         val question = request.questions.singleOrNull()?.takeIf { !it.multiSelect }
         if (question != null) {
-            WatchRequestView(false, "Hermes has a question", question.question, question.choices, WatchAnswering.ChoicesOrText)
+            // Blank ones are left out here, not on the watch: it answers by a choice's place among those shown.
+            val choices = question.choices.filter { it.isNotBlank() }
+            WatchRequestView(false, "Hermes has a question", question.question, choices, WatchAnswering.ChoicesOrText)
         } else {
             val detail = request.questions.joinToString("\n") { it.question }
             WatchRequestView(false, "Hermes has questions", detail, emptyList(), WatchAnswering.OnPhone)

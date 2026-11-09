@@ -49,6 +49,16 @@ class WatchRequestsTest {
     }
 
     @Test
+    fun aBlankChoiceIsLeftOutSoTheWatchsPlacesMatch() {
+        // The watch shows one choice per line and skips empty lines: a blank one sent would shift every place after it.
+        val question = InputRequest.Clarify("c6", listOf(ClarifyQuestion("q0", "Go on?", listOf("", "Yes", "  ", "No"))))
+        assertEquals(listOf("Yes", "No"), watchView(question).choices)
+        assertEquals(JsonPrimitive("Yes"), watchAnswer(question, 0, null)!!["answers"]!!.jsonObject["q0"])
+        assertEquals(JsonPrimitive("No"), watchAnswer(question, 1, null)!!["answers"]!!.jsonObject["q0"])
+        assertNull(watchAnswer(question, 2, null))
+    }
+
+    @Test
     fun aQuestionWithoutABatchIdIsAnsweredPlainly() {
         val question = InputRequest.Clarify("c2", listOf(ClarifyQuestion(null, "Name?")))
         assertEquals(JsonPrimitive("Ada"), watchAnswer(question, null, "Ada")!!["answer"])
