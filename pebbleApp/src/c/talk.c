@@ -32,7 +32,7 @@ static char s_prompts_rev[16];
 // Persisted; a prompt each from KEY_PROMPT.
 enum {
   KEY_CHAT_ID = 1, KEY_CHAT_TITLE = 2, KEY_ACCENT_REV = 3, KEY_ACCENT_FILL = 4, KEY_ACCENT_ON_FILL = 5,
-  KEY_PROMPTS_REV = 6, KEY_PROMPT_COUNT = 7, KEY_CHAT_SCOPE = 8, KEY_PROMPT = 10,
+  KEY_PROMPTS_REV = 6, KEY_PROMPT_COUNT = 7, KEY_CHAT_SCOPE = 8, KEY_ASK_ID = 9, KEY_PROMPT = 10,
 };
 
 typedef enum {
@@ -85,6 +85,21 @@ static int s_ask_count;
 static void prv_copy(char *to, size_t size, const char *from) {
   strncpy(to, from ? from : "", size - 1);
   to[size - 1] = '\0';
+}
+
+// The ask the watch is on now, kept for the next launch: the phone sends its newest turn again on opening, which
+// may be one from a chat this watch moved on from.
+static void prv_set_ask(const char *ask_id) {
+  prv_copy(s_ask_id, sizeof(s_ask_id), ask_id);
+  persist_write_string(KEY_ASK_ID, s_ask_id);
+}
+
+// The ask a chat's last exchange comes as (PebbleLink.historyAskId), or "-" for a new chat, which has none.
+static void prv_set_history_ask(void) {
+  char id[sizeof(s_ask_id)];
+  if (s_chat_id[0]) snprintf(id, sizeof(id), "h:%s", s_chat_id);
+  else prv_copy(id, sizeof(id), "-");
+  prv_set_ask(id);
 }
 
 static bool prv_running(void) {
@@ -237,6 +252,7 @@ void talk_on_status(const LinkStatus *status) {
   static bool s_asked_history;
   if (!s_asked_history && !s_has_turn && s_chat_id[0] && s_phone == PHONE_READY) {
     s_asked_history = true;
+    prv_set_history_ask();
     s_loading_chat = link_history_request(s_chat_id, s_chat_scope);
   }
   if (s_phone == PHONE_OFF && s_has_turn && s_phase == PHASE_SENDING) {
@@ -268,7 +284,9 @@ static void prv_phone_connection(bool connected) {
 // --- The turn
 
 static void prv_ask(const char *text) {
-  snprintf(s_ask_id, sizeof(s_ask_id), "p%lx%d", (unsigned long)time(NULL), ++s_ask_count);
+  char id[sizeof(s_ask_id)];
+  snprintf(id, sizeof(id), "p%lx%d", (unsigned long)time(NULL), ++s_ask_count);
+  prv_set_ask(id);
   s_has_turn = true;
   prv_copy(s_said, sizeof(s_said), text);
   s_reply[0] = '\0';
@@ -298,11 +316,14 @@ void talk_on_send_failed(int type) {
 }
 
 void talk_on_reply(const LinkReply *reply) {
+  // An ask this watch moved on from (asked again, or picked another chat): the phone streams it until it ends, and
+  // taking it would put the watch back in that ask's chat.
+  if (s_ask_id[0] && strcmp(reply->ask_id, s_ask_id) != 0) return;
   s_loading_chat = false;
-  if (!s_has_turn || strcmp(reply->ask_id, s_ask_id) != 0) {
-    // Another ask's turn: one from before this app opened, which the phone sends again on opening.
+  if (!s_has_turn) {
+    // The first turn since this app opened (one the phone sends again on opening), or the chat's last exchange.
     s_has_turn = true;
-    prv_copy(s_ask_id, sizeof(s_ask_id), reply->ask_id);
+    prv_set_ask(reply->ask_id);
     s_said[0] = '\0';
     s_reply[0] = '\0';
     s_reply_len = 0;
@@ -391,7 +412,8 @@ static void prv_use_chat(const char *chat_id, const char *title, const char *sco
   }
   s_has_turn = false;
   s_said[0] = '\0';
-  s_ask_id[0] = '\0';
+  // Only this chat's last exchange shows from now on; a new chat shows nothing until it's asked in.
+  prv_set_history_ask();
   // An old chat opens on its last exchange.
   s_loading_chat = s_chat_id[0] && link_history_request(s_chat_id, s_chat_scope);
   scroll_layer_set_content_offset(s_scroll_layer, GPointZero, false);
@@ -598,6 +620,7 @@ void talk_init(void) {
   if (persist_exists(KEY_CHAT_ID)) persist_read_string(KEY_CHAT_ID, s_chat_id, sizeof(s_chat_id));
   if (persist_exists(KEY_CHAT_TITLE)) persist_read_string(KEY_CHAT_TITLE, s_chat_title, sizeof(s_chat_title));
   if (persist_exists(KEY_CHAT_SCOPE)) persist_read_string(KEY_CHAT_SCOPE, s_chat_scope, sizeof(s_chat_scope));
+  if (persist_exists(KEY_ASK_ID)) persist_read_string(KEY_ASK_ID, s_ask_id, sizeof(s_ask_id));
   if (persist_exists(KEY_ACCENT_REV)) {
     persist_read_string(KEY_ACCENT_REV, s_accent_rev, sizeof(s_accent_rev));
     s_fill = PBL_IF_COLOR_ELSE(GColorFromHEX(persist_read_int(KEY_ACCENT_FILL)), GColorBlack);
