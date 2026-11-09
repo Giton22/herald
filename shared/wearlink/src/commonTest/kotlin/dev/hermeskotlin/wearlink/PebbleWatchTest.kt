@@ -219,6 +219,11 @@ class PebbleWatchTest {
         val last = fake.replies.last()
         assertEquals(PebbleValue.Num(ReplyPhase.Done.ordinal), last[PebbleKeys.PHASE])
         assertEquals(null, last[PebbleKeys.ACTIVITY])
+        // An update the relay sent before the stop took hold doesn't set it running again.
+        watch.reply(update(2, "Half an answer", activity = "Running terminal"))
+        advanceUntilIdle()
+        assertEquals(PebbleValue.Num(ReplyPhase.Done.ordinal), fake.replies.last()[PebbleKeys.PHASE])
+        assertEquals("Half an ans", fake.text)
         // Reopened later, it's still over.
         fake.text = ""
         watch.opened()

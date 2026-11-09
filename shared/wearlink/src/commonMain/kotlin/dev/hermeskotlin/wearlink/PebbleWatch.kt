@@ -118,6 +118,8 @@ class PebbleWatch(
     private fun apply(event: Event) {
         when (event) {
             is Event.Reply -> {
+                // One the relay sent before the stop took hold: the stopped turn ends as the watch shows it.
+                if (event.update.askId == stoppedAsk) return
                 finalRounds = 0
                 val last = latest
                 // The newest wins; one that arrives late for the same ask would undo it.
