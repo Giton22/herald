@@ -8,16 +8,21 @@ import dev.hermeskotlin.android.R
 import dev.hermeskotlin.core.bots.BotsApi
 import dev.hermeskotlin.core.chat.ApprovalChoice
 import dev.hermeskotlin.core.chat.ChatHost
+import dev.hermeskotlin.core.chat.ChatSession
 import dev.hermeskotlin.core.chat.InputAnswers
 import dev.hermeskotlin.core.chat.InputRequest
 import dev.hermeskotlin.core.chat.SessionWatcher
+import dev.hermeskotlin.core.chat.TurnOutcome
 import dev.hermeskotlin.core.inbox.InboxStore
 import dev.hermeskotlin.core.inbox.markNoticeRead
 import dev.hermeskotlin.core.push.PushSetup
+import dev.hermeskotlin.core.settings.SettingsStore
 import dev.hermeskotlin.core.wear.WatchRelay
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
@@ -34,6 +39,7 @@ class NotificationActionReceiver : BroadcastReceiver(), KoinComponent {
     private val relay: WatchRelay by inject()
     private val answers: RequestAnswers by inject()
     private val inbox: InboxStore by inject()
+    private val settings: SettingsStore by inject()
 
     override fun onReceive(context: Context, intent: Intent) {
         val pending = goAsync()
@@ -105,9 +111,13 @@ class NotificationActionReceiver : BroadcastReceiver(), KoinComponent {
                     }
                     return
                 }
+                // The watch's chat, with no watch asking: the relay tells no one how this turn ends, so it's told here.
+                val watchChat = chat !== session
+                if (watchChat) relay.phoneTurnStarts(storedId)
                 awaitConnection()
                 // The send itself outlives this receiver's few seconds; only the verdict is waited for.
                 val sent = scope.async { chat.send(text) }
+                if (watchChat) scope.launch { tellWatchChat(chat, storedId, sent.await()) }
                 if (withTimeoutOrNull(RECEIVER_BUDGET_MS) { sent.await() } == false) {
                     val error = chat.state.value.error
                     if (error != null) {
@@ -118,6 +128,19 @@ class NotificationActionReceiver : BroadcastReceiver(), KoinComponent {
                 }
             }
         }
+    }
+
+    /**
+     * The turn a notification's reply started in the watch's chat: Kyllene stays connected until it ends, and its
+     * reply comes as a notification, as the one that was answered did.
+     */
+    private suspend fun tellWatchChat(chat: ChatSession, storedId: String, sent: Boolean) {
+        val reply = relay.phoneTurnEnds(chat, sent) ?: return
+        if (reply.outcome == TurnOutcome.Interrupted || settings.settings.value?.notifyReplies == false) return
+        val failed = reply.outcome == TurnOutcome.Error
+        val text = (if (failed) reply.error ?: reply.text else reply.text).ifBlank { notifications.finished }
+        // Notifications are posted from the main thread, as the notifiers do.
+        withContext(Dispatchers.Main) { notifications.postReply(storedId, chat.state.value.title, text, failed) }
     }
 
     private suspend fun answer(requestId: String, result: (InputRequest) -> kotlinx.serialization.json.JsonObject?) {
