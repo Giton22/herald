@@ -97,7 +97,10 @@ class PebbleRinger(
             // No Pebble said it rings (out of reach, Kyllene gone from it): the phone's call shows there instead.
             delay(RING_ON_MS)
             val now = rung[id] ?: return@launch
-            if (now.waiting.containsAll(now.watches) && phoneCallShown.add(id)) notifications.showOnWatch(id, show = true)
+            // None left ringing (each was picked up there): nothing to show the phone's call instead of.
+            if (now.watches.isNotEmpty() && now.waiting.containsAll(now.watches) && phoneCallShown.add(id)) {
+                notifications.showOnWatch(id, want = true, by = this@PebbleRinger)
+            }
         }
         return true
     }
@@ -111,7 +114,7 @@ class PebbleRinger(
     fun ringsOn(node: String, on: PebbleIncoming.RingOn) {
         val now = rung[on.requestId] ?: return
         now.waiting -= node
-        if (phoneCallShown.remove(on.requestId)) notifications.showOnWatch(on.requestId, show = false)
+        if (phoneCallShown.remove(on.requestId)) notifications.showOnWatch(on.requestId, want = false, by = this)
     }
 
     /**
@@ -125,6 +128,8 @@ class PebbleRinger(
         val request = now.call.request
         if (end.answered && (request == null || now.answering == WatchAnswering.OnPhone || !current.answersOnPebble)) {
             outbox.watch(node).message(PebbleLink.ringEnd(RingEnd(end.requestId)))
+            // No Pebble rings for it any more: the phone's call may show on a Wear OS watch that didn't ring.
+            if (now.watches.isEmpty()) notifications.showOnWatch(end.requestId, want = null, by = this)
             return
         }
         phoneCallShown -= end.requestId
