@@ -370,6 +370,23 @@ not qualify KDE focus, context menus, portals other than the Secret portal
 through gnome-keyring, voice or live-provider behavior;
 real Bazzite acceptance remains a separate release gate.
 
+### Launcher actions
+
+The desktop entry offers **New chat**, **Quick entry** and **Call Hermes** (see
+[Call launcher action](#call-launcher-action)). Each can start the app; a later
+launch forwards its action to the existing instance. Quick entry opens the
+existing small composer and waits for the user to send a prompt.
+
+The entry handles the app's existing `herald://` links, including stored chats and
+bots. It does not claim `hermes://`, which belongs to Hermes Desktop. Launchers
+can use `herald://new-chat` and the desktop-only `herald://quick-entry` action.
+The latter is an exact action URI, without parameters or an extra path. On Linux,
+when the app is asked to come forward (a later launch, a link, the tray or a
+notification), it asks the window manager to activate its X11/Xwayland window;
+the manager may decline. This does not qualify a
+native Wayland backend. Global shortcut binding is a separate integration, and
+these entries don't set up automatic startup.
+
 ### Quick entry shortcut
 
 With **Settings → Desktop → Quick entry** enabled, Linux asks the desktop's

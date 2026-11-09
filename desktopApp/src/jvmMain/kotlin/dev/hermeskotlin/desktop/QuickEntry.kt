@@ -78,7 +78,7 @@ private val SIZE = DpSize(620.dp, 132.dp)
  * Enter sends to a new chat or the open one and puts it away; Escape, or clicking elsewhere, puts it away too.
  */
 @Composable
-fun QuickEntryWindow(visible: Boolean, onDismiss: () -> Unit, onSend: (String, QuickTarget) -> Unit) {
+fun QuickEntryWindow(visible: Boolean, onDismiss: () -> Unit, onSend: (String, QuickTarget) -> Unit, raise: Int = 0) {
     if (!visible) return
     val state = rememberWindowState(size = SIZE, position = spotlightPosition())
     // Where the system rounds a frameless window, it does, with its shadow and edge; elsewhere the window is
@@ -103,6 +103,9 @@ fun QuickEntryWindow(visible: Boolean, onDismiss: () -> Unit, onSend: (String, Q
                 override fun windowLostFocus(e: java.awt.event.WindowEvent?) = onDismiss()
             })
             window.toFront()
+        }
+        LaunchedEffect(window, raise) {
+            if (raise != 0) javax.swing.SwingUtilities.invokeLater { LinuxWindowActivation.request(window) }
         }
         CompositionLocalProvider(LocalClipboard provides rememberPatientClipboard()) {
             HeraldTheme { QuickEntry(window, framed = !native, onSend = onSend) }

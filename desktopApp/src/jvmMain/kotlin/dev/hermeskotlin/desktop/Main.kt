@@ -150,12 +150,16 @@ fun main(args: Array<String>) {
         var frame by remember { mutableStateOf<Frame?>(null) }
         val focused = remember { MutableStateFlow(false) }
         var quickOpen by remember { mutableStateOf(false) }
+        var quickRaise by remember { mutableStateOf(0) }
+        // Bumped by every show(): once the window is visible, Linux asks the window manager to activate it.
+        var windowRaise by remember { mutableStateOf(0) }
         val tray = rememberTrayState()
         // The chat the last notification was about, which a click on it opens.
         var lastNotice by remember { mutableStateOf<DesktopNotice?>(null) }
 
         fun show() {
             windowShown = true
+            windowRaise++
             frame?.let {
                 if (it.extendedState and Frame.ICONIFIED != 0) it.extendedState = it.extendedState and Frame.ICONIFIED.inv()
                 // Raised once Compose has made it visible again, after this pass: a hidden window can't come forward.
@@ -198,6 +202,7 @@ fun main(args: Array<String>) {
                 answer.sessionId?.let { links.open(it, title = null) }
                 return
             }
+            if (handleQuickEntryLink(link) { quickOpen = true; quickRaise++ }) return
             show()
             AppLink.parse(link)?.let(links::follow)
         }
@@ -287,7 +292,7 @@ fun main(args: Array<String>) {
                     show()
                     links.newChat()
                 }
-                Item(stringResource(Res.string.tray_quick_entry), onClick = { quickOpen = true })
+                Item(stringResource(Res.string.tray_quick_entry), onClick = { quickOpen = true; quickRaise++ })
                 Separator()
                 Item(stringResource(Res.string.tray_quit), onClick = ::exitApplication)
             },
@@ -318,6 +323,9 @@ fun main(args: Array<String>) {
         ) {
             dialogOwner = window
             frame = window
+            LaunchedEffect(windowRaise) {
+                if (windowRaise != 0) SwingUtilities.invokeLater { LinuxWindowActivation.request(window) }
+            }
             // Narrow enough for Windows' snap layouts (a third of a screen), where the sidebar folds into a drawer;
             // past that, things would only be cut off.
             LaunchedEffect(Unit) { window.minimumSize = java.awt.Dimension(500, 520) }
@@ -394,9 +402,11 @@ fun main(args: Array<String>) {
 
         QuickEntryWindow(
             visible = quickOpen,
-            onDismiss = { quickOpen = false },
+            raise = quickRaise,
+            onDismiss = { quickOpen = false; quickRaise = 0 },
             onSend = { text, target ->
                 quickOpen = false
+                quickRaise = 0
                 // The open chat takes it if it can; one it can't reach (Settings over it, still connecting) gets a new chat.
                 if (target == QuickTarget.NewChat || !shortcuts.fire(Shortcut.Prompt(text))) {
                     links.newChat(ComposeDraft(text = text, start = DraftStart.Send))
