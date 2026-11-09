@@ -64,26 +64,30 @@ private const val ELLIPSIS = "..."
  * Code keeps its text, links keep their words, lists keep a dash.
  */
 fun plainText(markdown: String): String {
+    var fenced = false
     val lines = markdown.replace("\r\n", "\n").lines().mapNotNull { line ->
         val trimmed = line.trimStart()
         when {
-            trimmed.startsWith("```") || trimmed.startsWith("~~~") -> null
-            HEADING.matches(trimmed) -> trimmed.replace(HEADING_MARK, "")
-            trimmed.startsWith(">") -> trimmed.removePrefix(">").trimStart()
+            trimmed.startsWith("```") || trimmed.startsWith("~~~") -> null.also { fenced = !fenced }
+            // A code block's lines are kept as written: its stars, underscores and hashes are code.
+            fenced -> line
+            HEADING.matches(trimmed) -> plainInline(trimmed.replace(HEADING_MARK, ""))
+            trimmed.startsWith(">") -> plainInline(trimmed.removePrefix(">").trimStart())
             RULE.matches(trimmed) -> ""
-            else -> line.replace(BULLET, "$1- ")
+            else -> plainInline(line.replace(BULLET, "$1- "))
         }
     }
-    return lines.joinToString("\n")
-        .replace(IMAGE, "$1")
-        .replace(LINK, "$1")
-        .replace("**", "")
-        .replace("__", "")
-        .replace("`", "")
-        .replace(EMPHASIS, "$1")
-        .replace(BLANK_LINES, "\n\n")
-        .trim()
+    return lines.joinToString("\n").replace(BLANK_LINES, "\n\n").trim()
 }
+
+/**
+ * [line] without its inline marks, but for `code`, which keeps its text as written. Links and pictures go first, as
+ * their words can be code too.
+ */
+private fun plainInline(line: String): String =
+    line.replace(IMAGE, "$1").replace(LINK, "$1").split('`').mapIndexed { index, part ->
+        if (index % 2 == 1) part else part.replace("**", "").replace("__", "").replace(EMPHASIS, "$1")
+    }.joinToString("")
 
 private val HEADING = Regex("^#{1,6}\\s.*")
 private val HEADING_MARK = Regex("^#{1,6}\\s+")

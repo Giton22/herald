@@ -70,6 +70,27 @@ class PebbleTextTest {
     }
 
     @Test
+    fun codeKeepsItsMarks() {
+        val markdown = """
+            Call `__init__` with **care**, as [`setup.py`](https://example.com/setup.py) does:
+
+            ```python
+            # set up
+            def f(*args, **kwargs):
+                return [x for x in args]
+            ```
+        """.trimIndent()
+        val expected = """
+            Call __init__ with care, as setup.py does:
+
+            # set up
+            def f(*args, **kwargs):
+                return [x for x in args]
+        """.trimIndent()
+        assertEquals(expected, plainText(markdown))
+    }
+
+    @Test
     fun plainWordsWithStarsAndUnderscoresKeepThem() {
         assertEquals("2 * 3 * 4 = 24", plainText("2 * 3 * 4 = 24"))
         assertEquals("snake_case_name", plainText("snake_case_name"))
