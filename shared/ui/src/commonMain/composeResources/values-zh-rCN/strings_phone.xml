@@ -27,7 +27,7 @@
     <string name="phone_rings_talk_title">接听后语音交流</string>
     <string name="phone_rings_talk_detail">接听后 Hermes 会上线：用自己的话提问，你用语音回答，还可以继续聊。关闭时，接听会打开对话。</string>
     <string name="phone_watch_rings_title">手表也响铃</string>
-    <string name="phone_watch_rings_detail">手表上的 Kyllene 也会响铃。在手表上接听，Hermes 会通过手表通话提问。仅在你的网关支持实时语音时可用。</string>
+    <string name="phone_watch_rings_detail">手表上的 Kyllene 也会响铃。在 Wear OS 手表上，接听会从手表发起通话（需你的网关支持实时语音）。在 Pebble 上，如果开启了“在 Pebble 上回复”，接听会在手表上显示问题；否则请在手机上回复。</string>
     <string name="phone_quiet_title">免打扰时段</string>
     <string name="phone_quiet_empty">开始和结束都在 %1$s，所以还没有静音时间：请换一个时间。</string>
     <string name="phone_quiet_window">%1$s 到 %2$s 之间不响铃。</string>

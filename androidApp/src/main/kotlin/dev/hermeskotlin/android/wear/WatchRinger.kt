@@ -60,7 +60,6 @@ class WatchRinger(
     private val phoneCallShown: MutableSet<String> = ConcurrentHashMap.newKeySet()
 
     fun start() {
-        notifications.alsoRings = this
         capabilities.addListener({ info -> found(info.nodes.mapTo(HashSet()) { it.id }) }, WearCapabilities.WATCH)
         scope.launch {
             val nodes = try {
@@ -114,7 +113,7 @@ class WatchRinger(
             delay(RING_ON_MS)
             if (rung.containsKey(id) && id !in ringingOn && phoneCallShown.add(id)) {
                 // Said just now, in between: it rings there after all.
-                if (id in ringingOn) phoneCallShown -= id else notifications.showOnWatch(id, show = true)
+                if (id in ringingOn) phoneCallShown -= id else notifications.showOnWatch(id, want = true, by = this@WatchRinger)
             }
         }
         return true
@@ -123,7 +122,7 @@ class WatchRinger(
     /** Herald on a watch rings for [on]; should that come late, the phone's call shown there meanwhile goes. */
     fun ringsOn(on: RingOn) {
         if (!rung.containsKey(on.requestId) || !ringingOn.add(on.requestId)) return
-        if (phoneCallShown.remove(on.requestId)) notifications.showOnWatch(on.requestId, show = false)
+        if (phoneCallShown.remove(on.requestId)) notifications.showOnWatch(on.requestId, want = false, by = this)
     }
 
     override fun stop(requestId: String) {

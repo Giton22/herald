@@ -79,6 +79,7 @@
     <string name="chat_pdf_locked">Il est protégé par un mot de passe. Enregistrez-le, ou partagez-le avec une app qui le demande.</string>
     <string name="chat_pdf_broken">Il ne se lit pas comme un PDF : il est peut-être endommagé ou incomplet. Enregistrer récupère le fichier tel quel.</string>
     <string name="chat_pdf_no_room">Le téléphone n’a pas la place de l’ouvrir pour l’instant. Enregistrez-le ou partagez-le plutôt.</string>
+    <string name="chat_pdf_desktop_limit">Ce PDF dépasse les limites de la visionneuse de bureau. Enregistrez-le pour l’ouvrir ailleurs.</string>
 
     <string name="chat_widget_not_html">Ce fichier n’est pas du texte HTML.</string>
     <string name="chat_widget_too_big">Ce widget dépasse la limite d’aperçu de 512 Ko.</string>
@@ -457,6 +458,7 @@
     <string name="chat_notice_dictation_mic">La dictée a besoin du micro. Autorisez-le dans les paramètres d’Android.</string>
     <string name="chat_notice_no_desktop_voice">Le chat vocal n’est pas encore sur ordinateur.</string>
     <string name="chat_notice_no_desktop_dictation">La dictée n’est pas encore sur ordinateur.</string>
+    <string name="chat_notice_voice_needs_ffmpeg">Le chat vocal a besoin de ffmpeg dans /usr/bin/ffmpeg pour dire ses réponses. Installez-le, puis relancez le chat vocal.</string>
     <string name="chat_notice_nothing_waiting">Rien en attente</string>
     <string name="chat_notice_adopted">%1$s adopté</string>
     <string name="chat_notice_prompt_not_sent">Le prompt n’a pas été envoyé : Kyllene n’a pas pu joindre le Gateway. Il est dans la zone de saisie.</string>

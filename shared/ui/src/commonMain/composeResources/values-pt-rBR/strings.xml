@@ -158,6 +158,10 @@
     <string name="settings_phone_tools">Ferramentas do celular</string>
     <string name="settings_phone_tools_off">Desativado. Deixe o agente usar este celular, cada ferramenta só depois que você ativá-la.</string>
     <string name="settings_phone_tools_none_on">Ativado, mas nenhuma ferramenta está ativada ainda.</string>
+    <string name="settings_connected_devices">Dispositivos conectados</string>
+    <string name="settings_connected_devices_pebble_off">Pebble desativado.</string>
+    <string name="settings_connected_devices_pebble_on">Pebble ativado.</string>
+    <string name="settings_connected_devices_pebble_answers">Pebble ativado, respondendo aprovações e perguntas.</string>
     <string name="settings_app_lock">Bloqueio do app</string>
     <string name="settings_app_lock_detail">Pede sua digital, seu rosto ou o bloqueio de tela quando o Kyllene abre e depois de um minuto fora. Esconde o Kyllene nos Recentes e bloqueia capturas de tela dele. As ações das notificações continuam funcionando.</string>
     <string name="settings_app_lock_needs_screen_lock">Primeiro defina um bloqueio de tela nas configurações do Android.</string>
@@ -249,6 +253,18 @@
     <string name="start_instruction_suggestion_computer">Estou no computador: pode dar respostas completas e usar tabelas e blocos de código quando ajudarem.</string>
     <string name="start_instruction_suggestion_direct">Seja direto. Comece pela resposta, depois os detalhes.</string>
     <string name="update_downloading">Baixando…</string>
+    <string name="connected_devices_section_pebble">Pebble</string>
+    <string name="connected_devices_pebble">Kyllene no Pebble</string>
+    <string name="connected_devices_pebble_detail">Fale com o Hermes pelo app do Kyllene para Pebble e deixe ele tocar lá. Desativado, o app do relógio avisa e nada é enviado a ele.</string>
+    <string name="connected_devices_answers">Responder no Pebble</string>
+    <string name="connected_devices_answers_detail">Aprovações e perguntas podem ser respondidas no relógio, que não pede o desbloqueio deste celular: qualquer pessoa que o esteja usando pode respondê-las.</string>
+    <string name="connected_devices_section_prompts">Prompts do Pebble</string>
+    <string name="connected_devices_prompts_detail">Segure Select no relógio para vê-los, e um toque envia a pergunta. Eles chegam ao relógio na próxima vez que ele se conectar ao celular, e ficam lá.</string>
+    <string name="connected_devices_prompt_placeholder">Algo para perguntar</string>
+    <string name="connected_devices_prompt_remove">Remover este prompt</string>
+    <string name="connected_devices_prompt_add">Adicionar um prompt</string>
+    <string name="connected_devices_section_wear">Wear OS</string>
+    <string name="connected_devices_wear_detail">O Kyllene em um relógio Wear OS tem as próprias configurações: no relógio, abra os chats do Kyllene e toque em Configurações. Se ele toca junto com o celular fica em Ferramentas do celular › Chamadas, como para um Pebble.</string>
     <plurals name="settings_phone_tools_count">
         <item quantity="one">%1$d ferramenta ativada.</item>
         <item quantity="other">%1$d ferramentas ativadas.</item>
@@ -257,4 +273,20 @@
         <item quantity="one">%1$d de %2$d visível.</item>
         <item quantity="other">%1$d de %2$d visíveis.</item>
     </plurals>
+    <string name="managed_update_available">Uma atualização está disponível na fonte de software deste aplicativo.</string>
+    <string name="managed_update_ready">Uma atualização está instalada. Reinicie quando estiver pronto.</string>
+    <string name="managed_update_empty">Não havia atualização para instalar.</string>
+    <string name="managed_update_cancelled">A solicitação de atualização foi cancelada. Ela pode já ter terminado; confira nas ferramentas de atualização do sistema.</string>
+    <string name="managed_update_progress">Atualizando… %1$d%</string>
+    <string name="managed_update_working">Processando…</string>
+    <string name="managed_update_denied">O sistema não permitiu esta atualização. Autorize atualizações nas configurações de privacidade ou use as ferramentas do sistema.</string>
+    <string name="managed_update_system">Use as ferramentas de atualização do sistema para revisar e instalar esta atualização, incluindo alterações de permissões.</string>
+    <string name="managed_update_uncertain">O resultado da atualização é desconhecido. Confira nas ferramentas do sistema antes de tentar novamente.</string>
+    <string name="managed_update_restart_failed">Não foi possível confirmar a reinicialização. Termine seu trabalho, feche o Kyllene e abra-o novamente.</string>
+    <string name="managed_update_unavailable">As atualizações do aplicativo não estão disponíveis aqui. Use as ferramentas de atualização do sistema.</string>
+    <string name="managed_update_failed">A atualização falhou. Tente novamente ou use as ferramentas de atualização do sistema.</string>
+    <string name="managed_update_restart">Reiniciar</string>
+    <string name="managed_update_restart_title">Reiniciar o Kyllene?</string>
+    <string name="managed_update_restart_warning">Encerre as chamadas e salve seu trabalho. Reiniciar fecha todas as janelas; alterações e anexos não salvos podem ser perdidos.</string>
+    <string name="managed_update_restart_now">Reiniciar agora</string>
 </resources>

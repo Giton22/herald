@@ -49,6 +49,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
@@ -116,6 +117,9 @@ class WatchRelay(
     private val calls = AtomicInt(0)
     private val lists = AtomicInt(0)
 
+    /** Turns sent into the watch's chat from the phone ([phoneTurnStarts]), counted apart from a watch's ask. */
+    private val phoneTurns = AtomicInt(0)
+
     /** A live call is on, from the watch or answered on the phone: nothing rings over it. */
     val onCall: Boolean get() = calls.load() > 0
     private var asking: Boolean
@@ -125,14 +129,16 @@ class WatchRelay(
             refreshBusy()
         }
 
-    /** Busy while asking, calling or listing; re-check writes made on another thread. */
+    /** Busy while asking, calling or listing, or in a turn sent from the phone; re-check writes made on another thread. */
     private fun refreshBusy() {
         while (true) {
-            val wanted = askingNow.load() || calls.load() > 0 || lists.load() > 0
+            val wanted = wantsBusy()
             _busy.value = wanted
-            if (wanted == (askingNow.load() || calls.load() > 0 || lists.load() > 0)) return
+            if (wanted == wantsBusy()) return
         }
     }
+
+    private fun wantsBusy() = askingNow.load() || calls.load() > 0 || lists.load() > 0 || phoneTurns.load() > 0
 
     /** What each profile of the current gateway said of its live voice, and when: the watch's chat and the ringer ask for different ones. */
     private class LiveVoice(val on: Boolean, val at: Long)
@@ -189,6 +195,41 @@ class WatchRelay(
                     }
                 }
             }
+        }
+    }
+
+    /**
+     * A turn is about to be sent into the watch's chat [storedId] from the phone (a reply typed in its notification).
+     * No watch asked for it, so none is told how it ends: busy from now until [phoneTurnEnds], as for a watch's turn,
+     * and the chat is kept out of the phone's watching before the send, so only the caller tells it.
+     */
+    suspend fun phoneTurnStarts(storedId: String) {
+        phoneTurns.incrementAndFetch()
+        refreshBusy()
+        turnLock.withLock {
+            releaseLater?.cancel()
+            holdChat(storedId)
+        }
+    }
+
+    /**
+     * Waits out the turn [phoneTurnStarts] announced in [session], once its send went or didn't ([sent]); always
+     * called after it. The turn's reply, or null when there's none to tell: nothing was sent, it left none, or the
+     * watch moved its chat elsewhere meanwhile and this session closed under the turn.
+     */
+    suspend fun phoneTurnEnds(session: ChatSession, sent: Boolean): ChatMessage.Assistant? {
+        try {
+            if (!sent) return null
+            withTimeoutOrNull(TURN_START_MS) { session.state.first { it.running } }
+            // A closed session never says its turn ended.
+            val closed = combine(session.state, _session) { state, current ->
+                if (current !== session) true else if (!state.running) false else null
+            }.filterNotNull().first()
+            return if (closed) null else replyAfter(session.state.value)
+        } finally {
+            phoneTurns.updateAndFetch { (it - 1).coerceAtLeast(0) }
+            refreshBusy()
+            withContext(NonCancellable) { turnLock.withLock { releaseHeldChatLater() } }
         }
     }
 
@@ -598,7 +639,9 @@ class WatchRelay(
         // (the turn cancelled), after the lease itself has gone out.
         val lease = scope.launch { audio.ttsLease(gateway, true, profile) }
         try {
-            val chunks = speechChunks(text)
+            // Pieces stay short here: each is made and sent over Bluetooth while the one before plays, and the watch
+            // stops waiting 20 s after a clip ends.
+            val chunks = speechChunks(text, maxChars = WATCH_SPEECH_CHARS)
             chunks.forEachIndexed { index, chunk ->
                 val clip = when (val result = audio.speak(gateway, chunk, profile)) {
                     is ApiResult.Success -> result.value
@@ -632,7 +675,7 @@ class WatchRelay(
         releaseLater = scope.launch {
             delay(RELEASE_AFTER_MS)
             turnLock.withLock {
-                if (heldChat == held && turn?.isActive != true && calls.load() == 0) {
+                if (heldChat == held && turn?.isActive != true && calls.load() == 0 && phoneTurns.load() == 0) {
                     host.releaseSideChat(held)
                     heldChat = null
                 }
@@ -677,6 +720,9 @@ class WatchRelay(
         private const val UPDATE_EVERY_MS = 400L
         private const val RELEASE_AFTER_MS = 30_000L
         private const val LIVE_VOICE_CHECK_MS = 5 * 60_000L
+
+        /** The longest voice clip sent to the watch, as the phone read it before pieces grew. */
+        private const val WATCH_SPEECH_CHARS = 400
     }
 }
 

@@ -158,6 +158,10 @@
     <string name="settings_phone_tools">Outils du téléphone</string>
     <string name="settings_phone_tools_off">Désactivé. Laissez l’agent utiliser ce téléphone, chaque outil seulement une fois que vous l’activez.</string>
     <string name="settings_phone_tools_none_on">Activé, mais aucun outil n’est encore activé.</string>
+    <string name="settings_connected_devices">Appareils connectés</string>
+    <string name="settings_connected_devices_pebble_off">Pebble désactivée.</string>
+    <string name="settings_connected_devices_pebble_on">Pebble activée.</string>
+    <string name="settings_connected_devices_pebble_answers">Pebble activée, répond aux approbations et aux questions.</string>
     <string name="settings_app_lock">Verrouillage de l’app</string>
     <string name="settings_app_lock_detail">Demande votre empreinte, votre visage ou le verrouillage de l’écran quand Kyllene s’ouvre et après une minute d’absence. Masque Kyllene dans les apps récentes et bloque les captures d’écran. Les actions des notifications continuent de fonctionner.</string>
     <string name="settings_app_lock_needs_screen_lock">Configurez d’abord un verrouillage de l’écran dans les paramètres d’Android.</string>
@@ -249,6 +253,18 @@
     <string name="start_instruction_suggestion_computer">Je suis sur mon ordinateur : les réponses complètes me vont, utilise des tableaux et des blocs de code quand ils aident.</string>
     <string name="start_instruction_suggestion_direct">Sois direct. Commence par la réponse, puis les détails.</string>
     <string name="update_downloading">Téléchargement…</string>
+    <string name="connected_devices_section_pebble">Pebble</string>
+    <string name="connected_devices_pebble">Kyllene sur la Pebble</string>
+    <string name="connected_devices_pebble_detail">Parlez à Hermes depuis l’application Pebble de Kyllene, et laissez-la sonner sur la montre. Désactivée, l’application le dit et rien ne lui est envoyé.</string>
+    <string name="connected_devices_answers">Répondre sur la Pebble</string>
+    <string name="connected_devices_answers_detail">Les approbations et les questions peuvent recevoir une réponse sur la montre, qui ne demande pas le déverrouillage de ce téléphone : quiconque la porte peut y répondre.</string>
+    <string name="connected_devices_section_prompts">Prompts de la Pebble</string>
+    <string name="connected_devices_prompts_detail">Maintenez Select sur la montre pour les voir, et une pression en envoie un. Ils arrivent sur la montre la prochaine fois qu’elle contacte le téléphone, et y restent.</string>
+    <string name="connected_devices_prompt_placeholder">Une question à poser</string>
+    <string name="connected_devices_prompt_remove">Retirer ce prompt</string>
+    <string name="connected_devices_prompt_add">Ajouter un prompt</string>
+    <string name="connected_devices_section_wear">Wear OS</string>
+    <string name="connected_devices_wear_detail">Kyllene sur une montre Wear OS a ses propres paramètres : sur la montre, ouvrez les discussions de Kyllene et touchez Paramètres. Le fait qu’elle sonne avec le téléphone se règle dans Outils du téléphone › Appels, comme pour une Pebble.</string>
     <plurals name="settings_phone_tools_count">
         <item quantity="one">%1$d outil activé.</item>
         <item quantity="other">%1$d outils activés.</item>
@@ -257,4 +273,20 @@
         <item quantity="one">%1$d sur %2$d affichée.</item>
         <item quantity="other">%1$d sur %2$d affichées.</item>
     </plurals>
+    <string name="managed_update_available">Une mise à jour est disponible depuis la source logicielle de cette application.</string>
+    <string name="managed_update_ready">Une mise à jour est installée. Redémarrez quand vous le souhaitez.</string>
+    <string name="managed_update_empty">Aucune mise à jour n’était à installer.</string>
+    <string name="managed_update_cancelled">La demande de mise à jour a été annulée. Elle est peut-être déjà terminée ; vérifiez avec les outils de mise à jour du système.</string>
+    <string name="managed_update_progress">Mise à jour… %1$d %</string>
+    <string name="managed_update_working">Traitement en cours…</string>
+    <string name="managed_update_denied">Le système n’a pas autorisé cette mise à jour. Autorisez-la dans les paramètres de confidentialité ou utilisez les outils du système.</string>
+    <string name="managed_update_system">Utilisez les outils de mise à jour du système pour vérifier et installer cette mise à jour, y compris les changements d’autorisations.</string>
+    <string name="managed_update_uncertain">Le résultat de la mise à jour est inconnu. Vérifiez-le avec les outils du système avant de réessayer.</string>
+    <string name="managed_update_restart_failed">Le redémarrage n’a pas pu être confirmé. Terminez votre travail, quittez Kyllene et rouvrez-le.</string>
+    <string name="managed_update_unavailable">Les mises à jour de l’application sont indisponibles ici. Utilisez les outils de mise à jour du système.</string>
+    <string name="managed_update_failed">La mise à jour a échoué. Réessayez ou utilisez les outils de mise à jour du système.</string>
+    <string name="managed_update_restart">Redémarrer</string>
+    <string name="managed_update_restart_title">Redémarrer Kyllene ?</string>
+    <string name="managed_update_restart_warning">Terminez les appels et enregistrez votre travail. Le redémarrage ferme toutes les fenêtres ; les modifications et pièces jointes non enregistrées risquent d’être perdues.</string>
+    <string name="managed_update_restart_now">Redémarrer maintenant</string>
 </resources>

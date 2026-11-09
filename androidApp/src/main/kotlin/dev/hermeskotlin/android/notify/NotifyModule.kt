@@ -41,6 +41,7 @@ val notifyModule = module {
     } bind InboxNotices::class
     // Why the agent called, from the call picked up on the watch to the call the watch starts.
     single { CallOpeners() }
+    single { RequestAnswers(get(), get(), get(), get(), get()) }
     single { VoiceCallKeeper(androidContext()) } bind VoiceKeepAlive::class
     single { ChatNotifier(androidContext(), get(), get(), get(), get(), get(), get(), get<WatchRelay>().busy) }
     single { WatchNotifier(get(), get(), get(), get(), get(), get(), get(), get()) }

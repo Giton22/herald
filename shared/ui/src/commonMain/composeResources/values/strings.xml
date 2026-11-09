@@ -158,6 +158,10 @@
     <string name="settings_phone_tools">Phone tools</string>
     <string name="settings_phone_tools_off">Off. Let the agent use this phone, each tool only once you turn it on.</string>
     <string name="settings_phone_tools_none_on">On, but no tool is turned on yet.</string>
+    <string name="settings_connected_devices">Connected devices</string>
+    <string name="settings_connected_devices_pebble_off">Pebble off.</string>
+    <string name="settings_connected_devices_pebble_on">Pebble on.</string>
+    <string name="settings_connected_devices_pebble_answers">Pebble on, answering approvals and questions.</string>
     <string name="settings_app_lock">App lock</string>
     <string name="settings_app_lock_detail">Ask for your fingerprint, face or screen lock when Kyllene opens and after a minute away. Hides Kyllene in Recents and blocks screenshots of it. Notification actions keep working.</string>
     <string name="settings_app_lock_needs_screen_lock">Set a screen lock in Android’s settings first.</string>
@@ -249,6 +253,18 @@
     <string name="start_instruction_suggestion_computer">I’m on my computer: full answers are fine, and use tables and code blocks where they help.</string>
     <string name="start_instruction_suggestion_direct">Be direct. Lead with the answer, then the detail.</string>
     <string name="update_downloading">Downloading…</string>
+    <string name="connected_devices_section_pebble">Pebble</string>
+    <string name="connected_devices_pebble">Kyllene on the Pebble</string>
+    <string name="connected_devices_pebble_detail">Talk to Hermes from Kyllene’s Pebble watchapp, and let it ring there. Off, the watchapp says so and nothing goes to it.</string>
+    <string name="connected_devices_answers">Answer on the Pebble</string>
+    <string name="connected_devices_answers_detail">Approvals and questions can be answered on the watch, which doesn’t ask for this phone’s unlock: anyone wearing it can answer them.</string>
+    <string name="connected_devices_section_prompts">Pebble prompts</string>
+    <string name="connected_devices_prompts_detail">Hold Select on the watch for these, and one press asks it. They go to the watch the next time it checks in with the phone, and stay there.</string>
+    <string name="connected_devices_prompt_placeholder">Something to ask</string>
+    <string name="connected_devices_prompt_remove">Remove this prompt</string>
+    <string name="connected_devices_prompt_add">Add a prompt</string>
+    <string name="connected_devices_section_wear">Wear OS</string>
+    <string name="connected_devices_wear_detail">Kyllene on a Wear OS watch keeps its own settings: on the watch, open Kyllene’s chats and tap Settings. Whether it rings along with the phone is in Phone tools › Calls, as for a Pebble.</string>
     <plurals name="settings_phone_tools_count">
         <item quantity="one">1 tool on.</item>
         <item quantity="other">%1$d tools on.</item>
@@ -257,4 +273,20 @@
         <item quantity="one">%1$d of %2$d shown.</item>
         <item quantity="other">%1$d of %2$d shown.</item>
     </plurals>
+    <string name="managed_update_available">An update is available from this app’s software source.</string>
+    <string name="managed_update_ready">An update is installed. Restart when you are ready.</string>
+    <string name="managed_update_empty">There was no update to install.</string>
+    <string name="managed_update_cancelled">Update request canceled. It may already have finished; check your system’s update tools.</string>
+    <string name="managed_update_progress">Updating… %1$d%</string>
+    <string name="managed_update_working">Working…</string>
+    <string name="managed_update_denied">Your system didn’t allow this update. Allow updates in privacy settings or use its update tools.</string>
+    <string name="managed_update_system">Use your system’s update tools to review and install this update, including any permission changes.</string>
+    <string name="managed_update_uncertain">The update’s outcome is unknown. Check your system’s update tools before trying again.</string>
+    <string name="managed_update_restart_failed">Restart could not be confirmed. Finish your work, then quit and reopen Kyllene.</string>
+    <string name="managed_update_unavailable">App updates are unavailable here. Use your system’s update tools.</string>
+    <string name="managed_update_failed">The update failed. Try again or use your system’s update tools.</string>
+    <string name="managed_update_restart">Restart</string>
+    <string name="managed_update_restart_title">Restart Kyllene?</string>
+    <string name="managed_update_restart_warning">Finish calls and save your work. Restart closes all windows; unsaved changes and attachments may be lost.</string>
+    <string name="managed_update_restart_now">Restart now</string>
 </resources>

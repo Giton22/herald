@@ -158,6 +158,10 @@
     <string name="settings_phone_tools">手机工具</string>
     <string name="settings_phone_tools_off">关闭。让代理使用这部手机，每个工具都要你开启后才能用。</string>
     <string name="settings_phone_tools_none_on">已开启，但还没有开启任何工具。</string>
+    <string name="settings_connected_devices">已连接的设备</string>
+    <string name="settings_connected_devices_pebble_off">Pebble 已关闭。</string>
+    <string name="settings_connected_devices_pebble_on">Pebble 已开启。</string>
+    <string name="settings_connected_devices_pebble_answers">Pebble 已开启，可回复批准与提问。</string>
     <string name="settings_app_lock">应用锁</string>
     <string name="settings_app_lock_detail">Kyllene 打开时和离开一分钟后，要求验证指纹、面容或屏幕锁。在最近任务中隐藏 Kyllene，并禁止截屏。通知中的操作仍可使用。</string>
     <string name="settings_app_lock_needs_screen_lock">请先在 Android 设置中设置屏幕锁。</string>
@@ -249,10 +253,38 @@
     <string name="start_instruction_suggestion_computer">我在用电脑：可以完整回答，在有帮助时使用表格和代码块。</string>
     <string name="start_instruction_suggestion_direct">直接一点。先给答案，再讲细节。</string>
     <string name="update_downloading">正在下载…</string>
+    <string name="connected_devices_section_pebble">Pebble</string>
+    <string name="connected_devices_pebble">Pebble 上的 Kyllene</string>
+    <string name="connected_devices_pebble_detail">通过 Kyllene 的 Pebble 手表应用与 Hermes 对话，并让它在手表上响铃。关闭后，手表应用会提示已关闭，不会再向它发送任何内容。</string>
+    <string name="connected_devices_answers">在 Pebble 上回复</string>
+    <string name="connected_devices_answers_detail">可以在手表上回复批准与提问，但手表不会要求解锁这部手机：任何戴着它的人都能回复。</string>
+    <string name="connected_devices_section_prompts">Pebble 提示语</string>
+    <string name="connected_devices_prompts_detail">在手表上长按 Select 即可看到这些提示语，按一下就会发送。它们会在手表下次与手机联系时同步过去，并保存在手表上。</string>
+    <string name="connected_devices_prompt_placeholder">想问的问题</string>
+    <string name="connected_devices_prompt_remove">移除此提示语</string>
+    <string name="connected_devices_prompt_add">添加提示语</string>
+    <string name="connected_devices_section_wear">Wear OS</string>
+    <string name="connected_devices_wear_detail">Wear OS 手表上的 Kyllene 有自己的设置：在手表上打开 Kyllene 的聊天，然后点按“设置”。是否随手机一起响铃，在“手机工具 › 通话”中设置，与 Pebble 相同。</string>
     <plurals name="settings_phone_tools_count">
         <item quantity="other">已开启 %1$d 个工具。</item>
     </plurals>
     <plurals name="settings_sidebar_pages_count">
         <item quantity="other">显示 %1$d 个，共 %2$d 个。</item>
     </plurals>
+    <string name="managed_update_available">此应用的软件源中有可用更新。</string>
+    <string name="managed_update_ready">更新已安装。请在准备好后重启。</string>
+    <string name="managed_update_empty">没有需要安装的更新。</string>
+    <string name="managed_update_cancelled">已取消更新请求。更新可能已经完成，请使用系统更新工具检查。</string>
+    <string name="managed_update_progress">正在更新… %1$d%</string>
+    <string name="managed_update_working">正在处理…</string>
+    <string name="managed_update_denied">系统未允许此次更新。请在隐私设置中允许更新，或使用系统更新工具。</string>
+    <string name="managed_update_system">请使用系统更新工具检查并安装此次更新，包括任何权限变更。</string>
+    <string name="managed_update_uncertain">无法确认更新结果。请先使用系统更新工具检查，再重试。</string>
+    <string name="managed_update_restart_failed">无法确认重启。请完成工作后退出并重新打开 Kyllene。</string>
+    <string name="managed_update_unavailable">此处无法更新应用。请使用系统更新工具。</string>
+    <string name="managed_update_failed">更新失败。请重试或使用系统更新工具。</string>
+    <string name="managed_update_restart">重启</string>
+    <string name="managed_update_restart_title">重启 Kyllene？</string>
+    <string name="managed_update_restart_warning">请结束通话并保存工作。重启将关闭所有窗口，未保存的更改和附件可能会丢失。</string>
+    <string name="managed_update_restart_now">立即重启</string>
 </resources>

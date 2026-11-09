@@ -28,7 +28,7 @@
     <string name="phone_rings_talk_title">Beim Annehmen sprechen</string>
     <string name="phone_rings_talk_detail">Beim Annehmen ist Hermes in der Leitung: Er fragt in eigenen Worten, du antwortest per Stimme und kannst weiterreden. Aus öffnet Annehmen stattdessen den Chat.</string>
     <string name="phone_watch_rings_title">Auch auf der Uhr klingeln</string>
-    <string name="phone_watch_rings_detail">Kyllene auf deiner Uhr klingelt mit. Nimmst du dort an, fragt Hermes in einem Anruf von der Uhr. Nur wenn dein Gateway live spricht.</string>
+    <string name="phone_watch_rings_detail">Kyllene auf deiner Uhr klingelt mit. Auf einer Wear-OS-Uhr startet Annehmen einen Anruf von der Uhr, wenn dein Gateway live spricht. Auf einer Pebble zeigt Annehmen die Frage dort, wenn Auf der Pebble antworten an ist; sonst antworte auf dem Telefon.</string>
     <string name="phone_quiet_title">Ruhezeiten</string>
     <string name="phone_quiet_empty">Sie beginnen und enden um %1$s, also ist noch nichts ruhig: Wähle eine andere Zeit.</string>
     <string name="phone_quiet_window">Von %1$s bis %2$s klingelt nichts.</string>

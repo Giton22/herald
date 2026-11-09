@@ -1751,6 +1751,28 @@ class ChatSession(
     }
 
     /**
+     * Catches the open chat up with the gateway after the app was away. A backgrounded phone misses live
+     * events, and a socket that never reported a drop leaves the connection on Connected: no attach fires
+     * on the way back, so the transcript stays short until an unrelated event arrives. A chat nothing has
+     * been read for yet has nothing to catch up on; the first send attaches it as usual.
+     */
+    fun resync() {
+        val state = _state.value
+        val runtimeId = state.runtimeSessionId ?: return
+        // Nothing read yet: the first send attaches the chat and loads the transcript as it always does.
+        if (!state.historyRead) return
+        scope.launch {
+            val client = connectedClient() ?: return@launch
+            val start = streamMutex.withLock {
+                // Only the runtime attached on this socket, and not while another catch-up runs. Live events are held
+                // from here, so none lands both live and again in the replay.
+                (liveRuntimeId(client) == runtimeId && held == null).also { if (it) held = mutableListOf() }
+            }
+            if (start) catchUp(client, runtimeId, foreground = true)
+        }
+    }
+
+    /**
      * Applies a live event in order: one already applied (replayed, or sent twice) is skipped, and one past a gap
      * waits, with those after it, while [catchUp] fills the gap. Called under [streamMutex].
      */
@@ -1779,7 +1801,7 @@ class ChatSession(
      * events through. When the ring can't fill it (an older gateway, too long away, a restarted gateway) the chat
      * reloads the transcript and takes the running reply as the gateway has it, as it did before replay existed.
      */
-    private suspend fun catchUp(client: JsonRpcClient, runtimeId: String) {
+    private suspend fun catchUp(client: JsonRpcClient, runtimeId: String, foreground: Boolean = false) {
         val from = streamMutex.withLock { lastSeq }
         val missed = if (from == null) null else try {
             val reply = client.request(
@@ -1795,8 +1817,11 @@ class ChatSession(
         } catch (e: Exception) {
             null // method missing on an older gateway, or the link went again
         }
+        // Back in sight mid-turn with no replay: the running reply and the gateway's copy of it are from before the
+        // app went away, so neither is laid over a fresh transcript. The turn goes on from what shows, as before.
+        val keep = missed == null && foreground && _state.value.running
         // Read while live events stay held; the stream lock is only taken to apply.
-        if (missed == null && rowExists && _state.value.runtimeSessionId == runtimeId) loadHistory()
+        if (missed == null && !keep && rowExists && _state.value.runtimeSessionId == runtimeId) loadHistory()
         streamMutex.withLock {
             // The link went, or another runtime took over: the next attach starts its own catch-up.
             if (_state.value.runtimeSessionId != runtimeId) {
@@ -1805,7 +1830,7 @@ class ChatSession(
             }
             if (missed != null) {
                 missed.forEach(::apply)
-            } else {
+            } else if (!keep) {
                 lastSeq = null
                 val streamed = inflightText
                 if (streamed != null && _state.value.running) {

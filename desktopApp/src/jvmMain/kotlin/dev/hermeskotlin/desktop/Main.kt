@@ -48,6 +48,9 @@ import dev.hermeskotlin.core.chat.DraftStart
 import dev.hermeskotlin.core.settings.AppSettings
 import dev.hermeskotlin.core.settings.SettingsStore
 import dev.hermeskotlin.core.storage.appDataDir
+import dev.hermeskotlin.ui.update.LocalManagedUpdateOffer
+import dev.hermeskotlin.ui.update.ManagedUpdateOffer
+import dev.hermeskotlin.ui.update.ManagedUpdateState
 import dev.hermeskotlin.core.storage.desktopStorageFolder
 import dev.hermeskotlin.core.storage.prepareDesktopStorage
 import dev.hermeskotlin.core.storage.startDesktopStorageFresh
@@ -114,7 +117,9 @@ fun main(args: Array<String>) {
     // A `herald://` link Windows started this launch with: a notification's, or one from a browser.
     val launchLink = args.firstOrNull { it.startsWith("${AppLink.DESKTOP_SCHEME}:", ignoreCase = true) }
     // A second launch brings the running Herald forward, with its link, instead of opening another.
-    val instance = SingleInstance.claim(appDataDir, launchLink) ?: exitProcess(0)
+    val flatpak = inFlatpak
+    val restartWait = if (flatpak && args.contentEquals(arrayOf("--restart"))) 30_000L else 0L
+    val instance = SingleInstance.claim(appDataDir, launchLink, restartWait) ?: exitProcess(if (restartWait > 0) 1 else 0)
     val koin = startKoin {
         modules(sharedModules + desktopModule)
         if (!unlockDesktopStorage(
@@ -166,6 +171,17 @@ fun main(args: Array<String>) {
         }
 
         val scope = rememberCoroutineScope()
+        val updates = remember {
+            if (flatpak) FlatpakUpdateController(scope, open = { FlatpakUpdatePortal.open(onEvent = it) },
+                onRestartAccepted = { exitApplication() }) else null
+        }
+        val updateState = updates?.state?.collectAsState()?.value
+        LaunchedEffect(updates, settings.checkForUpdates) { updates?.setEnabled(settings.checkForUpdates) }
+        DisposableEffect(updates) { onDispose { updates?.close() } }
+        val managedUpdate = updates?.let { controller ->
+            ManagedUpdateOffer(updateState ?: ManagedUpdateState(), onUpdate = { controller.update() },
+                onCancel = controller::cancel, onRestart = controller::restart, onDismiss = controller::dismiss)
+        }
         val host = remember { koin.get<ChatHost>() }
 
         /**
@@ -346,7 +362,7 @@ fun main(args: Array<String>) {
                     }
                 }
                 Box(Modifier.fillMaxSize().keepFocusHeld(focusHeld)) {
-                    CompositionLocalProvider(LocalUpdateInstaller provides DesktopUpdater) {
+                    CompositionLocalProvider(LocalUpdateInstaller provides DesktopUpdater, LocalManagedUpdateOffer provides managedUpdate) {
                         App(
                             appVersion = System.getProperty("herald.version"),
                             releasesRepo = System.getProperty("herald.releasesRepo"),
@@ -399,6 +415,6 @@ fun main(args: Array<String>) {
         )
     }
     // The windows are gone; Chromium's helper processes go with the app, not after it.
-    Jcef.shutdown()
+    try { Jcef.shutdown() } finally { instance.close() }
     exitProcess(0)
 }

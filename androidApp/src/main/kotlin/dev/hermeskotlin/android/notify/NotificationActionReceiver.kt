@@ -12,16 +12,17 @@ import dev.hermeskotlin.core.chat.ChatSession
 import dev.hermeskotlin.core.chat.InputAnswers
 import dev.hermeskotlin.core.chat.InputRequest
 import dev.hermeskotlin.core.chat.SessionWatcher
-import dev.hermeskotlin.core.connection.ConnectionState
-import dev.hermeskotlin.core.connection.GatewayConnection
+import dev.hermeskotlin.core.chat.TurnOutcome
 import dev.hermeskotlin.core.inbox.InboxStore
 import dev.hermeskotlin.core.inbox.markNoticeRead
 import dev.hermeskotlin.core.push.PushSetup
+import dev.hermeskotlin.core.settings.SettingsStore
 import dev.hermeskotlin.core.wear.WatchRelay
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
@@ -30,14 +31,15 @@ import org.koin.core.component.inject
 class NotificationActionReceiver : BroadcastReceiver(), KoinComponent {
 
     private val host: ChatHost by inject()
-    private val connection: GatewayConnection by inject()
     private val notifications: ChatNotifications by inject()
     private val scope: CoroutineScope by inject()
     private val bots: BotsApi by inject()
     private val push: PushSetup by inject()
     private val watcher: SessionWatcher by inject()
     private val relay: WatchRelay by inject()
+    private val answers: RequestAnswers by inject()
     private val inbox: InboxStore by inject()
+    private val settings: SettingsStore by inject()
 
     override fun onReceive(context: Context, intent: Intent) {
         val pending = goAsync()
@@ -60,11 +62,11 @@ class NotificationActionReceiver : BroadcastReceiver(), KoinComponent {
             }
             ACTION_APPROVE -> {
                 val choice = ApprovalChoice.fromWire(intent.getStringExtra(EXTRA_CHOICE).orEmpty()) ?: return
-                answer(session, intent.getStringExtra(EXTRA_REQUEST_ID) ?: return) { InputAnswers.approval(choice) }
+                answer(intent.getStringExtra(EXTRA_REQUEST_ID) ?: return) { InputAnswers.approval(choice) }
             }
             ACTION_CLARIFY -> {
                 if (text.isNullOrEmpty()) return
-                answer(session, intent.getStringExtra(EXTRA_REQUEST_ID) ?: return) { request ->
+                answer(intent.getStringExtra(EXTRA_REQUEST_ID) ?: return) { request ->
                     (request as? InputRequest.Clarify)?.let { InputAnswers.clarify(it, listOf(listOf(text))) }
                 }
             }
@@ -94,7 +96,9 @@ class NotificationActionReceiver : BroadcastReceiver(), KoinComponent {
                 if (text.isNullOrEmpty()) return
                 // Clears the inline reply's spinner; a failure posts in its place.
                 notifications.cancelReply(storedId)
-                if (session == null || session.state.value.storedSessionId != storedId) {
+                // The open chat's, else the watch's chat's (a Pebble's reply notification is for it).
+                val chat = listOfNotNull(session, relay.session.value).firstOrNull { it.state.value.storedSessionId == storedId }
+                if (chat == null) {
                     // A chat followed without being open takes the reply straight to its live session.
                     if (storedId !in watcher.chats.value) {
                         notifications.postFailure(storedId, ChatNotifications.REPLY_ID, R.string.notification_chat_closed)
@@ -107,11 +111,15 @@ class NotificationActionReceiver : BroadcastReceiver(), KoinComponent {
                     }
                     return
                 }
+                // The watch's chat, with no watch asking: the relay tells no one how this turn ends, so it's told here.
+                val watchChat = chat !== session
+                if (watchChat) relay.phoneTurnStarts(storedId)
                 awaitConnection()
                 // The send itself outlives this receiver's few seconds; only the verdict is waited for.
-                val sent = scope.async { session.send(text) }
+                val sent = scope.async { chat.send(text) }
+                if (watchChat) scope.launch { tellWatchChat(chat, storedId, sent.await()) }
                 if (withTimeoutOrNull(RECEIVER_BUDGET_MS) { sent.await() } == false) {
-                    val error = session.state.value.error
+                    val error = chat.state.value.error
                     if (error != null) {
                         notifications.postFailure(storedId, ChatNotifications.REPLY_ID, error)
                     } else {
@@ -122,41 +130,26 @@ class NotificationActionReceiver : BroadcastReceiver(), KoinComponent {
         }
     }
 
-    private suspend fun answer(open: ChatSession?, requestId: String, result: (InputRequest) -> kotlinx.serialization.json.JsonObject?) {
-        // The open chat's, else the watch's chat's (it has its own session).
-        val session = listOfNotNull(open, relay.session.value).firstOrNull { chat -> chat.state.value.inputRequests.any { it.id == requestId } }
-        val request = session?.state?.value?.inputRequests?.firstOrNull { it.id == requestId }
-        if (session == null || request == null) {
-            // A chat that isn't open but is watched; else answered elsewhere, or the turn is over.
-            val watched = watcher.find(requestId)?.second
-            val answer = watched?.let(result)
-            if (watched == null || answer == null) {
-                notifications.cancelRequest(requestId)
-                return
-            }
-            awaitConnection()
-            if (watcher.answer(requestId, answer)) {
-                notifications.cancelRequest(requestId)
-            } else {
-                notifications.postFailure(requestId, ChatNotifications.REQUEST_ID, R.string.notification_answer_not_connected)
-            }
-            return
-        }
-        val answer = result(request) ?: return
-        awaitConnection()
-        if (session.answer(request, answer)) {
-            notifications.cancelRequest(requestId)
-        } else {
+    /**
+     * The turn a notification's reply started in the watch's chat: Kyllene stays connected until it ends, and its
+     * reply comes as a notification, as the one that was answered did.
+     */
+    private suspend fun tellWatchChat(chat: ChatSession, storedId: String, sent: Boolean) {
+        val reply = relay.phoneTurnEnds(chat, sent) ?: return
+        if (reply.outcome == TurnOutcome.Interrupted || settings.settings.value?.notifyReplies == false) return
+        val failed = reply.outcome == TurnOutcome.Error
+        val text = (if (failed) reply.error ?: reply.text else reply.text).ifBlank { notifications.finished }
+        // Notifications are posted from the main thread, as the notifiers do.
+        withContext(Dispatchers.Main) { notifications.postReply(storedId, chat.state.value.title, text, failed) }
+    }
+
+    private suspend fun answer(requestId: String, result: (InputRequest) -> kotlinx.serialization.json.JsonObject?) {
+        if (answers.answer(requestId, result) == RequestAnswers.Outcome.NotConnected) {
             notifications.postFailure(requestId, ChatNotifications.REQUEST_ID, R.string.notification_answer_not_connected)
         }
     }
 
-    /** After a while in the background the socket may be down; give it one quick chance to come back. */
-    private suspend fun awaitConnection() {
-        if (connection.state.value is ConnectionState.Connected) return
-        connection.retry()
-        withTimeoutOrNull(RECONNECT_BUDGET_MS) { connection.state.first { it is ConnectionState.Connected } }
-    }
+    private suspend fun awaitConnection() = answers.awaitConnection()
 
     companion object {
         const val ACTION_APPROVE = "dev.hermeskotlin.action.APPROVE"
@@ -175,7 +168,6 @@ class NotificationActionReceiver : BroadcastReceiver(), KoinComponent {
         const val EXTRA_SESSION_ID = "session_id"
         const val KEY_TEXT = "text"
 
-        private const val RECONNECT_BUDGET_MS = 5_000L
         private const val RECEIVER_BUDGET_MS = 4_000L
     }
 }

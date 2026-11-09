@@ -158,6 +158,10 @@
     <string name="settings_phone_tools">Telefoneszközök</string>
     <string name="settings_phone_tools_off">Kikapcsolva. Engedd, hogy az ügynök használja ezt a telefont, minden eszközt csak azután, hogy bekapcsoltad.</string>
     <string name="settings_phone_tools_none_on">Bekapcsolva, de még egy eszköz sincs bekapcsolva.</string>
+    <string name="settings_connected_devices">Csatlakoztatott eszközök</string>
+    <string name="settings_connected_devices_pebble_off">Pebble kikapcsolva.</string>
+    <string name="settings_connected_devices_pebble_on">Pebble bekapcsolva.</string>
+    <string name="settings_connected_devices_pebble_answers">Pebble bekapcsolva, jóváhagyásokra és kérdésekre válaszol.</string>
     <string name="settings_app_lock">Alkalmazászár</string>
     <string name="settings_app_lock_detail">Ujjlenyomatot, arcot vagy képernyőzárat kér, amikor a Kyllene megnyílik, és egy perc távollét után. Elrejti a Kyllene-t a legutóbbi alkalmazások között, és letiltja a képernyőképeket. Az értesítések műveletei továbbra is működnek.</string>
     <string name="settings_app_lock_needs_screen_lock">Előbb állíts be képernyőzárat az Android beállításaiban.</string>
@@ -249,6 +253,18 @@
     <string name="start_instruction_suggestion_computer">Számítógépről írok: a teljes válaszok is jók, és használj táblázatokat és kódblokkokat, ahol segítenek.</string>
     <string name="start_instruction_suggestion_direct">Légy közvetlen. Előbb a válasz, aztán a részletek.</string>
     <string name="update_downloading">Letöltés…</string>
+    <string name="connected_devices_section_pebble">Pebble</string>
+    <string name="connected_devices_pebble">Kyllene a Pebble-ön</string>
+    <string name="connected_devices_pebble_detail">Beszélj Hermesszel a Kyllene Pebble-alkalmazásából, és hagyd, hogy ott is csörögjön. Kikapcsolva az óra alkalmazása ezt jelzi, és semmi nem megy rá.</string>
+    <string name="connected_devices_answers">Válaszolás a Pebble-ön</string>
+    <string name="connected_devices_answers_detail">A jóváhagyásokra és kérdésekre az órán is válaszolhatsz, de az óra nem kéri ennek a telefonnak a feloldását: bárki válaszolhat, aki viseli.</string>
+    <string name="connected_devices_section_prompts">Pebble-promptok</string>
+    <string name="connected_devices_prompts_detail">Tartsd lenyomva a Select gombot az órán, és egy gombnyomással elküldheted bármelyiket. A következő alkalommal kerülnek az órára, amikor az kapcsolatba lép a telefonnal, és ott is maradnak.</string>
+    <string name="connected_devices_prompt_placeholder">Valami, amit kérdeznél</string>
+    <string name="connected_devices_prompt_remove">Prompt eltávolítása</string>
+    <string name="connected_devices_prompt_add">Prompt hozzáadása</string>
+    <string name="connected_devices_section_wear">Wear OS</string>
+    <string name="connected_devices_wear_detail">A Kyllene egy Wear OS órán saját beállításokkal rendelkezik: az órán nyisd meg a Kyllene csevegéseit, és koppints a Beállítások elemre. Azt, hogy a telefonnal együtt csörögjön-e, a Telefoneszközök › Hívások alatt állíthatod be, ahogy a Pebble-nél is.</string>
     <plurals name="settings_phone_tools_count">
         <item quantity="one">%1$d eszköz bekapcsolva.</item>
         <item quantity="other">%1$d eszköz bekapcsolva.</item>
@@ -257,4 +273,20 @@
         <item quantity="one">%2$d közül %1$d látható.</item>
         <item quantity="other">%2$d közül %1$d látható.</item>
     </plurals>
+    <string name="managed_update_available">Frissítés érhető el az alkalmazás szoftverforrásából.</string>
+    <string name="managed_update_ready">Egy frissítés telepítve van. Indítsd újra, amikor készen állsz.</string>
+    <string name="managed_update_empty">Nem volt telepíthető frissítés.</string>
+    <string name="managed_update_cancelled">A frissítési kérés megszakítva. Lehet, hogy már befejeződött; ellenőrizd a rendszer frissítési eszközeivel.</string>
+    <string name="managed_update_progress">Frissítés… %1$d%</string>
+    <string name="managed_update_working">Folyamatban…</string>
+    <string name="managed_update_denied">A rendszer nem engedélyezte ezt a frissítést. Engedélyezd az adatvédelmi beállításokban, vagy használd a rendszer frissítési eszközeit.</string>
+    <string name="managed_update_system">A rendszer frissítési eszközeivel ellenőrizd és telepítsd a frissítést, beleértve az engedélyek változásait is.</string>
+    <string name="managed_update_uncertain">A frissítés eredménye ismeretlen. Újabb próbálkozás előtt ellenőrizd a rendszer frissítési eszközeivel.</string>
+    <string name="managed_update_restart_failed">Az újraindítás nem igazolható. Fejezd be a munkád, lépj ki a Kyllene alkalmazásból, majd nyisd meg újra.</string>
+    <string name="managed_update_unavailable">Az alkalmazásfrissítés itt nem érhető el. Használd a rendszer frissítési eszközeit.</string>
+    <string name="managed_update_failed">A frissítés sikertelen. Próbáld újra, vagy használd a rendszer frissítési eszközeit.</string>
+    <string name="managed_update_restart">Újraindítás</string>
+    <string name="managed_update_restart_title">Újraindítod a Kyllene alkalmazást?</string>
+    <string name="managed_update_restart_warning">Fejezd be a hívásokat és mentsd a munkád. Az újraindítás minden ablakot bezár; a nem mentett változások és mellékletek elveszhetnek.</string>
+    <string name="managed_update_restart_now">Újraindítás most</string>
 </resources>

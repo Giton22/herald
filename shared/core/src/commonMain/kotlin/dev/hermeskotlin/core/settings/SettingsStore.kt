@@ -158,6 +158,18 @@ data class AppSettings(
      */
     val watchRings: Boolean = true,
     /**
+     * Herald talks to its Pebble watchapp. Off, the watchapp is told so and nothing goes to it: no turns, no rings,
+     * no requests.
+     */
+    val pebble: Boolean = true,
+    /**
+     * Approvals and questions can be answered on a Pebble, as they come or when it rings. Off by default: a watch's
+     * answer doesn't ask for the phone's unlock. Off, the Pebble says to answer on the phone.
+     */
+    val pebbleAnswers: Boolean = false,
+    /** What the Pebble's hold-Select menu offers to ask with a press, in order (Settings → Connected devices). */
+    val pebblePrompts: List<String> = DEFAULT_PEBBLE_PROMPTS,
+    /**
      * Nothing rings from [quietFrom] to [quietUntil], minutes into the day on this phone's clock: the agent's calls
      * don't get through, and an approval or a question is the usual notification (see `quietNow`).
      */
@@ -198,6 +210,12 @@ data class AppSettings(
     /** Desktop: the sidebar's width in dp, as its edge was last dragged to. */
     val sidebarWidth: Int = 304,
 )
+
+/** The Pebble's prompts until they're edited. */
+val DEFAULT_PEBBLE_PROMPTS = listOf("Summarize my day", "What's running?", "What needs my attention?")
+
+/** Approvals and questions are answered on a Pebble: its switch is on, and so is answering there. */
+val AppSettings.answersOnPebble: Boolean get() = pebble && pebbleAnswers
 
 /** Where [AppSettings.lastProjects] keeps [gateway]'s project for [profile] (null: the launch profile). */
 fun lastProjectKey(gateway: GatewayUrl, profile: String?): String = gateway.value + (profile?.let { "#$it" } ?: "")

@@ -52,7 +52,10 @@ import dev.hermeskotlin.ui.resources.*
 import org.jetbrains.compose.resources.stringResource
 
 /** A newer release, if one was found, and a way to stop offering it. */
-class UpdateOffer(val update: AppUpdate?, val onDismiss: () -> Unit)
+class UpdateOffer private constructor(val update: AppUpdate?, val onDismiss: () -> Unit, val managed: ManagedUpdateOffer?) {
+    constructor(update: AppUpdate?, onDismiss: () -> Unit) : this(update, onDismiss, null)
+    internal constructor(managed: ManagedUpdateOffer) : this(null, managed.onDismiss, managed)
+}
 
 val LocalUpdateOffer = compositionLocalOf { UpdateOffer(null) {} }
 
@@ -73,6 +76,7 @@ val LocalUpdateInstaller = staticCompositionLocalOf<UpdateInstaller?> { null }
  */
 @Composable
 fun rememberUpdateOffer(repo: String?, version: String?, enabled: Boolean): UpdateOffer {
+    LocalManagedUpdateOffer.current?.let { return UpdateOffer(it) }
     val checker = koinInject<UpdateChecker>()
     val scope = rememberCoroutineScope()
     var update by remember { mutableStateOf<AppUpdate?>(null) }
@@ -92,6 +96,7 @@ fun rememberUpdateOffer(repo: String?, version: String?, enabled: Boolean): Upda
 @Composable
 fun UpdateBanner(modifier: Modifier = Modifier) {
     val offer = LocalUpdateOffer.current
+    offer.managed?.let { ManagedUpdateBanner(it, modifier); return }
     val update = offer.update ?: return
     val uriHandler = LocalUriHandler.current
     val installer = LocalUpdateInstaller.current?.takeIf { update.downloadUrl != null }

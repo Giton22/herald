@@ -79,6 +79,7 @@
     <string name="chat_pdf_locked">Sie ist mit einem Passwort geschützt. Speichere sie oder teile sie mit einer App, die danach fragt.</string>
     <string name="chat_pdf_broken">Sie lässt sich nicht als PDF lesen: Vielleicht ist sie beschädigt oder unvollständig. Speichern holt die Datei so, wie sie ist.</string>
     <string name="chat_pdf_no_room">Das Telefon hat gerade keinen Platz, um sie zu öffnen. Speichere oder teile sie stattdessen.</string>
+    <string name="chat_pdf_desktop_limit">Dieses PDF überschreitet die Grenzen des Desktop-Viewers. Speichere es, um es anderswo zu öffnen.</string>
 
     <string name="chat_widget_not_html">Diese Datei ist kein HTML-Text.</string>
     <string name="chat_widget_too_big">Dieses Widget überschreitet die Vorschaugrenze von 512 KB.</string>
@@ -457,6 +458,7 @@
     <string name="chat_notice_dictation_mic">Diktieren braucht das Mikrofon. Erlaube es in den Android-Einstellungen.</string>
     <string name="chat_notice_no_desktop_voice">Sprachchat gibt es auf dem Desktop noch nicht.</string>
     <string name="chat_notice_no_desktop_dictation">Diktieren gibt es auf dem Desktop noch nicht.</string>
+    <string name="chat_notice_voice_needs_ffmpeg">Der Sprachchat braucht ffmpeg unter /usr/bin/ffmpeg, um seine Antworten zu sprechen. Installiere es und starte den Sprachchat dann erneut.</string>
     <string name="chat_notice_nothing_waiting">Nichts wartet</string>
     <string name="chat_notice_adopted">%1$s adoptiert</string>
     <string name="chat_notice_prompt_not_sent">Der Prompt wurde nicht gesendet: Kyllene hat das Gateway nicht erreicht. Er steht im Eingabefeld.</string>

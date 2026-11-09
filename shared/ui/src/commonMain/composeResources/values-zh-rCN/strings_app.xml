@@ -358,4 +358,29 @@
     <string name="check_fix_https">请检查域名是否指向服务器、证书是否有效，以及代理是否转发到控制台。</string>
     <string name="check_fix_local_network">请连接到与服务器相同的 Wi-Fi 或网络，并用 --host 0.0.0.0 启动控制台，以便其他设备访问。</string>
     <string name="check_fix_reachable">请检查地址和端口，以及从这台手机能否访问服务器。</string>
+
+    <!-- Imported desktop client certificates. -->
+    <string name="check_fix_client_cert_desktop">请导入该服务器要求的 PKCS#12 客户端证书，然后再次检查。</string>
+    <string name="check_fix_client_cert_unsupported">此版本的 Kyllene 无法出示客户端证书。请使用 Android 应用或 Linux Flatpak 连接此服务器。</string>
+    <string name="client_cert_import_title">导入客户端证书</string>
+    <string name="client_cert_import">导入</string>
+    <string name="client_cert_importing">正在导入…</string>
+    <string name="client_cert_import_detail">请输入所选 PKCS#12 文件的密码。其密钥会针对此 TLS 主机名加密保存。共用此主机名的网关也共用证书选择，与端口或路径无关。</string>
+    <string name="client_cert_password">PKCS#12 密码</string>
+    <string name="client_cert_invalid">Kyllene 无法打开此客户端证书。请检查密码，并选择只含一个未过期客户端证书、其对应私钥和证书链的 PKCS#12 文件。</string>
+    <string name="client_cert_regular_file">请选择普通的 PKCS#12 文件。符号链接、设备和命名管道无法导入。</string>
+    <string name="client_cert_read_failed">无法读取该 PKCS#12 文件。请重新选择，并检查文件访问权限。</string>
+    <string name="client_cert_clear_selection">清除选择</string>
+    <string name="connect_cert_kept_desktop">导入的密钥会针对此 TLS 主机名加密保存。清除此选择后，仍可能使用为同一主机名保存的其他证书。导入的密钥仍保留在加密设置中。</string>
+    <string name="gateways_client_cert_detail_desktop">当服务器要求时，Kyllene 会向“%1$s”出示此证书。导入的密钥会针对此 TLS 主机名加密保存。清除此选择后，仍可能使用为同一主机名保存的其他证书。导入的密钥仍保留在加密设置中。</string>
+    <string name="client_cert_storage_unavailable">Kyllene 无法获取其存储密钥。请解锁桌面密钥环，并检查其 Secret 门户是否可用，然后重试。</string>
+    <string name="client_cert_storage_cancelled">存储解锁已取消。请重试以解锁；现有数据已保留。</string>
+    <string name="client_cert_storage_corrupt">Kyllene 无法打开其加密设置。请恢复一个正常的备份，或使用原来的应用标识。现有数据已保留。</string>
+    <string name="client_cert_storage_version">此设置格式需要其他版本的 Kyllene。现有数据已保留。</string>
+    <string name="client_cert_storage_read">Kyllene 无法读取其设置，或文件超过 16 MiB。请先检查文件访问权限再重试。</string>
+    <string name="client_cert_storage_write">Kyllene 无法完成保存或清理其设置。现有副本已保留；请先检查磁盘空间和文件访问权限再重试。</string>
+    <string name="client_cert_storage_uncertain">Kyllene 无法确认设置已保存。请检查文件访问权限，然后重试启动，或在进行其他更改前退出并重新启动。</string>
+    <string name="client_cert_storage_changed">设置已在此窗口之外更改。请退出并重新启动 Kyllene 以在保存前重新加载。</string>
+    <string name="client_cert_storage_legacy">发现了冲突或未完成的旧设置。现有文件已保留。请退出并处理较旧的副本后再重试。</string>
+    <string name="client_cert_storage_unsupported">Kyllene 无法验证其 Flatpak 应用标识。请先检查安装再重试。没有未加密的备用方案。</string>
 </resources>

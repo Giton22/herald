@@ -22,6 +22,18 @@ enum class ApprovalChoice(val wire: String) {
     }
 }
 
+/** How a notification or a watch names the choice. */
+val ApprovalChoice.label: String
+    get() = when (this) {
+        ApprovalChoice.Once -> "Allow once"
+        ApprovalChoice.Session -> "Allow for chat"
+        ApprovalChoice.Always -> "Always allow"
+        ApprovalChoice.Deny -> "Deny"
+    }
+
+/** The choices offered outside the app: "Always" is too big a decision for a notification or a watch. */
+val InputRequest.Approval.choicesAway: List<ApprovalChoice> get() = choices.filter { it != ApprovalChoice.Always }
+
 data class ClarifyQuestion(
     /** Batch question id; null for a single-question request. */
     val qid: String?,

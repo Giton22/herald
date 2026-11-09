@@ -6,13 +6,19 @@ import java.net.InetAddress
 import java.net.ServerSocket
 import java.net.Socket
 import java.nio.channels.FileLock
+import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
 
 /**
  * One Herald per user, as Hermes Desktop: a second launch hands over to the running one, which comes to the
  * front, and quits. The first holds a lock file in its folder and listens on a loopback port written next to it.
  */
-class SingleInstance private constructor(@Suppress("unused") private val lock: FileLock?, private val server: ServerSocket?) {
+class SingleInstance private constructor(private val lock: FileLock?, private val server: ServerSocket?) : AutoCloseable {
+    override fun close() {
+        runCatching { server?.close() }
+        val channel = lock?.channel()
+        try { if (lock?.isValid == true) lock.release() } finally { channel?.close() }
+    }
 
     /**
      * Calls [onShow] (on its own thread) each time another launch asks this one to come forward, with the link that
@@ -46,11 +52,22 @@ class SingleInstance private constructor(@Suppress("unused") private val lock: F
          * [link], when given). A holder that doesn't answer may be on its way out, so this one runs then too, only
          * without the claim.
          */
-        fun claim(dir: File, link: String? = null): SingleInstance? {
+        fun claim(dir: File, link: String? = null, waitForExitMillis: Long = 0): SingleInstance? {
             dir.mkdirs()
             val portFile = File(dir, "instance.port")
             val channel = RandomAccessFile(File(dir, "instance.lock"), "rw").channel
-            val lock = runCatching { channel.tryLock() }.getOrNull()
+            var lock = runCatching { channel.tryLock() }.getOrNull()
+            if (lock == null && waitForExitMillis > 0) {
+                val start = System.nanoTime()
+                try {
+                    while (lock == null && System.nanoTime() - start < TimeUnit.MILLISECONDS.toNanos(waitForExitMillis)) {
+                        Thread.sleep(25)
+                        lock = runCatching { channel.tryLock() }.getOrNull()
+                    }
+                } catch (error: Throwable) { channel.close(); throw error }
+                // A restart cannot forward to the exiting process or start a duplicate without its lock.
+                if (lock == null) { channel.close(); return null }
+            }
             if (lock == null) {
                 channel.close()
                 val port = portFile.takeIf { it.exists() }?.readText()?.trim()?.toIntOrNull()

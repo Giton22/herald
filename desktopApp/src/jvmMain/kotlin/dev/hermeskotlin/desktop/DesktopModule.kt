@@ -9,6 +9,7 @@ import dev.hermeskotlin.core.push.PushGateway
 import dev.hermeskotlin.core.push.PushKeys
 import dev.hermeskotlin.core.push.PushRegistration
 import dev.hermeskotlin.core.push.PushSetup
+import dev.hermeskotlin.core.push.linuxPushKeys
 import dev.hermeskotlin.core.voice.VoiceKeepAlive
 import dev.hermeskotlin.desktop.web.Jcef
 import dev.hermeskotlin.desktop.web.JcefWeb
@@ -28,7 +29,7 @@ val desktopModule = module {
             override fun release() = Unit
         }
     }
-    single<PushKeys> { NoPushKeys }
+    single<PushKeys> { linuxPushKeys(get()) ?: NoPushKeys }
     single { PushSetup(get(), get(), get(), get(), get(), get(), deviceName = ::computerName) }
     single { InboxApi(get(), get()) }
     single<PhoneToolRunner> { NoPhoneTools }
@@ -39,10 +40,7 @@ val desktopModule = module {
 
 private fun computerName(): String = runCatching { InetAddress.getLocalHost().hostName }.getOrNull() ?: "Desktop"
 
-/**
- * No notifications on the desktop yet, so no identity to register with the gateway: asking for one says so,
- * and nothing is ever pinned.
- */
+/** Push registration stays unavailable where secure identity storage is not supported. */
 private object NoPushKeys : PushKeys {
     override val deviceId = "desktop"
 

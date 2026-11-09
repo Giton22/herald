@@ -12,6 +12,7 @@ import dev.hermeskotlin.core.gateway.GatewayRepository
 import dev.hermeskotlin.core.gateway.GatewayUrl
 import dev.hermeskotlin.core.gateway.InvalidGatewayUrlException
 import dev.hermeskotlin.core.gateway.ProbeResult
+import dev.hermeskotlin.core.gateway.accessHostKey
 import dev.hermeskotlin.core.gateway.clientCertAliasFor
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -82,9 +83,10 @@ class ConnectViewModel(
     fun clearClientCert() = setClientCert(null)
 
     /**
-     * A saved address takes the pick on its saved gateway, which the sign-in then keeps; only an address not
-     * saved yet holds it as a pending pick until the sign-in saves it. A pending pick for a saved gateway would
-     * shadow its own, and clearing one would leave the saved certificate in place.
+     * A saved address takes the pick on its saved gateway, which the sign-in then keeps; only a host not saved
+     * yet holds it as a pending pick until the sign-in saves it. Certificates are picked per host, so a new path or
+     * port on a saved host goes on the gateway whose certificate that host uses: a pending pick there would shadow
+     * every saved gateway on the host, and clearing one would leave the saved certificate in place.
      */
     private fun setClientCert(alias: String?) {
         val gatewayUrl = GatewayUrl.parseOrNull(url.text.toString())
@@ -93,8 +95,12 @@ class ConnectViewModel(
         val previous = certJob
         certJob = viewModelScope.launch {
             previous?.join()
-            if (gateways.all().find(gatewayUrl.value) != null) {
-                gateways.setClientCert(gatewayUrl.value, alias)
+            val list = gateways.all()
+            val host = accessHostKey(gatewayUrl.host)
+            val sameHost = list.gateways.filter { GatewayUrl.parseOrNull(it.url)?.host?.let(::accessHostKey) == host }
+            val saved = list.find(gatewayUrl.value) ?: sameHost.firstOrNull { it.clientCertAlias != null } ?: sameHost.firstOrNull()
+            if (saved != null) {
+                gateways.setClientCert(saved.url, alias)
                 certs.set(gatewayUrl.host, null)
             } else {
                 certs.set(gatewayUrl.host, alias)

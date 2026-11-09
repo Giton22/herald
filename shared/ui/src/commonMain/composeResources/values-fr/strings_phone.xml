@@ -28,7 +28,7 @@
     <string name="phone_rings_talk_title">Parler quand je réponds</string>
     <string name="phone_rings_talk_detail">Répondre met Hermes en ligne : il pose la question à sa façon, vous répondez à voix haute et pouvez continuer à parler. Désactivé, Répondre ouvre le chat.</string>
     <string name="phone_watch_rings_title">Faire sonner ma montre aussi</string>
-    <string name="phone_watch_rings_detail">Kyllene sonne aussi sur votre montre. Répondez-y, et Hermes vous pose la question dans un appel depuis la montre. Seulement si votre Gateway parle en direct.</string>
+    <string name="phone_watch_rings_detail">Kyllene sonne aussi sur votre montre. Sur une montre Wear OS, Répondre lance un appel depuis la montre, si votre Gateway parle en direct. Sur une Pebble, Répondre y affiche la question si Répondre sur la Pebble est activé ; sinon, répondez sur le téléphone.</string>
     <string name="phone_quiet_title">Heures calmes</string>
     <string name="phone_quiet_empty">Elles commencent et finissent à %1$s, donc rien n’est calme : choisissez une autre heure.</string>
     <string name="phone_quiet_window">Rien ne sonne de %1$s à %2$s.</string>
