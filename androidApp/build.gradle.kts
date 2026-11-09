@@ -12,7 +12,11 @@ val releasesRepo = (findProperty("releasesRepo") as String?).orEmpty()
 
 android {
     namespace = "dev.hermeskotlin.android"
-    compileSdk = libs.versions.android.compileSdk.get().toInt()
+    compileSdk {
+        version = release(libs.versions.android.compileSdk.get().toInt()) {
+            minorApiLevel = libs.versions.android.compileSdkMinor.get().toInt()
+        }
+    }
 
     defaultConfig {
         // The installed identity; the Kotlin packages keep their original dev.hermeskotlin name.
@@ -33,7 +37,12 @@ android {
         Properties().apply { file.inputStream().use(::load) }
     }
     // A published APK signed with a debug key wouldn't install over the real one, so a release fails instead.
-    if (keystore == null && releasesRepo.isNotEmpty()) error("releasesRepo is set but keystore.properties is missing")
+    // It fails when an APK is packaged, not when this project is configured: the desktop release sets releasesRepo
+    // too, has no Android key, and configures every project.
+    if (keystore == null && releasesRepo.isNotEmpty()) {
+        val missing = "releasesRepo is set but keystore.properties is missing"
+        tasks.configureEach { if (name.startsWith("package")) doFirst { throw GradleException(missing) } }
+    }
     signingConfigs {
         if (keystore != null) create("release") {
             storeFile = file(keystore.getProperty("storeFile"))
@@ -115,5 +124,7 @@ dependencies {
     // The watch companion's link to Herald's Wear OS app (wearApp).
     implementation(libs.play.services.wearable)
     implementation(libs.kotlinx.coroutines.play.services)
+    // The Pebble companion's link to Kyllene's Pebble watchapp (pebbleApp), through the Pebble phone app.
+    implementation(libs.pebblekit2.client)
     debugImplementation(libs.compose.ui.tooling)
 }

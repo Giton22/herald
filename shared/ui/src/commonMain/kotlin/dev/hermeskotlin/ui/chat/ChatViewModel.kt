@@ -3,6 +3,7 @@ package dev.hermeskotlin.ui.chat
 import dev.hermeskotlin.core.voice.ReadAloudVoices
 import dev.hermeskotlin.core.voice.InMemoryReadAloudVoices
 import androidx.compose.foundation.text.input.TextFieldState
+import dev.hermeskotlin.designsystem.components.stripBidiIsolates
 import androidx.compose.foundation.text.input.clearText
 import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import androidx.lifecycle.ViewModel
@@ -44,6 +45,7 @@ import dev.hermeskotlin.core.chat.regenerateTarget
 import dev.hermeskotlin.core.network.errorMessage
 import dev.hermeskotlin.core.plugins.NextPromptApi
 import dev.hermeskotlin.core.profiles.ProfilesApi
+import dev.hermeskotlin.core.sessions.CaughtUp
 import dev.hermeskotlin.core.sessions.SeenStore
 import dev.hermeskotlin.core.sessions.SessionsApi
 import dev.hermeskotlin.core.settings.SettingsStore
@@ -98,6 +100,8 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.JsonObject
+import dev.hermeskotlin.ui.resources.*
+import org.jetbrains.compose.resources.getString
 
 /** The model sheet: the catalog once loaded, and a pricey pick waiting for a yes. */
 data class ModelPickerState(
@@ -128,8 +132,14 @@ sealed interface ChatRequest {
     /** `/voice`: the screen asks for the microphone, then starts a voice chat. */
     data object StartVoice : ChatRequest
 
+    /** The default-call shortcut uses a connection cue while GPT-Live answers. */
+    data object StartCall : ChatRequest
+
     /** The voice shortcut: the screen asks for the microphone, then dictates into the composer. */
     data object StartDictation : ChatRequest
+
+    /** A chat opened to type in: the composer takes the keyboard. */
+    data object FocusComposer : ChatRequest
 
     /** [profile] null is the gateway's launch profile. */
     data class SwitchProfile(val profile: String?) : ChatRequest
@@ -167,7 +177,9 @@ data class ChatTarget(
 data class BotIdentity(val name: String, val label: String, val chatsProfile: String? = null)
 
 /** A transcript and its file callbacks travel together while the selected route changes. */
-internal data class ChatTranscript(val state: ChatState = ChatState(), val widgetFiles: WidgetFiles? = null)
+internal data class ChatTranscript(val state: ChatState = ChatState(), val widgetFiles: WidgetFiles? = null, val owner: ChatTarget? = null)
+
+internal data class ChatReadPosition(val target: ChatTarget, val readUpTo: Double?)
 
 /**
  * Shows the [ChatSession] the app-wide [ChatHost] has open; opening another target replaces it.
@@ -249,10 +261,108 @@ class ChatViewModel(
         .stateIn(viewModelScope, SharingStarted.Eagerly, settings.settings.value?.runningSend ?: RunningSend.Steer)
 
     private var target: ChatTarget? = null
+    private val _readPosition = MutableStateFlow<ChatReadPosition?>(null)
+    internal val readPosition: StateFlow<ChatReadPosition?> = _readPosition.asStateFlow()
+
+    private var readPositionJob: Job? = null
+    private var readTail: Triple<String, String, Double>? = null
+
+    /** The open chat's gateway may keep a read watermark for it (`last_read_at` set, zero included), so reading it is sent there. */
+    private var readTracked = false
+
+    /** The open chat's position has been read for this opening, so [readTracked] is known. */
+    private var readResolved = false
+
+    private fun resolveReadPosition(owner: ChatTarget) {
+        readPositionJob?.cancel()
+        // The same chat reopened (a notification for it) keeps its transcript on screen while the new position is read.
+        if (_readPosition.value?.target?.copy(readUpTo = null) != owner.copy(readUpTo = null)) _readPosition.value = null
+        readTail = null
+        readTracked = false
+        // The kept position may be for this very target (reopened after signing in again); reads wait for the new one.
+        readResolved = false
+        releaseCaughtUp()
+        readPositionJob = viewModelScope.launch {
+            val id = owner.storedSessionId
+            // No position from the list (or the notification) means it found nothing new: the chat opens at its end.
+            val fallback = owner.readUpTo
+            // Off the gateway the answer can't come; the saved copy shows at once rather than after the wait.
+            val reachable = connectionState.value.let { it !is ConnectionState.Reconnecting && it !is ConnectionState.SessionExpired && it !is ConnectionState.Failed }
+            val answer = if (id != null && reachable) {
+                withTimeoutOrNull(READ_POSITION_WAIT_MS) { sessions.totals(owner.gateway.gatewayUrl, id, owner.profile) as? ApiResult.Success }
+            } else null
+            val shared = answer?.value?.lastReadAt?.takeIf { it.isFinite() && it >= 0 }
+            if (target != owner) return@launch
+            // Only a clear answer without one (an older gateway, an untracked chat) is left alone; an unknown one is sent.
+            readTracked = answer == null || shared != null
+            readResolved = true
+            _readPosition.value = ChatReadPosition(owner, shared?.takeIf { it > 0 } ?: fallback)
+        }
+    }
+
+    /** Called only once the initial placement has finished and the latest messages are visible. */
+    fun readLatest(owner: ChatTarget, rendered: ChatState) {
+        if (target != owner || !shown.value || connectionState.value !is ConnectionState.Connected) return
+        if (!readResolved || _readPosition.value?.target != owner) return
+        val state = session.value?.state?.value ?: return
+        val id = rendered.storedSessionId?.takeIf { it == state.storedSessionId } ?: return
+        if (rendered.messages != state.messages) return
+        if (!state.historyLoaded || !state.historyRead || state.running) return
+        val tail = endOf(state) ?: return
+        val caughtUp = CaughtUp(owner.gateway.gatewayUrl, owner.profile, id)
+        // Back on a chat already read to this end (the screen shown again): still caught up, nothing to send.
+        if (readTail == tail) return holdCaughtUp(caughtUp)
+        readTail = tail
+        val tracked = readTracked
+        viewModelScope.launch {
+            seen?.markLooked(owner.gateway.gatewayUrl, id, tail.third, owner.profile)
+            val stillAtIt = session.value?.state?.value?.takeIf { !it.running }?.let(::endOf) == tail
+            if (target == owner && readTail == tail && shown.value && stillAtIt) holdCaughtUp(caughtUp)
+            // The protocol only supports read-now, not an arbitrary timestamp or partial-read cursor. A gateway that
+            // keeps no watermark for the chat has nothing to clear.
+            if (tracked && target == owner && shown.value) sessions.setUnread(owner.gateway.gatewayUrl, id, unread = false, profile = owner.profile)
+        }
+    }
+
+    /** The chat's end: its stored id, last message and newest timestamp (the machinery's rows count too). */
+    private fun endOf(state: ChatState): Triple<String, String, Double>? {
+        val id = state.storedSessionId ?: return null
+        val newest = state.messages.mapNotNull { it.sentAt ?: (it as? ChatMessage.Event)?.timestamp }.maxOrNull() ?: return null
+        return Triple(id, state.messages.last().key, newest)
+    }
+
+    /** What this view model last told the [SeenStore] is caught up; another window's chat is left alone. */
+    private var heldCaughtUp: CaughtUp? = null
+
+    private fun holdCaughtUp(chat: CaughtUp) {
+        heldCaughtUp = chat
+        seen?.setCaughtUp(chat)
+    }
+
+    private fun releaseCaughtUp() {
+        val held = heldCaughtUp ?: return
+        heldCaughtUp = null
+        if (seen?.caughtUp?.value == held) seen.setCaughtUp(null)
+    }
+
+    /** A chat window closed is no longer being read. */
+    override fun onCleared() {
+        releaseCaughtUp()
+        super.onCleared()
+    }
+
     private val session = MutableStateFlow<ChatSession?>(null)
     private val widgetSession = MutableStateFlow<Pair<ChatSession, ChatTarget>?>(null)
 
     init {
+        // Caught up only while the end that was read is still the end: a turn starting or a message coming in lets go.
+        viewModelScope.launch {
+            session.flatMapLatest { it?.state ?: flowOf(null) }.collect { state ->
+                if (state == null || state.running || endOf(state) != readTail) releaseCaughtUp()
+            }
+        }
+        // Off the gateway the chat hears of no new turns, while the lists may read them on reconnecting first.
+        viewModelScope.launch { connectionState.collect { if (it !is ConnectionState.Connected) releaseCaughtUp() } }
         // A chat opened under the checkpoints sheet shows its own checkpoints, not the last chat's.
         viewModelScope.launch { session.collect { checkpoints.follow(it) } }
         viewModelScope.launch { session.collect { control.follow(it) } }
@@ -271,7 +381,7 @@ class ChatViewModel(
                 val (chat, owner) = bound
                 // Keyed by whose files these are, so a new title or draft on the same chat doesn't reload its widgets.
                 val files = WidgetFiles(owner.gateway.gatewayUrl to owner.profile, { previewFile(it, owner) }, { downloadFile(it, owner) })
-                chat.state.map { ChatTranscript(it, files) }
+                chat.state.map { ChatTranscript(it, files, owner) }
             }
         }
         .stateIn(viewModelScope, SharingStarted.Eagerly, ChatTranscript())
@@ -304,8 +414,8 @@ class ChatViewModel(
     /** The chat whose draft the composer holds; null while it's being restored, so nothing is saved over it. */
     private var draftOf: ChatTarget? = null
 
-    private val _attachmentError = MutableStateFlow<String?>(null)
-    val attachmentError: StateFlow<String?> = _attachmentError.asStateFlow()
+    private val _attachmentError = MutableStateFlow<ComposerNotice?>(null)
+    val attachmentError: StateFlow<ComposerNotice?> = _attachmentError.asStateFlow()
 
     private val _editing = MutableStateFlow<String?>(null)
 
@@ -328,6 +438,7 @@ class ChatViewModel(
      * take the microphone from the background, and shouldn't start behind another screen.
      */
     private val shown = MutableStateFlow(true)
+    internal val screenShown: StateFlow<Boolean> = shown.asStateFlow()
 
     /** The commands and skills of the open chat's profile; fetched once per chat, on the first `/`. */
     private var catalog: SlashCatalog? = null
@@ -427,30 +538,57 @@ class ChatViewModel(
                 typed != null -> typed
                 else -> drafts.get(target.gateway.gatewayUrl, target.storedSessionId, target.profile)
             }
-            if (this@ChatViewModel.target != target) return@launch
+            val now = this@ChatViewModel.target
+            if (now == null || !now.sameChatAs(target)) return@launch
             val shared = target.draft?.text?.takeIf { it.isNotBlank() && !clean }
             when {
                 shared != null -> composer.setTextAndPlaceCursorAtEnd(listOfNotNull(saved?.takeIf { it.isNotBlank() }, shared).joinToString("\n"))
                 saved != null && composer.text.isEmpty() -> composer.setTextAndPlaceCursorAtEnd(saved)
             }
-            draftOf = target
+            // The new chat may have moved to another project meanwhile; the draft is the one now open.
+            draftOf = now
+        }
+    }
+
+    /** Leaving records a running turn without advancing past messages the viewport actually showed. */
+    fun markLooked() {
+        val target = target ?: return
+        releaseCaughtUp()
+        val state = session.value?.state?.value ?: return
+        val id = state.storedSessionId ?: return
+        viewModelScope.launch {
+            val at = seen?.lastLook(target.gateway.gatewayUrl, id, target.profile) ?: return@launch
+            seen.markLooked(target.gateway.gatewayUrl, id, at, target.profile, running = state.running)
         }
     }
 
     /**
-     * The user is leaving this chat, for another one or out of the app: everything in it up to now counts as
-     * read, so a reply that comes in meanwhile (and its notification) is new to them. The lists only record a
-     * look when a chat is tapped there, which misses what came in while it stayed open. A turn still running
-     * then makes its reply new even in a chat from a messaging platform, as Desktop's finished-turn dot does.
+     * [target] is the open new chat moved to another project before anything was sent in it: it keeps its session,
+     * and with it the model picked and what's typed and attached, and its first send starts in the new folder.
+     * False when it's another chat, or this one has begun on the gateway.
      */
-    fun markLooked() {
-        val target = target ?: return
-        val state = state.value
-        val id = state.storedSessionId ?: return
-        // The machinery's rows (deliveries, routines) count too: they move the chat's activity on as well.
-        val newest = state.messages.mapNotNull { it.sentAt ?: (it as? ChatMessage.Event)?.timestamp }.maxOrNull() ?: return
-        viewModelScope.launch { seen?.markLooked(target.gateway.gatewayUrl, id, newest, target.profile, running = state.running) }
+    private fun moveNewChat(target: ChatTarget): Boolean {
+        val open = this.target ?: return false
+        val chat = session.value ?: return false
+        if (open.storedSessionId != null || target.storedSessionId != null) return false
+        if (open.copy(cwd = target.cwd, draft = target.draft, readUpTo = target.readUpTo) != target) return false
+        if (chat !== host.session.value || !chat.startIn(target.cwd)) return false
+        this.target = target
+        if (draftOf == open) draftOf = target
+        widgetSession.value = chat to target
+        // A new chat's position is its end either way; it stays known, so the greeting doesn't blink to a spinner.
+        _readPosition.value = _readPosition.value?.takeIf { it.target == open }?.copy(target = target) ?: ChatReadPosition(target, target.readUpTo)
+        return true
     }
+
+    /**
+     * The same chat as [other], whatever its read position. A new chat stays itself when it moves to another project,
+     * which also drops the draft it came with (already in the composer).
+     */
+    private fun ChatTarget.sameChatAs(other: ChatTarget): Boolean =
+        if (storedSessionId == null && other.storedSessionId == null) {
+            copy(cwd = null, draft = null, readUpTo = null) == other.copy(cwd = null, draft = null, readUpTo = null)
+        } else copy(readUpTo = null) == other.copy(readUpTo = null)
 
     /** Opens [target]'s chat in the host, with the transcript's file callbacks bound to that target. */
     private fun bind(target: ChatTarget) {
@@ -463,12 +601,19 @@ class ChatViewModel(
         // The same chat, perhaps with a new read position (reopened from a notification): the screen places the
         // "New messages" line from the target; the chat itself, its draft and any voice chat stay as they are.
         if (this.target?.copy(readUpTo = null) == target.copy(readUpTo = null)) {
+            val changed = this.target != target || session.value !== host.session.value
             this.target = target
+            if (changed) resolveReadPosition(target)
             // An expired session or sign-out closes the host's chat; the same chat reopened after signing
-            // back in needs a fresh session, not the stopped one this view model still holds.
-            if (session.value !== host.session.value) bind(target)
+            // back in needs a fresh session, not the stopped one this view model still holds. A voice chat
+            // went with the stopped one (the host closed under it, as on adding the gateway already open).
+            if (session.value !== host.session.value) {
+                voice.stopAll()
+                bind(target)
+            }
             return
         }
+        if (moveNewChat(target)) return
         markLooked()
         // An edit belongs to its chat; what was typed before it is that chat's draft.
         cancelEdit()
@@ -476,6 +621,7 @@ class ChatViewModel(
         val typed = composer.text.toString().takeIf { sameChat }
         stashDraft()
         this.target = target
+        resolveReadPosition(target)
         // A voice chat belongs to the chat it started in.
         voice.stopAll()
         composer.clearText()
@@ -499,14 +645,16 @@ class ChatViewModel(
     private fun sendWhenConnected(target: ChatTarget) {
         viewModelScope.launch {
             val ready = withTimeoutOrNull(VOICE_CONNECT_WAIT_MS) { connectionState.first { it is ConnectionState.Connected } }
-            if (this@ChatViewModel.target != target) return@launch
-            if (ready != null) send() else showAttachmentError("The prompt wasn't sent: Kyllene couldn't reach the gateway. It's in the composer.")
+            if (this@ChatViewModel.target?.sameChatAs(target) != true) return@launch
+            if (ready != null) send() else showNotice(ComposerNotice.PromptNotSent)
         }
     }
 
     /** The screen tells whether it's on screen (started) or gone to the background (stopped). */
     fun onScreen(shown: Boolean) {
         this.shown.value = shown
+        // Something else in the chat's place (a room, the background) isn't reading it.
+        if (!shown) releaseCaughtUp()
     }
 
     /**
@@ -521,11 +669,11 @@ class ChatViewModel(
                 combine(connectionState, shown) { state, shown -> state.takeIf { it !is ConnectionState.Connected || shown } }
                     .first { it is ConnectionState.Connected || it is ConnectionState.Failed || it is ConnectionState.SessionExpired }
             }
-            if (this@ChatViewModel.target?.copy(readUpTo = null) != target.copy(readUpTo = null)) return@launch
+            if (this@ChatViewModel.target?.sameChatAs(target) != true) return@launch
             when {
-                ready is ConnectionState.Connected -> _requests.send(ChatRequest.StartVoice)
+                ready is ConnectionState.Connected -> _requests.send(ChatRequest.StartCall)
                 ready is ConnectionState.Failed || (ready == null && connectionState.value !is ConnectionState.Connected) ->
-                    showAttachmentError("The call didn't start: Kyllene couldn't reach the gateway.")
+                    showNotice(ComposerNotice.CallNotStarted)
             }
         }
     }
@@ -541,13 +689,14 @@ class ChatViewModel(
         // After the notice: when the files overfill a tray that already held some, the tray limit is what to tell.
         if (draft.attachments.isNotEmpty()) addAttachments(draft.attachments)
         if (draft.start == DraftStart.Dictation) viewModelScope.launch { _requests.send(ChatRequest.StartDictation) }
+        if (draft.start == DraftStart.Typing) viewModelScope.launch { _requests.send(ChatRequest.FocusComposer) }
     }
 
-    fun startVoiceChat() {
+    fun startVoiceChat(ringback: Boolean = false) {
         val chat = session.value ?: return
         val target = target ?: return
         val pause = (settings.settings.value ?: AppSettings()).voicePause
-        voice.startChat(chat, target.gateway.gatewayUrl, target.profile, pause.millis)
+        voice.startChat(chat, target.gateway.gatewayUrl, target.profile, pause.millis, ringback = ringback)
     }
 
     /** Starts dictating into the composer, or finishes the dictation in progress. */
@@ -653,7 +802,7 @@ class ChatViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _picker.update { it.copy(loading = false, error = e.message ?: "Couldn't load the models.") }
+                _picker.update { it.copy(loading = false, error = e.message.orEmpty()) }
             }
         }
     }
@@ -683,7 +832,7 @@ class ChatViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                chat.showModel(null, null, error = "Couldn't change ${bot.label}'s model. ${e.message.orEmpty()}".trim())
+                chat.showModel(null, null, error = getString(Res.string.chat_model_bot_change_failed, bot.label, e.message.orEmpty()).trim())
             }
         }
     }
@@ -731,7 +880,7 @@ class ChatViewModel(
     suspend fun previewFile(file: GatewayFile): FileLoad = previewFile(file, target)
 
     internal suspend fun previewFile(file: GatewayFile, owner: ChatTarget?): FileLoad {
-        val gateway = owner?.gateway?.gatewayUrl ?: return FileLoad.Failed("Not connected to a gateway.")
+        val gateway = owner?.gateway?.gatewayUrl ?: return FileLoad.Failed(FileProblem.NotConnected)
         return media.fileLoad(gateway, file, owner.profile)
     }
 
@@ -742,15 +891,23 @@ class ChatViewModel(
     suspend fun downloadFile(file: GatewayFile): FileDownload = downloadFile(file, target)
 
     internal suspend fun downloadFile(file: GatewayFile, owner: ChatTarget?): FileDownload {
-        val gateway = owner?.gateway?.gatewayUrl ?: return FileDownload.Failed("Not connected to a gateway.")
+        val gateway = owner?.gateway?.gatewayUrl ?: return FileDownload.Failed(FileProblem.NotConnected)
         return media.fileDownload(gateway, file, owner.profile)
     }
 
-    /** Adds picked files to the composer tray, up to [OutgoingAttachment.MAX_COUNT]. */
+    /**
+     * Adds picked files to the composer tray, up to [OutgoingAttachment.MAX_COUNT], each at most
+     * [OutgoingAttachment.MAX_BYTES]: the pickers hold to that, a long paste or a drop may not.
+     */
     fun addAttachments(picked: List<OutgoingAttachment>) {
+        val tooLarge = picked.firstOrNull { it.size > OutgoingAttachment.MAX_BYTES }
+        val fitting = picked.filter { it.size <= OutgoingAttachment.MAX_BYTES }
         val room = OutgoingAttachment.MAX_COUNT - _attachments.value.size
-        if (picked.size > room) showAttachmentError("Up to ${OutgoingAttachment.MAX_COUNT} attachments per message.")
-        _attachments.update { it + picked.take(room.coerceAtLeast(0)) }
+        when {
+            tooLarge != null -> showNotice(ComposerNotice.FileTooLarge(tooLarge.name, OutgoingAttachment.MAX_BYTES / 1_000_000))
+            fitting.size > room -> showNotice(ComposerNotice.TooManyAttachments(OutgoingAttachment.MAX_COUNT))
+        }
+        _attachments.update { it + fitting.take(room.coerceAtLeast(0)) }
     }
 
     override fun removeAttachment(id: String) = _attachments.update { tray -> tray.filterNot { it.id == id } }
@@ -780,11 +937,15 @@ class ChatViewModel(
     }
 
     override fun askAside(source: CommentSource, anchor: SelectionAnchor) {
-        val quote = anchor.text.replace(Regex("""\s+"""), " ").trim().let { if (it.length > ASIDE_QUOTE_MAX) it.take(ASIDE_QUOTE_MAX).trimEnd() + "…" else it }
+        // The selection comes off the rendered text, so it carries the bidi isolates; the composer must not.
+        val quote = stripBidiIsolates(anchor.text).replace(Regex("""\s+"""), " ").trim().let { if (it.length > ASIDE_QUOTE_MAX) it.take(ASIDE_QUOTE_MAX).trimEnd() + "…" else it }
         composer.setTextAndPlaceCursorAtEnd("/btw About “$quote” in ${source.label}: ")
     }
 
-    fun showAttachmentError(message: String) = _attachmentError.update { message }
+    /** Shows [message], already in words (a picker's or a share's own), over the composer. */
+    fun showAttachmentError(message: String) = showNotice(ComposerNotice.Said(message))
+
+    private fun showNotice(notice: ComposerNotice) = _attachmentError.update { notice }
 
     override fun dismissAttachmentError() = _attachmentError.update { null }
 
@@ -863,7 +1024,7 @@ class ChatViewModel(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            chat.showCommandOutput(command, e.message ?: "Couldn't start ${thread.name} fresh.", failed = true)
+            chat.showCommandOutput(command, e.message ?: getString(Res.string.chat_cmd_fresh_failed, thread.name), failed = true)
         }
     }
 
@@ -892,7 +1053,7 @@ class ChatViewModel(
                 SlashRoute.Aside -> chat.askAside(arg)
                 SlashRoute.Background -> chat.runInBackground(arg)
                 SlashRoute.Steer -> if (arg.isEmpty()) {
-                    chat.showCommandOutput("/steer", "Usage: /steer <note>. The running reply reads it after its current step, without stopping.")
+                    chat.showCommandOutput("/steer", getString(Res.string.chat_cmd_steer_usage))
                 } else if (chat.steer(arg) == SendOutcome.NotSent) {
                     giveBack("/steer $arg")
                 }
@@ -906,13 +1067,13 @@ class ChatViewModel(
                 SlashRoute.Title -> when {
                     arg.isEmpty() -> onGateway()
                     // Its title is what makes it the bot's chat; renamed, the bot would start a new one.
-                    target?.bot != null -> chat.showCommandOutput("/title", "A bot's chat keeps its name, so the bot can find it.", failed = true)
+                    target?.bot != null -> chat.showCommandOutput("/title", getString(Res.string.chat_cmd_title_bot), failed = true)
                     else -> chat.retitle(arg)
                 }
                 SlashRoute.Branch -> {
                     val count = arg.toIntOrNull()
                     if (arg.isNotEmpty() && (count == null || count < 1)) {
-                        chat.showCommandOutput("/branch", "Usage: /branch [how many messages to keep]", failed = true)
+                        chat.showCommandOutput("/branch", getString(Res.string.chat_cmd_branch_usage), failed = true)
                     } else {
                         chat.branch(count)?.let { (id, title) -> _requests.send(ChatRequest.OpenChat(id, title)) }
                     }
@@ -933,7 +1094,7 @@ class ChatViewModel(
     }
 
     /** `/skin [light|dark|black|system]`: this app's theme; bare, it steps to the next one. */
-    private fun skin(chat: ChatSession, arg: String) {
+    private suspend fun skin(chat: ChatSession, arg: String) {
         val current = settings.settings.value ?: AppSettings()
         val next = when (arg.lowercase()) {
             "" -> when (current.theme) {
@@ -945,15 +1106,16 @@ class ChatViewModel(
             "dark" -> current.copy(theme = ThemeMode.Dark, pureBlack = false)
             "black", "oled", "amoled" -> current.copy(theme = ThemeMode.Dark, pureBlack = true)
             "system", "auto", "default" -> current.copy(theme = ThemeMode.System)
-            else -> return chat.showCommandOutput("/skin", "Themes here: light, dark, black or system.", failed = true)
+            // The theme names stay as typed: they're the command's arguments.
+            else -> return chat.showCommandOutput("/skin", getString(Res.string.chat_cmd_skin_usage), failed = true)
         }
         settings.update { next }
-        val name = when (next.theme) {
-            ThemeMode.System -> "matches the system"
-            ThemeMode.Light -> "light"
-            ThemeMode.Dark -> if (next.pureBlack) "black" else "dark"
+        val said = when (next.theme) {
+            ThemeMode.System -> Res.string.chat_cmd_skin_system
+            ThemeMode.Light -> Res.string.chat_cmd_skin_light
+            ThemeMode.Dark -> if (next.pureBlack) Res.string.chat_cmd_skin_black else Res.string.chat_cmd_skin_dark
         }
-        chat.showCommandOutput("/skin", "Theme: $name.")
+        chat.showCommandOutput("/skin", getString(said))
     }
 
     /** `/pet [name|off]`: bare opens the gallery; a name adopts that pet; `off` puts it away. */
@@ -962,24 +1124,24 @@ class ChatViewModel(
             "", "list", "gallery", "browse", "all" -> _requests.send(ChatRequest.OpenPets)
             "off", "hide", "disable", "none" -> try {
                 pets.hide()
-                chat.showCommandOutput("/pet", "Pet put away. Bring one back with /pet.")
+                chat.showCommandOutput("/pet", getString(Res.string.chat_cmd_pet_hidden))
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                chat.showCommandOutput("/pet", e.message ?: "Couldn't put the pet away.", failed = true)
+                chat.showCommandOutput("/pet", e.message ?: getString(Res.string.chat_cmd_pet_hide_failed), failed = true)
             }
             else -> try {
                 val name = pets.adopt(arg)
                 if (name == null) {
-                    chat.showCommandOutput("/pet", "No pet called “$arg”. Type /pet to browse them.", failed = true)
+                    chat.showCommandOutput("/pet", getString(Res.string.chat_cmd_pet_unknown, arg), failed = true)
                 } else {
                     if (settings.settings.value?.showPet == false) settings.update { it.copy(showPet = true) }
-                    chat.showCommandOutput("/pet", "Adopted $name.")
+                    chat.showCommandOutput("/pet", getString(Res.string.chat_cmd_pet_adopted, name))
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                chat.showCommandOutput("/pet", e.message ?: "Couldn't adopt $arg.", failed = true)
+                chat.showCommandOutput("/pet", e.message ?: getString(Res.string.chat_cmd_pet_adopt_failed, arg), failed = true)
             }
         }
     }
@@ -989,8 +1151,8 @@ class ChatViewModel(
         val target = target ?: return
         when (val result = sessions.search(target.gateway.gatewayUrl, query, limit = 1, profile = target.profile)) {
             is ApiResult.Success -> result.value.firstOrNull()?.let { _requests.send(ChatRequest.OpenChat(it.id, it.displayTitle)) }
-                ?: chat.showCommandOutput("/resume", "No chat matches “$query”.", failed = true)
-            else -> chat.showCommandOutput("/resume", result.errorMessage ?: "Couldn't search the chats.", failed = true)
+                ?: chat.showCommandOutput("/resume", getString(Res.string.chat_cmd_resume_none, query), failed = true)
+            else -> chat.showCommandOutput("/resume", result.errorMessage ?: getString(Res.string.chat_cmd_resume_failed), failed = true)
         }
     }
 
@@ -998,31 +1160,32 @@ class ChatViewModel(
     private suspend fun profile(chat: ChatSession, name: String) {
         val target = target ?: return
         val roster = (profiles.roster(target.gateway.gatewayUrl) as? ApiResult.Success)?.value
-            ?: return chat.showCommandOutput("/profile", "Couldn't load the gateway's profiles.", failed = true)
+            ?: return chat.showCommandOutput("/profile", getString(Res.string.chat_cmd_profile_failed), failed = true)
         val current = roster.profiles.find { it.name == (target.profile ?: roster.launch) }
         if (name.isEmpty()) {
             val others = roster.profiles.filter { it != current }.map { it.name }
+            val here = getString(Res.string.chat_cmd_profile_current, current?.label ?: target.profile ?: roster.launch)
             chat.showCommandOutput(
                 "/profile",
-                "Profile: ${current?.label ?: target.profile ?: roster.launch}" +
-                    if (others.isEmpty()) "" else "\nAlso on this gateway: ${others.joinToString(", ")}",
+                if (others.isEmpty()) here else here + "\n" + getString(Res.string.chat_cmd_profile_others, others.joinToString(", ")),
             )
             return
         }
         val match = roster.profiles.find { it.name.equals(name, ignoreCase = true) }
             ?: return chat.showCommandOutput(
                 "/profile",
-                "No profile named “$name”. This gateway has: ${roster.profiles.joinToString(", ") { it.name }}",
+                getString(Res.string.chat_cmd_profile_unknown, name, roster.profiles.joinToString(", ") { it.name }),
                 failed = true,
             )
-        if (match == current) return chat.showCommandOutput("/profile", "Already in ${match.label}.")
+        if (match == current) return chat.showCommandOutput("/profile", getString(Res.string.chat_cmd_profile_already, match.label))
         _requests.send(ChatRequest.SwitchProfile(match.name.takeIf { it != roster.launch }))
     }
 
-    private fun helpText(catalog: SlashCatalog?): String {
+    private suspend fun helpText(catalog: SlashCatalog?): String {
         val rows = catalog?.suggestions.orEmpty().filterNot { SlashRoute.hidden(it.text.removePrefix("/"), catalog) }
-        if (rows.isEmpty()) return "Couldn't load the command list. Type / to try again."
-        return rows.groupBy { it.group ?: "Commands" }.entries.joinToString("\n\n") { (group, items) ->
+        if (rows.isEmpty()) return getString(Res.string.chat_cmd_help_failed)
+        val ungrouped = getString(Res.string.chat_cmd_help_group)
+        return rows.groupBy { it.group ?: ungrouped }.entries.joinToString("\n\n") { (group, items) ->
             group + "\n" + items.joinToString("\n") { row -> if (row.description.isBlank()) row.text else "${row.text}  ${row.description}" }
         }
     }
@@ -1240,6 +1403,11 @@ class ChatViewModel(
         session.value?.retry()
     }
 
+    /** Catches the chat up after the app was away; see [ChatSession.resync]. Safe while it's still attached. */
+    fun resync() {
+        session.value?.resync()
+    }
+
     /**
      * Tries the gateway again now instead of waiting out the backoff. Only while it's waiting: during an attempt
      * the wake would stay buffered and skip the wait after some later drop.
@@ -1302,6 +1470,9 @@ class ChatViewModel(
 
         /** How long the Call Hermes shortcut waits for the gateway (a cold start connects in a few seconds). */
         const val VOICE_CONNECT_WAIT_MS = 30_000L
+
+        /** How long opening a chat waits for the gateway's read watermark before it uses the list's position. */
+        const val READ_POSITION_WAIT_MS = 5_000L
     }
 }
 
@@ -1319,27 +1490,45 @@ internal suspend fun MediaApi.fileDownload(gateway: GatewayUrl, file: GatewayFil
         else -> FileDownload.Failed(fileError(result, whole = true))
     }
 
+/** A notice over the composer, put into words by the chat screen. */
+sealed interface ComposerNotice {
+    /** Already in words: a file picker's or a share's own message. */
+    data class Said(val text: String) : ComposerNotice
+
+    /** The quick entry's prompt couldn't go out; it waits in the composer. */
+    data object PromptNotSent : ComposerNotice
+
+    /** The Call Hermes shortcut's call couldn't start. */
+    data object CallNotStarted : ComposerNotice
+
+    /** More files were picked than a message carries. */
+    data class TooManyAttachments(val max: Int) : ComposerNotice
+
+    /** [name] is past the per-file limit of [megabytes] MB. */
+    data class FileTooLarge(val name: String, val megabytes: Int) : ComposerNotice
+}
+
 /**
  * Why a gateway file couldn't be read, in the words the file viewer shows. [whole] is for the whole file
  * (Save, Share, a linked picture), where too large means past the phone's cap, not the preview's.
  */
-internal fun fileError(result: ApiResult<*>, whole: Boolean = false): String = when (result) {
+internal fun fileError(result: ApiResult<*>, whole: Boolean = false): FileProblem = when (result) {
     is ApiResult.Failed -> when (result.status) {
-        404 -> "It isn't on the gateway, or it has moved since the reply was written."
+        404 -> FileProblem.Missing
         403 -> if (result.message.contains("sensitive", ignoreCase = true)) {
-            "The gateway keeps files like this one private."
+            FileProblem.Private
         } else {
-            "The gateway won't share it: ${result.message.trimEnd('.')}."
+            FileProblem.Refused(result.message)
         }
         413 -> when {
-            !whole -> "It's too large for the gateway to preview. Save still gets it."
-            result.message == MediaApi.TOO_LARGE -> MediaApi.TOO_LARGE
-            else -> "It's too large for the gateway to hand over."
+            !whole -> FileProblem.TooLargeToPreview
+            result.message == MediaApi.TOO_LARGE -> FileProblem.Said(MediaApi.TOO_LARGE)
+            else -> FileProblem.TooLargeToHandOver
         }
-        else -> result.message.trimEnd('.') + "."
+        else -> FileProblem.Said(result.message.trimEnd('.') + ".")
     }
-    ApiResult.SessionExpired -> "Sign in again to open files."
-    ApiResult.RateLimited -> "The gateway is busy. Try again in a moment."
-    is ApiResult.Unavailable -> "Couldn't reach the gateway."
-    else -> "Couldn't open it."
+    ApiResult.SessionExpired -> FileProblem.SignInAgain
+    ApiResult.RateLimited -> FileProblem.Busy
+    is ApiResult.Unavailable -> FileProblem.Unreachable
+    else -> FileProblem.CouldNotOpen
 }

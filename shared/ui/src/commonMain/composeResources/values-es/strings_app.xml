@@ -1,0 +1,389 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_expanded">Desplegado</string>
+    <string name="app_collapsed">Plegado</string>
+    <string name="app_save">Guardar</string>
+    <string name="app_try_again">Reintentar</string>
+    <string name="app_done">Listo</string>
+
+    <string name="app_palette_title">Paleta de comandos</string>
+    <string name="app_palette_placeholder">Buscar chats, páginas y acciones</string>
+    <string name="app_palette_nothing">Sin resultados</string>
+    <string name="app_palette_search">Buscar</string>
+    <string name="app_palette_search_all">Buscar «%1$s» en todos los chats</string>
+    <string name="app_palette_go_to">Ir a</string>
+    <string name="app_palette_this_chat">Este chat</string>
+    <string name="app_palette_pinned">Fijados</string>
+    <string name="app_palette_help">Ayuda</string>
+    <string name="app_page_chats">Chats</string>
+    <string name="app_page_bots">Bots</string>
+    <string name="app_page_inbox">Bandeja de entrada</string>
+    <string name="app_page_scheduled">Programados</string>
+    <string name="app_page_archived">Chats archivados</string>
+    <string name="app_page_capabilities">Capacidades</string>
+    <string name="app_page_config">Configuración</string>
+    <string name="app_page_insights">Estadísticas</string>
+    <string name="app_new_chat">Nuevo chat</string>
+    <string name="app_search_chats">Buscar chats</string>
+    <string name="app_pick_model">Elegir un modelo</string>
+    <string name="app_find_in_chat">Buscar en el chat</string>
+    <string name="app_new_window">Abrir en una ventana nueva</string>
+    <string name="app_chat_options">Opciones del chat</string>
+    <string name="app_usage">Consumo</string>
+    <string name="app_processes">Procesos</string>
+    <string name="app_checkpoints">Puntos de control</string>
+    <string name="app_theme_light">Tema claro</string>
+    <string name="app_theme_dark">Tema oscuro</string>
+    <string name="app_theme_system">Tema del sistema</string>
+    <string name="app_keyboard_shortcuts">Atajos de teclado</string>
+    <string name="app_keys_composer">Cuadro de texto</string>
+    <string name="app_keys_app">App</string>
+    <string name="app_keys_send">Enviar</string>
+    <string name="app_keys_new_line">Nueva línea</string>
+    <string name="app_keys_queue">Poner en cola tras la respuesta en curso</string>
+    <string name="app_keys_earlier_prompts">Prompts anteriores</string>
+    <string name="app_keys_stop">Detener la respuesta</string>
+    <string name="app_keys_focus_composer">Ir al cuadro de texto</string>
+    <string name="app_keys_next_chat">Chat siguiente</string>
+    <string name="app_keys_previous_chat">Chat anterior</string>
+    <string name="app_keys_chat_in_list">Chats 1 a 9 de la lista</string>
+    <string name="app_keys_find_in_chat">Buscar en este chat</string>
+    <string name="app_keys_toggle_file">Ocultar o mostrar el archivo abierto</string>
+    <string name="app_keys_files_in_prompt">Archivos y carpetas en un prompt</string>
+    <string name="app_keys_chat_new_window">Abrir un chat en una ventana nueva</string>
+    <string name="app_keys_pin">Fijar o soltar un chat</string>
+    <string name="app_keys_archive">Archivar un chat</string>
+    <string name="app_keys_scroll_page">Desplazar una página</string>
+    <string name="app_keys_first_latest">Primer o último mensaje</string>
+    <string name="app_keys_step_chats">Chat anterior o siguiente</string>
+    <string name="app_keys_sidebar">Mostrar u ocultar la barra lateral</string>
+    <string name="app_keys_zoom">Acercar / alejar / restablecer</string>
+    <string name="app_keys_save">Guardar una tarea o config.yaml</string>
+    <string name="app_keys_close_window">Cerrar la ventana</string>
+    <string name="app_keys_quick_entry">Entrada rápida desde cualquier sitio</string>
+    <string name="app_keys_these">Estos atajos</string>
+    <string name="app_loading">Cargando</string>
+    <string name="app_clear">Borrar</string>
+    <string name="app_show_password">Mostrar contraseña</string>
+    <string name="app_hide_password">Ocultar contraseña</string>
+    <string name="app_dismiss">Cerrar</string>
+    <string name="app_copy">Copiar</string>
+    <string name="app_copied">Copiado</string>
+    <string name="app_open_picture">Abrir la imagen</string>
+    <string name="app_picture_failed">No se pudo cargar la imagen</string>
+    <string name="app_not_connected">Sin conexión</string>
+    <string name="app_reconnecting">Reconectando…</string>
+    <string name="app_connected">Conectado</string>
+    <string name="app_offline_retrying">Sin conexión · reintento en %1$d s</string>
+    <string name="app_session_expired">Sesión caducada</string>
+    <string name="app_connection_refused">Conexión rechazada</string>
+    <string name="app_sign_in_again">Tu sesión caducó. Vuelve a iniciar sesión.</string>
+    <string name="app_chat_fallback_title">Chat</string>
+    <string name="app_untitled_session">Sesión sin título</string>
+    <string name="app_share_bot_gone">No se pudo abrir el chat de %1$s, así que lo compartido está en un chat nuevo.</string>
+    <string name="app_call_opening">Abriendo la llamada…</string>
+    <string name="app_call_failed">No se pudo iniciar la llamada</string>
+    <string name="app_ok">OK</string>
+    <string name="app_call_invalid_target">Elige un destino de llamada predeterminado válido en Ajustes.</string>
+    <string name="app_call_bot_unavailable">Este bot no está disponible. Elige un destino de llamada predeterminado en Ajustes.</string>
+    <string name="app_call_open_failed">No se pudo abrir el destino de llamada predeterminado. %1$s</string>
+    <string name="app_call_bot_unreachable">No se pudo contactar con el bot. Inténtalo de nuevo cuando estés conectado.</string>
+    <string name="app_call_open_retry">No se pudo abrir el destino de llamada predeterminado. Inténtalo de nuevo.</string>
+    <string name="app_bot_model_note">%1$s lo usa en todos sus chats, incluidos su chat de bot y sus rutinas.</string>
+    <string name="app_bot_capabilities">Capacidades de %1$s</string>
+    <string name="app_bot_capabilities_note">Los cambios se aplican a los chats nuevos de %1$s. Si su chat de bot no recoge alguno, «Empezar de cero» le da un chat nuevo con todo lo que ajustes aquí.</string>
+    <string name="app_bot_config">Configuración de %1$s</string>
+    <string name="app_bot_config_note">Los ajustes propios de %1$s, guardados en el config.yaml de su perfil. La mayoría se aplican desde su próximo chat.</string>
+
+    <string name="app_suggestions_no_reason">El Gateway no lo instaló.</string>
+    <string name="app_suggestions_not_listed">Instalado, pero el Gateway aún no lo muestra. Reinicia el Gateway y vuelve a mirar.</string>
+
+    <string name="time_today">Hoy</string>
+    <string name="time_yesterday">Ayer</string>
+    <string name="time_yesterday_at">Ayer %1$s</string>
+    <string name="time_weekday_at">%1$s %2$s</string>
+    <string name="time_month_day">%2$s %1$s</string>
+    <string name="time_with_year">%1$s %2$s</string>
+    <string name="time_with_clock">%1$s, %2$s</string>
+    <string name="time_full">%1$s, %2$s, %3$s</string>
+    <string name="time_am">a. m.</string>
+    <string name="time_pm">p. m.</string>
+    <string-array name="time_months_short">
+        <item>ene</item>
+        <item>feb</item>
+        <item>mar</item>
+        <item>abr</item>
+        <item>may</item>
+        <item>jun</item>
+        <item>jul</item>
+        <item>ago</item>
+        <item>sept</item>
+        <item>oct</item>
+        <item>nov</item>
+        <item>dic</item>
+    </string-array>
+    <string-array name="time_weekdays_short">
+        <item>lun</item>
+        <item>mar</item>
+        <item>mié</item>
+        <item>jue</item>
+        <item>vie</item>
+        <item>sáb</item>
+        <item>dom</item>
+    </string-array>
+    <string-array name="time_weekdays">
+        <item>lunes</item>
+        <item>martes</item>
+        <item>miércoles</item>
+        <item>jueves</item>
+        <item>viernes</item>
+        <item>sábado</item>
+        <item>domingo</item>
+    </string-array>
+    <string name="time_saved_just_now">Copia guardada · ahora mismo</string>
+    <string name="time_saved_ago">Copia guardada · hace %1$s</string>
+
+    <string name="journey_title">Trayectoria</string>
+    <string name="journey_detail">%1$s y %2$s que ha adquirido el agente de este perfil.</string>
+    <plurals name="journey_skills">
+        <item quantity="one">%1$d habilidad</item>
+        <item quantity="other">%1$d habilidades</item>
+    </plurals>
+    <plurals name="journey_memories">
+        <item quantity="one">%1$d recuerdo</item>
+        <item quantity="other">%1$d recuerdos</item>
+    </plurals>
+    <string name="journey_error">No se pudo cargar la trayectoria.</string>
+    <string name="journey_empty">Aún no ha aprendido nada. Las habilidades que escribe el agente y los recuerdos que guarda aparecen aquí.</string>
+    <string name="journey_undated">Sin fecha</string>
+    <string name="journey_month_year">%1$s de %2$s</string>
+    <string-array name="journey_months">
+        <item>enero</item>
+        <item>febrero</item>
+        <item>marzo</item>
+        <item>abril</item>
+        <item>mayo</item>
+        <item>junio</item>
+        <item>julio</item>
+        <item>agosto</item>
+        <item>septiembre</item>
+        <item>octubre</item>
+        <item>noviembre</item>
+        <item>diciembre</item>
+    </string-array>
+    <string name="journey_pinned">Fijados</string>
+    <string name="journey_back">Volver a la trayectoria</string>
+    <string name="journey_unreadable">No se pudo leer este elemento.</string>
+    <string name="journey_memory">Recuerdo</string>
+    <string name="journey_skill">Habilidad</string>
+    <plurals name="journey_used">
+        <item quantity="one">usado una vez</item>
+        <item quantity="other">usado %1$d veces</item>
+    </plurals>
+    <string name="journey_archived">archivado</string>
+
+    <string name="pet_title">Mascotas</string>
+    <string name="pet_detail">Una mascota pertenece al perfil, así que Hermes Desktop muestra la misma.</string>
+    <string name="pet_empty">El Gateway no tiene mascotas que ofrecer.</string>
+    <string name="pet_hide">Guardar la mascota</string>
+    <string name="pet_error_load">No se pudieron cargar las mascotas.</string>
+    <string name="pet_error_adopt">No se pudo adoptar a %1$s.</string>
+
+    <string name="plugins_title">Plugins</string>
+    <string name="plugins_detail">Los plugins del panel del Gateway que tienen página propia, como Kanban. Se abren en la app.</string>
+    <string name="plugins_error">No se pudieron cargar los plugins</string>
+    <string name="plugins_empty">No hay páginas de plugins</string>
+    <string name="plugins_empty_detail">Un plugin con página propia, como Kanban, aparece aquí.</string>
+    <string name="plugins_open">Abrir %1$s</string>
+    <string name="plugins_close_page">Cerrar la página</string>
+    <string name="plugins_page_failed">No se pudo abrir la página.</string>
+    <string name="app_open_link">Abrir enlace</string>
+    <string name="app_copy_link">Copiar enlace</string>
+    <string name="wallpaper_dialog_title">Fondo del chat</string>
+    <string name="wallpaper_dialog_failed">No se pudo abrir el diálogo de archivos.</string>
+    <string name="wallpaper_too_large">Esa foto es demasiado grande o no se puede leer.</string>
+    <string name="wallpaper_not_an_image">Ese archivo no es una imagen que Kyllene pueda leer.</string>
+    <string name="wallpaper_read_failed">No se pudo leer esa imagen.</string>
+
+    <string name="update_renamed">Herald ahora es Kyllene</string>
+    <string name="update_renamed_detail">La misma app con nuevo nombre e icono. Tu sesión, tus chats y tus ajustes se mantienen.</string>
+    <string name="update_got_it">Entendido</string>
+
+    <string name="gateways_title">Gateways</string>
+    <string name="gateways_detail">Cada Gateway es su propio Hermes, con sus propios perfiles y chats.</string>
+    <string name="gateways_make_primary">Hacer principal</string>
+    <string name="gateways_rename">Renombrar</string>
+    <string name="gateways_primary">Principal</string>
+    <string name="gateways_signed_out">Sesión cerrada</string>
+    <string name="gateways_signed_out_after">· Sesión cerrada</string>
+    <string name="gateways_client_cert">Certificado de cliente</string>
+    <string name="gateways_more_for">Más para %1$s</string>
+    <string name="gateways_rename_title">Renombrar Gateway</string>
+    <string name="gateways_rename_detail">Déjalo vacío para mostrar su dirección.</string>
+    <string name="gateways_remove_title">¿Quitar el Gateway?</string>
+    <string name="gateways_remove_detail">Kyllene cierra la sesión en «%1$s» y lo olvida. Sus chats se quedan en el Gateway.</string>
+    <string name="gateways_client_cert_detail">Kyllene presenta este certificado a «%1$s» cuando su servidor pide uno. La clave se queda en el almacén del sistema; solo se guarda su nombre.</string>
+    <string name="gateways_pick">Elegir…</string>
+    <string name="gateways_change">Cambiar…</string>
+    <string name="gateways_clear">Quitar</string>
+
+    <string name="connect_welcome">Te damos la bienvenida a Kyllene</string>
+    <string name="connect_welcome_detail">Conéctate a tu Gateway de Hermes Agent. No se envía nada hasta que inicies sesión.</string>
+    <string name="connect_add_gateway">Añadir un Gateway</string>
+    <string name="connect_add_gateway_detail">Conéctate a otro Gateway de Hermes Agent. Sigues con la sesión iniciada en los que guardaste.</string>
+    <string name="connect_address">Dirección del Gateway</string>
+    <string name="connect_address_detail">Donde se ejecuta tu hermes dashboard: LAN, Tailscale o HTTPS.</string>
+    <string name="connect_url_required">La URL del Gateway es obligatoria.</string>
+    <string name="connect_url_scheme">La URL del Gateway debe empezar por http:// o https://, no por %1$s</string>
+    <string name="connect_url_invalid">La URL del Gateway no es válida: %1$s</string>
+    <string name="connect_url_no_host">La URL del Gateway no tiene host.</string>
+    <string name="connect_start_dashboard">Si el panel aún no está en marcha, ejecuta esto en el servidor:</string>
+    <string name="connect_exposed">Esta dirección no es privada y no usa https://, así que tu contraseña y tus chats cruzarían internet sin cifrar. Usa https://, Tailscale o tu propia red.</string>
+    <string name="connect_which_address">¿Qué dirección uso?</string>
+    <string name="connect_behind_access">¿Detrás de Cloudflare Access?</string>
+    <string name="connect_need_cert">¿Necesitas un certificado de cliente?</string>
+    <string name="connect_continue">Continuar al inicio de sesión</string>
+    <string name="connect_back_to_gateway">Volver a mi Gateway</string>
+    <string name="connect_test">Probar</string>
+    <string name="connect_testing">Probando…</string>
+    <string name="connect_test_connection">Probar la conexión</string>
+    <string name="connect_testing_connection">Probando la conexión</string>
+    <string name="connect_access_hint">Si Cloudflare Access protege esta dirección, crea un token de servicio en Cloudflare Zero Trust (Access → Service credentials) y añade una política Service Auth para él a la aplicación de Access.</string>
+    <string name="connect_access_saved">Hay un token de servicio guardado para esta dirección</string>
+    <string name="connect_forget">Olvidar</string>
+    <string name="connect_access_keep">Deja los campos vacíos para seguir usándolo, o escribe un token nuevo para sustituirlo.</string>
+    <string name="connect_client_id">Client ID</string>
+    <string name="connect_client_secret">Client Secret</string>
+    <string name="connect_client_secret_detail">Se guarda cifrado en este teléfono y solo se envía a esta dirección.</string>
+    <string name="connect_client_secret_detail_desktop">Se guarda cifrado en este ordenador y solo se envía a esta dirección.</string>
+    <string name="connect_access_half_filled">Escribe el Client ID y el Client Secret, o ninguno.</string>
+    <string name="connect_cert_demanded">Este servidor pide un certificado de cliente antes de responder. Elige el que te dio y vuelve a probar.</string>
+    <string name="connect_cert_hint">Si un proxy delante de esta dirección pide un certificado de cliente, elígelo aquí para que la prueba, el inicio de sesión y el chat lo presenten.</string>
+    <string name="connect_cert_kept">La clave se queda en el almacén del sistema; solo se guarda su nombre, por Gateway.</string>
+    <string name="connect_pick_cert">Elegir certificado</string>
+    <string name="connect_reachable">Hermes está disponible</string>
+    <string name="connect_reachable_version">Hermes %1$s está disponible</string>
+    <string name="connect_tested_next">Después se prueba el inicio de sesión y luego el chat</string>
+    <string name="connect_agent_gateway">Gateway del agente</string>
+    <string name="connect_running">En marcha</string>
+    <string name="connect_stopped">Detenido</string>
+    <string name="connect_sign_in_not_required">No hace falta</string>
+    <string name="connect_sign_in_password_or_browser">Contraseña o navegador</string>
+    <string name="connect_sign_in_password">Usuario y contraseña</string>
+    <string name="connect_sign_in_browser">En el navegador (SSO)</string>
+    <string name="connect_sign_in_unsupported">No compatible</string>
+    <string name="connect_profiles">Perfiles</string>
+    <string name="connect_no_sign_in">Ningún inicio de sesión que la app pueda usar</string>
+    <string name="connect_no_sign_in_detail">Este panel no ofrece ni un proveedor de usuario y contraseña ni inicio de sesión en el navegador. Actualiza Hermes o configura el proveedor de usuario y contraseña en el servidor.</string>
+    <string name="connect_auth_off">La protección de acceso está desactivada</string>
+    <string name="connect_auth_off_detail">El panel solo escucha en loopback, así que otros dispositivos no podrán chatear. Inícialo con --host 0.0.0.0 y configura un proveedor de contraseña.</string>
+    <string name="connect_guide_local">Misma wifi o red local</string>
+    <string name="connect_guide_local_detail">Usa la dirección local y el puerto del servidor, como 192.168.1.20:9119. Inicia el panel con --host 0.0.0.0 para que otros dispositivos lo alcancen.</string>
+    <string name="connect_guide_tailscale_detail">Activa Tailscale en este teléfono y usa la dirección Tailscale del servidor, como 100.64.0.1:9119 o su nombre .ts.net. También funciona fuera de casa.</string>
+    <string name="connect_guide_tailscale_detail_desktop">Activa Tailscale en este ordenador y usa la dirección Tailscale del servidor, como 100.64.0.1:9119 o su nombre .ts.net. También funciona fuera de casa.</string>
+    <string name="connect_guide_https_detail">Usa tu dirección https:// cuando el panel esté detrás de un proxy con certificado. El proxy también debe dejar pasar las actualizaciones WebSocket en /api/ws.</string>
+
+    <string name="signin_title">Iniciar sesión</string>
+    <string name="signin_detail_browser">Inicia sesión en %1$s en tu navegador, con la cuenta que usa su panel.</string>
+    <string name="signin_detail_both">Usa el usuario y la contraseña del panel configurados en %1$s, o inicia sesión en tu navegador.</string>
+    <string name="signin_detail_password">Usa el usuario y la contraseña del panel configurados en %1$s.</string>
+    <string name="signin_username">Usuario</string>
+    <string name="signin_password">Contraseña</string>
+    <string name="signin_signing_in">Iniciando sesión…</string>
+    <string name="signin_with_browser">Iniciar sesión con el navegador</string>
+    <string name="signin_waiting_browser">Esperando al navegador…</string>
+    <string name="signin_finish_in_browser">Termina de iniciar sesión en la página que se abrió. Kyllene vuelve sola cuando acabes.</string>
+    <string name="signin_different_gateway">Usar otro Gateway</string>
+    <string name="signin_gateway_chip">Gateway %1$s</string>
+    <string name="signin_or">o</string>
+    <string name="signin_error_missing">Escribe tu usuario y contraseña.</string>
+    <string name="signin_error_wrong">Usuario o contraseña incorrectos.</string>
+    <string name="signin_error_rejected">Se rechazó el inicio de sesión.</string>
+    <string name="signin_error_rate_limited">Demasiados intentos. Espera un momento y vuelve a intentarlo.</string>
+    <string name="signin_error_unreachable">No se pudo contactar con el Gateway: %1$s</string>
+
+    <string name="check_stage_server">Acceso al servidor</string>
+    <string name="check_stage_sign_in">Inicio de sesión</string>
+    <string name="check_stage_live">Conexión en directo</string>
+    <string name="check_not_checked_yet">Aún sin comprobar.</string>
+    <string name="check_step">Paso %1$d de %2$d</string>
+    <string name="check_disc">%1$s, %2$s</string>
+    <string name="check_state_checking">Comprobando</string>
+    <string name="check_state_passed">Superado</string>
+    <string name="check_state_failed">Fallido</string>
+    <string name="check_state_skipped">Omitido</string>
+    <string name="check_state_not_checked">Sin comprobar</string>
+    <string name="check_what_to_do">Qué hacer</string>
+    <string name="check_server_answers">Hermes %1$s responde en %2$s.</string>
+    <string name="check_signed_in_as">Sesión iniciada como %1$s.</string>
+    <string name="check_live_ready">La conexión del chat se abrió y el Gateway dijo que está listo.</string>
+    <string name="check_needs_server">Primero necesita acceso al servidor.</string>
+    <string name="check_needs_sign_in">Primero necesita iniciar sesión.</string>
+    <string name="check_sign_in_expired">Este teléfono no tiene sesión iniciada en el Gateway, o la sesión caducó.</string>
+    <string name="check_sign_in_rate_limited">El Gateway está limitando los intentos de inicio de sesión.</string>
+    <string name="check_sign_in_unavailable">La comprobación de inicio de sesión no llegó: %1$s</string>
+    <string name="check_sign_in_refused">El Gateway rechazó la comprobación de inicio de sesión: %1$s</string>
+    <string name="check_ticket_expired">El Gateway no emitió un ticket de chat: la sesión caducó.</string>
+    <string name="check_ticket_unavailable">No se pudo pedir un ticket de chat: %1$s</string>
+    <string name="check_requests_rate_limited">El Gateway está limitando las peticiones.</string>
+    <string name="check_ticket_refused">El Gateway no emitió un ticket de chat: %1$s</string>
+    <string name="check_never_ready">La conexión del chat se abrió, pero el Gateway nunca dijo que estuviera listo.</string>
+    <string name="check_no_chat_endpoint">Este panel no tiene endpoint de chat (/api/ws).</string>
+    <string name="check_chat_guarded">El Gateway rechazó la conexión del chat (protección Host/Origin).</string>
+    <string name="check_chat_login_redirect">La conexión del chat se envió a una página de inicio de sesión (HTTP %1$s).</string>
+    <string name="check_chat_refused">Se rechazó la conexión del chat (HTTP %1$s).</string>
+    <string name="check_ticket_rejected">El Gateway rechazó el ticket de chat.</string>
+    <string name="check_chat_cert_required">El servidor pidió un certificado de cliente durante la conexión del chat: %1$s</string>
+    <string name="check_chat_failed">La conexión del chat falló: %1$s</string>
+    <string name="check_server_cert_required">No se puede llegar a %1$s: el servidor pidió un certificado de cliente (%2$s).</string>
+    <string name="check_not_hermes">Algo respondió en %1$s, pero no un panel de Hermes.</string>
+    <string name="check_not_hermes_status">Algo respondió en %1$s (HTTP %2$s), pero no un panel de Hermes.</string>
+    <string name="check_access_token_refused">Cloudflare Access rechazó el token de servicio de este Gateway (HTTP %1$s).</string>
+    <string name="check_access_blocked">Cloudflare Access detuvo la petición antes de que llegara a Hermes (HTTP %1$s).</string>
+    <string name="check_unreachable">No se puede llegar a %1$s: %2$s</string>
+    <string name="check_fix_sign_in_again">Vuelve a iniciar sesión.</string>
+    <string name="check_fix_sign_in_password_or_browser">Vuelve a iniciar sesión, con la contraseña del panel o en el navegador.</string>
+    <string name="check_fix_wait_a_minute">Espera un minuto y vuelve a intentarlo.</string>
+    <string name="check_fix_sign_in_or_update">Vuelve a iniciar sesión; si sigue fallando, actualiza Hermes.</string>
+    <string name="check_fix_update_hermes_try_again">Actualiza Hermes y vuelve a intentarlo.</string>
+    <string name="check_fix_update_hermes">Actualiza Hermes en el servidor.</string>
+    <string name="check_fix_agent_running">Comprueba que el Gateway del agente está en marcha en el servidor. Detrás de un proxy, permite las actualizaciones WebSocket en /api/ws.</string>
+    <string name="check_fix_exact_address">Usa exactamente la dirección para la que está configurado el panel y comprueba que el chat integrado está activado.</string>
+    <string name="check_fix_access_token_or_proxy">Detrás de Cloudflare Access, añade un token de servicio para este Gateway. Si no, comprueba que el proxy reenvía /api/ws.</string>
+    <string name="check_fix_allow_upgrades">Detrás de un proxy, permite las actualizaciones WebSocket en /api/ws.</string>
+    <string name="check_fix_allow_upgrades_or_retry">Detrás de un proxy, permite las actualizaciones WebSocket en /api/ws; si no, vuelve a intentarlo.</string>
+    <string name="check_fix_client_cert">Asigna al Gateway el certificado de cliente que pide este servidor (su alias en el almacén del sistema) y vuelve a comprobar.</string>
+    <string name="check_fix_dashboard_port">Usa el puerto propio del panel, 9119 por defecto. Detrás de un proxy, comprueba que reenvía al panel.</string>
+    <string name="check_fix_check_access_token">Comprueba el Client ID y el Client Secret, y que la aplicación de Access tenga una política Service Auth que incluya este token.</string>
+    <string name="check_fix_add_access_token">Añade un token de servicio de Cloudflare Access para este Gateway y da a la aplicación de Access una política Service Auth que lo incluya.</string>
+    <string name="check_fix_loopback">Esta dirección apunta a este teléfono, no al servidor. Usa la dirección local o de Tailscale del servidor.</string>
+    <string name="check_fix_tailscale">Activa Tailscale en este teléfono y comprueba que el servidor está en línea en la misma tailnet.</string>
+    <string name="check_fix_https">Comprueba que el dominio apunta al servidor, que su certificado es válido y que el proxy reenvía al panel.</string>
+    <string name="check_fix_local_network">Conéctate a la misma wifi o red que el servidor e inicia el panel con --host 0.0.0.0 para que otros dispositivos lo alcancen.</string>
+    <string name="check_fix_reachable">Comprueba la dirección y el puerto, y que el servidor sea accesible desde este teléfono.</string>
+
+    <!-- Imported desktop client certificates. -->
+    <string name="check_fix_client_cert_desktop">Importa el certificado de cliente PKCS#12 que pide este servidor y vuelve a comprobar.</string>
+    <string name="check_fix_client_cert_unsupported">Esta versión de Kyllene no puede presentar certificados de cliente. Usa la app de Android o el Flatpak de Linux para este servidor.</string>
+    <string name="client_cert_import_title">Importar certificado de cliente</string>
+    <string name="client_cert_import">Importar</string>
+    <string name="client_cert_importing">Importando…</string>
+    <string name="client_cert_import_detail">Introduce la contraseña del archivo PKCS#12 seleccionado. Su clave se guardará cifrada para este nombre de host TLS. Los gateways que comparten el nombre de host también comparten la selección del certificado, sin importar el puerto o la ruta.</string>
+    <string name="client_cert_password">Contraseña PKCS#12</string>
+    <string name="client_cert_invalid">Kyllene no pudo abrir este certificado de cliente. Comprueba la contraseña y elige un archivo PKCS#12 con un certificado de cliente vigente, su clave privada correspondiente y la cadena de certificados.</string>
+    <string name="client_cert_regular_file">Elige un archivo PKCS#12 normal. No se pueden importar enlaces simbólicos, dispositivos ni tuberías con nombre.</string>
+    <string name="client_cert_read_failed">No se pudo leer ese archivo PKCS#12. Vuelve a seleccionarlo y comprueba los permisos de acceso.</string>
+    <string name="client_cert_clear_selection">Borrar selección</string>
+    <string name="connect_cert_kept_desktop">Las claves importadas se guardan cifradas para este nombre de host TLS. Al borrar esta selección, puede seguir usándose otro certificado guardado para el mismo nombre de host. Las claves importadas permanecen en los ajustes cifrados.</string>
+    <string name="gateways_client_cert_detail_desktop">Kyllene presenta este certificado a «%1$s» cuando su servidor lo solicita. Las claves importadas se guardan cifradas para este nombre de host TLS. Al borrar esta selección, puede seguir usándose otro certificado guardado para el mismo nombre de host. Las claves importadas permanecen en los ajustes cifrados.</string>
+    <string name="client_cert_storage_unavailable">Kyllene no pudo obtener su clave de almacenamiento. Desbloquea el llavero de tu escritorio, comprueba que su portal Secret esté disponible y vuelve a intentarlo.</string>
+    <string name="client_cert_storage_cancelled">Se canceló el desbloqueo del almacenamiento. Reintenta para desbloquearlo; los datos existentes se han conservado.</string>
+    <string name="client_cert_storage_corrupt">Kyllene no pudo abrir sus ajustes cifrados. Restaura una copia de seguridad que funcione o usa la identidad original de la aplicación. Los datos existentes se han conservado.</string>
+    <string name="client_cert_storage_version">Este formato de ajustes necesita otra versión de Kyllene. Los datos existentes se han conservado.</string>
+    <string name="client_cert_storage_read">Kyllene no pudo leer sus ajustes, o el archivo supera los 16 MiB. Comprueba el acceso al archivo antes de reintentar.</string>
+    <string name="client_cert_storage_write">Kyllene no pudo terminar de guardar o limpiar sus ajustes. Las copias existentes se han conservado; comprueba el espacio en disco y el acceso a los archivos antes de reintentar.</string>
+    <string name="client_cert_storage_uncertain">Kyllene no pudo confirmar que sus ajustes se guardaron. Comprueba el acceso a los archivos y vuelve a intentar el inicio, o sal y reinicia antes de hacer más cambios.</string>
+    <string name="client_cert_storage_changed">Los ajustes cambiaron fuera de esta ventana. Sal de Kyllene y reinícialo para volver a cargarlos antes de guardar.</string>
+    <string name="client_cert_storage_legacy">Se encontraron ajustes antiguos en conflicto o sin terminar. Los archivos existentes se han conservado. Sal y resuelve la copia anterior antes de reintentar.</string>
+    <string name="client_cert_storage_unsupported">Kyllene no pudo verificar su identidad de aplicación Flatpak. Comprueba la instalación antes de reintentar. No hay alternativa sin cifrar disponible.</string>
+</resources>

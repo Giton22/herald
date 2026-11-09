@@ -4,12 +4,17 @@ plugins {
     alias(libs.plugins.android.kotlin.multiplatform.library)
 }
 
-// What the phone and the watch say to each other over the Wear OS Data Layer. Both apps depend on it, so a
-// message one writes is one the other reads; it holds no Android or gateway code of its own.
+// What the phone and the watch say to each other over the Wear OS Data Layer, and to a Pebble through the Pebble
+// phone app (Pebble*.kt). Both apps depend on it, so a message one writes is one the other reads; it holds no Android
+// or gateway code of its own.
 kotlin {
     android {
         namespace = "dev.hermeskotlin.wearlink"
-        compileSdk = libs.versions.android.compileSdk.get().toInt()
+        compileSdk {
+            version = release(libs.versions.android.compileSdk.get().toInt()) {
+                minorApiLevel = libs.versions.android.compileSdkMinor.get().toInt()
+            }
+        }
         minSdk = libs.versions.android.minSdk.get().toInt()
         withHostTest {}
         // The apps build for JVM 11, and they inline WearJson's reified helpers: this module's bytecode must match.

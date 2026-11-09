@@ -2,6 +2,11 @@ package dev.hermeskotlin.ui.bots
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import dev.hermeskotlin.ui.inbox.Words
+import dev.hermeskotlin.ui.inbox.words
+import dev.hermeskotlin.ui.inbox.wordsThen
+import dev.hermeskotlin.ui.resources.*
+import org.jetbrains.compose.resources.getString
 import dev.hermeskotlin.core.bots.Bot
 import dev.hermeskotlin.core.cache.OfflineCache
 import dev.hermeskotlin.core.bots.BotDetails
@@ -54,6 +59,7 @@ import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonElement
@@ -67,7 +73,7 @@ data class BotsUiState(
     val hidden: List<Bot> = emptyList(),
     /** Nothing loaded yet. */
     val loading: Boolean = true,
-    /** The roster itself failed to load. */
+    /** The roster itself failed to load: the gateway's words for why, empty when it gave none. */
     val error: String? = null,
     /** The gateway predates Bot Mode's roster call. */
     val unsupported: Boolean = false,
@@ -78,7 +84,7 @@ data class BotsUiState(
     /** The bot whose chat is being found or started. */
     val opening: String? = null,
     /** What the last action said: why a chat didn't open, that a change didn't save. */
-    val notice: String? = null,
+    val notice: Words? = null,
 ) {
     /** Every bot, hidden ones too, e.g. to draw whoever a message names. */
     val all: List<Bot> get() = bots + hidden
@@ -143,6 +149,9 @@ class BotsViewModel(
     private val _mode = MutableStateFlow(SidebarMode.Chats)
     val mode: StateFlow<SidebarMode> = _mode.asStateFlow()
 
+    /** The side last picked on this gateway, which [showRemembered] goes back to after one set without remembering it. */
+    private var remembered = SidebarMode.Chats
+
     private val _avatars = MutableStateFlow<Map<String, ByteArray>>(emptyMap())
 
     /** Pictures of the bots that have one, by profile name. */
@@ -154,8 +163,6 @@ class BotsViewModel(
     /** Bots whose chats the gateway was asked to watch on this connection. */
     private val watched = mutableSetOf<String>()
 
-    /** The stored session open in the chat pane, so its bot's chat counts as read. */
-    private var openSession: String? = null
 
     init {
         // While the roster shows, or a Desktop room's copy read from it: read it now, then on every change
@@ -175,6 +182,18 @@ class BotsViewModel(
                 .filter { it.type == "sessions.changed" && (visible.value && _mode.value == SidebarMode.Bots || desktopRoomOpen.value) }
                 .debounce(EVENT_DEBOUNCE_MS)
                 .collect { refreshNow() }
+        }
+        // A bot's chat read to its end on screen: its row's activity counts as seen and its badge goes at once.
+        viewModelScope.launch {
+            combine(gateway, seenStore.caughtUp, _state.map { it.all }.distinctUntilChanged()) { url, caught, bots ->
+                if (url == null || caught == null || caught.gateway != url) return@combine null
+                val bot = bots.firstOrNull { it.name == caught.profile && it.canonicalSession?.isChat(caught.sessionId) == true }
+                bot?.chatSummary()?.let { Triple(url, bot.name, it) }
+            }.distinctUntilChanged().collect { found ->
+                val (url, name, chat) = found ?: return@collect
+                seenStore.markSeen(url, chat, name)
+                _state.update { it.copy(unread = it.unread - name) }
+            }
         }
         // A job changed (the launch store's jobs only; others are read on the minute): no waiting a minute.
         viewModelScope.launch {
@@ -203,7 +222,10 @@ class BotsViewModel(
         _avatars.value = emptyMap()
         avatarsAsked.clear()
         watched.clear()
-        viewModelScope.launch { _mode.value = modes.get(url) }
+        viewModelScope.launch {
+            remembered = modes.get(url)
+            _mode.value = remembered
+        }
     }
 
     fun setVisible(shown: Boolean) {
@@ -214,16 +236,18 @@ class BotsViewModel(
         desktopRoomOpen.value = open
     }
 
-    fun setMode(mode: SidebarMode) {
+    /** Shows [mode]'s side; [remember] keeps it as the gateway's pick, which a side the settings fix in place isn't. */
+    fun setMode(mode: SidebarMode, remember: Boolean = true) {
         _mode.value = mode
+        if (!remember) return
+        remembered = mode
         val url = gateway.value ?: return
         viewModelScope.launch { modes.set(url, mode) }
     }
 
-    /** The chat pane now shows [storedSessionId]; a bot's chat open there is read. */
-    fun setOpenSession(storedSessionId: String?) {
-        openSession = storedSessionId
-        viewModelScope.launch { markOpenSeen(_state.value.all) }
+    /** Back to the side last picked on this gateway, e.g. when the sidebar's switch shows again. */
+    fun showRemembered() {
+        _mode.value = remembered
     }
 
     fun refresh() {
@@ -241,8 +265,8 @@ class BotsViewModel(
 
     /**
      * Finds [bot]'s chat (starting it when the bot has never had one) and hands its stored id to [onOpened],
-     * with when the user last looked at it, so the messages since are marked new (taken before opening counts
-     * as reading). When that can't be done safely the row says so instead, and the user can tap again.
+     * with its local reading position as a fallback when the gateway has no shared watermark.
+     * When that can't be done safely the row says so instead, and the user can tap again.
      */
     fun open(bot: Bot, onOpened: (storedSessionId: String, readUpTo: Double?) -> Unit) {
         if (_state.value.opening != null) return
@@ -257,15 +281,14 @@ class BotsViewModel(
                 val readUpTo = gateway.value?.let { url ->
                     listOfNotNull(canonical, id).distinct().maxOf { seenStore.lastLook(url, it, bot.name) }
                 }
-                openSession = id
                 onOpened(id, readUpTo)
                 refreshNow()
             } catch (e: CancellationException) {
                 throw e
             } catch (e: BotChatUnavailableException) {
-                _state.update { it.copy(notice = e.message) }
+                _state.update { it.copy(notice = e.message?.let(Words::Raw)) }
             } catch (e: Exception) {
-                _state.update { it.copy(notice = "Couldn't open ${bot.label}'s chat. ${e.message.orEmpty()}".trim()) }
+                _state.update { it.copy(notice = wordsThen(Res.string.bots_open_failed, e.message, bot.label)) }
             } finally {
                 _state.update { it.copy(opening = null) }
             }
@@ -294,7 +317,7 @@ class BotsViewModel(
             val ids = listOfNotNull(chat.id, chat.resolvedId).distinct()
             val failed = ids.map { sessions.setArchived(url, it, archived = true, profile = bot.name) }.firstOrNull { it !is ApiResult.Success }
             if (failed != null) {
-                _state.update { it.copy(opening = null, notice = "Couldn't start ${bot.label}'s chat over. ${failed.errorMessage.orEmpty()}".trim()) }
+                _state.update { it.copy(opening = null, notice = wordsThen(Res.string.bots_start_over_failed, failed.errorMessage, bot.label)) }
                 return@launch
             }
             chats.forget(bot.name)
@@ -303,10 +326,10 @@ class BotsViewModel(
         }
     }
 
-    private val _busy = MutableStateFlow<String?>(null)
+    private val _busy = MutableStateFlow<Words?>(null)
 
     /** What the editor is waiting on ("Making Scribe…"), or null. */
-    val busy: StateFlow<String?> = _busy.asStateFlow()
+    val busy: StateFlow<Words?> = _busy.asStateFlow()
 
     /**
      * Makes a bot from [draft] and opens its new chat, where it introduces itself. A bot whose machine has
@@ -314,7 +337,7 @@ class BotsViewModel(
      */
     fun create(draft: BotDraft, onDone: () -> Unit, onOpened: (Bot, String) -> Unit) {
         if (_busy.value != null) return
-        _busy.value = "Making ${displayNameFor(draft.profile, draft.title)}…"
+        _busy.value = words(Res.string.bots_making, displayNameFor(draft.profile, draft.title))
         viewModelScope.launch {
             try {
                 val made = api.createBot(draft)
@@ -322,18 +345,17 @@ class BotsViewModel(
                 onDone()
                 val bot = _state.value.all.firstOrNull { it.name == made.profile } ?: Bot(name = made.profile)
                 if (!made.readyToChat) {
-                    _state.update { it.copy(notice = "Made ${bot.label}, but it has no model it can use yet. ${made.problem.orEmpty()}".trim()) }
+                    _state.update { it.copy(notice = wordsThen(Res.string.bots_made_without_model, made.problem, bot.label)) }
                     return@launch
                 }
                 val stored = api.startWithIntro(made.profile)
                 chats.note(listOf(bot.copy(canonicalSession = dev.hermeskotlin.core.bots.BotSession(id = stored))))
-                openSession = stored
                 onOpened(bot, stored)
                 refreshNow()
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _state.update { it.copy(notice = "Couldn't make the bot. ${e.message.orEmpty()}".trim()) }
+                _state.update { it.copy(notice = wordsThen(Res.string.bots_make_failed, e.message)) }
                 onDone()
             } finally {
                 _busy.value = null
@@ -368,7 +390,7 @@ class BotsViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                if (modelsOf == bot.name) _modelPicker.update { it.copy(loading = false, error = e.message ?: "Couldn't load the models.") }
+                if (modelsOf == bot.name) _modelPicker.update { it.copy(loading = false, error = e.message ?: getString(Res.string.bots_models_load_failed)) }
             }
         }
     }
@@ -405,7 +427,11 @@ class BotsViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _modelPicker.update { it.copy(saving = false, saveError = "Couldn't change ${bot.label}'s model. ${e.message.orEmpty()}".trim()) }
+                // The sheet is the chat's, which takes text: said here, in the app's language.
+                val said = getString(Res.string.bots_model_change_failed, bot.label)
+                val why = e.message?.trim()?.takeIf { it.isNotEmpty() }
+                val text = if (why == null) said else getString(Res.string.inbox_then_detail, said, why)
+                _modelPicker.update { it.copy(saving = false, saveError = text) }
             }
         }
     }
@@ -418,7 +444,7 @@ class BotsViewModel(
     /** Saves an edit; only what changed is sent, so an edit made on Desktop meanwhile isn't undone. */
     fun save(bot: Bot, description: String?, soul: String?, look: Map<String, JsonElement?>, onDone: () -> Unit) {
         if (_busy.value != null) return
-        _busy.value = "Saving…"
+        _busy.value = words(Res.string.bots_saving)
         viewModelScope.launch {
             try {
                 api.editBot(bot.name, description, soul, look)
@@ -427,7 +453,7 @@ class BotsViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _state.update { it.copy(notice = "Couldn't save ${bot.label}. ${e.message.orEmpty()}".trim()) }
+                _state.update { it.copy(notice = wordsThen(Res.string.bots_save_failed, e.message, bot.label)) }
                 onDone()
             } finally {
                 _busy.value = null
@@ -439,17 +465,17 @@ class BotsViewModel(
     /** Copies [bot] (configuration, skills, SOUL and memory) as a new bot with the same look. */
     fun duplicate(bot: Bot) {
         if (_busy.value != null) return
-        _busy.value = "Copying ${bot.label}…"
+        _busy.value = words(Res.string.bots_copying, bot.label)
         _state.update { it.copy(notice = _busy.value) }
         viewModelScope.launch {
             try {
                 val name = api.duplicate(bot, _state.value.all.map { it.name }.toSet())
                 refreshNow()
-                _state.update { it.copy(notice = "Made $name, a full copy of ${bot.label}.") }
+                _state.update { it.copy(notice = words(Res.string.bots_copied, name, bot.label)) }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _state.update { it.copy(notice = "Couldn't copy ${bot.label}. ${e.message.orEmpty()}".trim()) }
+                _state.update { it.copy(notice = wordsThen(Res.string.bots_copy_failed, e.message, bot.label)) }
             } finally {
                 _busy.value = null
             }
@@ -460,17 +486,17 @@ class BotsViewModel(
     fun delete(bot: Bot, onDeleted: () -> Unit) {
         val url = gateway.value ?: return
         if (_busy.value != null) return
-        _busy.value = "Deleting ${bot.label}…"
+        _busy.value = words(Res.string.bots_deleting, bot.label)
         _state.update { it.copy(notice = _busy.value) }
         viewModelScope.launch {
             when (val result = profiles.delete(url, bot.name)) {
                 is ApiResult.Success -> {
                     chats.forget(bot.name)
                     cache?.forgetProfile(url, bot.name)
-                    _state.update { it.regroup(it.all.filterNot { b -> b.name == bot.name }).copy(notice = "Deleted ${bot.label}.") }
+                    _state.update { it.regroup(it.all.filterNot { b -> b.name == bot.name }).copy(notice = words(Res.string.bots_deleted, bot.label)) }
                     onDeleted()
                 }
-                else -> _state.update { it.copy(notice = "Couldn't delete ${bot.label}. ${result.errorMessage.orEmpty()}".trim()) }
+                else -> _state.update { it.copy(notice = wordsThen(Res.string.bots_delete_failed, result.errorMessage, bot.label)) }
             }
             _busy.value = null
             refreshNow()
@@ -486,7 +512,7 @@ class BotsViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _state.update { it.copy(notice = "Couldn't change ${bot.label}. ${e.message.orEmpty()}".trim()) }
+                _state.update { it.copy(notice = wordsThen(Res.string.bots_change_failed, e.message, bot.label)) }
             }
             refreshNow()
         }
@@ -499,7 +525,6 @@ class BotsViewModel(
             if (gateway.value != url) return
             chats.note(roster.bots)
             val ordered = roster.bots.forRoster()
-            markOpenSeen(ordered)
             val unread = unread(url, ordered)
             // Desktop's rooms ride the roster's default row, so they refresh without a call of their own.
             val desktopRooms = parseDesktopRooms(roster.bots.firstOrNull { it.isDefault || it.name == Bot.DEFAULT }?.uiMeta)
@@ -514,7 +539,7 @@ class BotsViewModel(
             val unsupported = UNKNOWN_METHOD.containsMatchIn(e.message)
             _state.update { it.copy(loading = false, unsupported = unsupported, error = e.message.takeUnless { unsupported }) }
         } catch (e: Exception) {
-            _state.update { it.copy(loading = false, error = e.message ?: "Couldn't load the bots.") }
+            _state.update { it.copy(loading = false, error = e.message.orEmpty()) }
         }
     }
 
@@ -543,22 +568,13 @@ class BotsViewModel(
         }
     }
 
-    /** Read state is kept per bot profile, on its Bot Chat's stable id. */
+    /** Local fallback read state follows both the stable id and the resolved transcript after compression. */
     private suspend fun unread(url: GatewayUrl, bots: List<Bot>): Set<String> = bots.mapNotNull { bot ->
         // A chat just begun has nothing in it to read.
         if (bot.canonicalSession?.messageCount == 0) return@mapNotNull null
         val chat = bot.chatSummary() ?: return@mapNotNull null
-        bot.name.takeIf { seenStore.seen(url, bot.name).first().isUnread(chat) }
+        bot.name.takeIf { seenStore.seen(url, bot.name).first().isUnread(chat, resolvedId = bot.canonicalSession?.openId) }
     }.toSet()
-
-    private suspend fun markOpenSeen(bots: List<Bot>) {
-        val url = gateway.value ?: return
-        val open = openSession ?: return
-        val bot = bots.firstOrNull { it.canonicalSession?.let { chat -> open == chat.id || open == chat.openId } == true } ?: return
-        val chat = bot.chatSummary() ?: return
-        seenStore.markSeen(url, chat, bot.name)
-        _state.update { it.copy(unread = it.unread - bot.name) }
-    }
 
     private fun loadAvatars(bots: List<Bot>) {
         val wanted = bots.filter { it.hasAvatar && avatarsAsked.add(it.name) }

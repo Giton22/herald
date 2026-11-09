@@ -1,8 +1,9 @@
-# ProGuard for the desktop installers (release build type): shrinking and optimising only, names kept (see
+# ProGuard for the desktop installers (release build type): shrinking only, no optimisation, names kept (see
 # build.gradle.kts). These keep what's reached only by name, by native code or through the runtime.
 
-# Narrowing a method's declared types can pick a type it doesn't always return: okio's buffer() came out
-# declared as RealBufferedSource, and the JVM refused it (VerifyError), so the app never reached the gateway.
+# For when optimisation is turned back on. Narrowing a method's declared types can pick a type it doesn't always
+# return: okio's buffer() came out declared as RealBufferedSource, and the JVM refused it (VerifyError), so the app
+# never reached the gateway.
 -optimizations !method/specialization/returntype,!method/specialization/parametertype
 
 # The app's own code, whole: Warmup links every class under dev/hermeskotlin/ by name, and Koin builds view models
@@ -66,6 +67,13 @@
 -keep class org.freedesktop.dbus.** { *; }
 -keep class io.github.vinceglb.filekit.dialogs.platform.xdg.** { *; }
 
+# TeX environments and defined commands (matrices, cases, \dfrac, \newcommand) expand through NewCommandMacro,
+# loaded and invoked by name in JLaTeXMath's MacroInfo. Shrunk, they fall back to raw TeX.
+-keep class org.scilab.forge.jlatexmath.NewCommandMacro {
+    public <init>();
+    public java.lang.String executeMacro(org.scilab.forge.jlatexmath.TeXParser, java.lang.String[]);
+}
+
 # Optional dependencies the app never loads: OkHttp's GraalVM support, jsoup's RE2/J regexes.
 -dontwarn org.graalvm.nativeimage.**
 -dontwarn com.oracle.svm.core.**
@@ -73,3 +81,19 @@
 -dontwarn org.slf4j.**
 -dontwarn kotlinx.coroutines.debug.**
 -dontwarn org.jetbrains.annotations.**
+
+# The Linux audio backend's native library resolves WebRTC classes and members by name.
+-keep class dev.onvoid.webrtc.** { *; }
+
+# The PDF child explicitly selects these logging classes by name; its protocol must contain no logs.
+-keep class org.apache.commons.logging.impl.LogFactoryImpl { *; }
+-keep class org.apache.commons.logging.impl.NoOpLog { *; }
+# Other Commons Logging adapters are optional and are not selected by the PDF child.
+-dontwarn org.apache.commons.logging.impl.AvalonLogger
+-dontwarn org.apache.commons.logging.impl.Log4JLogger
+-dontwarn org.apache.commons.logging.impl.Log4jApiLogFactory**
+-dontwarn org.apache.commons.logging.impl.LogKitLogger
+-dontwarn org.apache.commons.logging.impl.ServletContextCleaner
+-dontwarn org.apache.commons.logging.jakarta.ServletContextCleaner
+# PDFBox's typed MethodHandle.invokeExact(ByteBuffer) is a valid signature-polymorphic JVM call.
+-dontwarn org.apache.pdfbox.io.IOUtils

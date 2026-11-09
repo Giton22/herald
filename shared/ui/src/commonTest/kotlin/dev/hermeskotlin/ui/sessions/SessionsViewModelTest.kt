@@ -10,10 +10,12 @@ import dev.hermeskotlin.core.chat.ChatHost
 import dev.hermeskotlin.core.chat.DraftStore
 import dev.hermeskotlin.core.chat.LastChatStore
 import dev.hermeskotlin.core.sessions.ActiveSessions
+import dev.hermeskotlin.core.sessions.CaughtUp
 import dev.hermeskotlin.core.sessions.SeenStore
 import dev.hermeskotlin.core.connection.GatewayConnection
 import dev.hermeskotlin.core.rpc.RpcTransport
 import dev.hermeskotlin.core.gateway.SavedGateway
+import dev.hermeskotlin.core.media.MediaApi
 import dev.hermeskotlin.core.network.createHttpClient
 import dev.hermeskotlin.core.profiles.ProfilesApi
 import dev.hermeskotlin.core.cache.InMemoryOfflineDao
@@ -55,7 +57,10 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertIs
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
+import dev.hermeskotlin.ui.resources.*
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class SessionsViewModelTest {
@@ -83,6 +88,11 @@ class SessionsViewModelTest {
         /** Whether [socket] connects at once; when not, the test starts it through [onConnection]. */
         connectNow: Boolean = true,
         onConnection: (GatewayConnection) -> Unit = {},
+        /** The body of each folder made on the gateway, in order. */
+        madeFolders: MutableList<String> = mutableListOf(),
+        seen: SeenStore = SeenStore(InMemoryKeyValueStore()) { 0.0 },
+        /** The list's rows, as JSON. */
+        rows: String = """{"id":"a","title":"Alpha","pinned":true},{"id":"b","title":"Beta"}""",
     ): SessionsViewModel {
         // On the test dispatcher, so no request is still finishing on another thread when a test ends
         // (and resuming onto Dispatchers.Main while the next test sets it).
@@ -91,7 +101,7 @@ class SessionsViewModelTest {
         config.addHandler { request ->
             when {
                 request.url.encodedPath == "/api/sessions" -> respond(
-                    """{"sessions":[{"id":"a","title":"Alpha","pinned":true},{"id":"b","title":"Beta"}],"total":$total}""",
+                    """{"sessions":[$rows],"total":$total}""",
                     if (listFails()) HttpStatusCode.InternalServerError else listStatus, json,
                 )
                 request.url.encodedPath == "/api/auth/ws-ticket" -> respond("""{"ticket":"T","ttl_seconds":30}""", HttpStatusCode.OK, json)
@@ -100,6 +110,10 @@ class SessionsViewModelTest {
                     else respond("""{"profiles":[{"name":"default","is_default":true}],"current":"default"}""", HttpStatusCode.OK, json)
                 // A gateway without snapshots, so writes go without an identity (SessionsApiTest covers that).
                 request.url.encodedPath.endsWith("/mutation-snapshot") -> respond("""{"detail":"Not Found"}""", HttpStatusCode.NotFound, json)
+                request.url.encodedPath == "/api/files/mkdir" -> {
+                    madeFolders += request.body.toByteArray().decodeToString()
+                    respond("""{"ok":true}""", HttpStatusCode.OK, json)
+                }
                 request.method == HttpMethod.Delete -> respond("""{"detail":"Store is busy"}""", deleteStatus, json)
                 request.method == HttpMethod.Patch -> {
                     patches += request.body.toByteArray().decodeToString()
@@ -118,10 +132,30 @@ class SessionsViewModelTest {
         val attention = AttentionTracker(connection, ChatHost(connection, SessionsApi(client), scope), ActiveSessions(connection, scope), scope)
         return SessionsViewModel(
             SessionsApi(client), auth, connection, LastChatStore(InMemoryKeyValueStore()), ProfilesApi(client),
-            attention, SeenStore(InMemoryKeyValueStore()) { 0.0 }, DraftStore(InMemoryKeyValueStore()), ProjectsApi(connection),
+            attention, seen, DraftStore(InMemoryKeyValueStore()), ProjectsApi(connection),
             ThreadsRepository(ThreadsApi(connection), SessionsApi(client), ProfilesApi(client)),
             cache,
+            MediaApi(client),
         )
+    }
+
+    @Test
+    fun theOpenChatReadToItsEndCountsItsRowsActivityAsSeen() = runTest(dispatcher) {
+        // The reply was stamped 1300 on this phone; the gateway's last activity (a title, a tool) came after it.
+        val seen = SeenStore(InMemoryKeyValueStore()) { 1000.0 }
+        val vm = viewModel(seen = seen, rows = """{"id":"a","title":"Alpha","last_active":1305.0},{"id":"b","title":"Beta","last_active":1400.0}""")
+        vm.bind(gateway)
+        seen.markLooked(gateway.gatewayUrl, "a", 1300.0)
+        assertTrue(assertNotNull(vm.seen.value).isUnread(vm.state.value.sessions.first { it.id == "a" }))
+
+        seen.setCaughtUp(CaughtUp(gateway.gatewayUrl, null, "a"))
+
+        assertEquals(1305.0, seen.lastLook(gateway.gatewayUrl, "a"))
+        assertFalse(assertNotNull(vm.seen.value).isUnread(vm.state.value.sessions.first { it.id == "a" }))
+        // Only the chat that's caught up, and only on its own gateway and profile.
+        assertEquals(1000.0, seen.lastLook(gateway.gatewayUrl, "b"))
+        seen.setCaughtUp(CaughtUp(gateway.gatewayUrl, "other", "b"))
+        assertEquals(1000.0, seen.lastLook(gateway.gatewayUrl, "b"))
     }
 
     @Test
@@ -364,6 +398,54 @@ class SessionsViewModelTest {
     }
 
     @Test
+    fun aNewFolderIsMadeInTheFolderBeingBrowsed() = runTest(dispatcher) {
+        val made = mutableListOf<String>()
+        val vm = viewModel(madeFolders = made)
+        vm.bind(gateway)
+        vm.awaitLoaded()
+
+        assertEquals(null, vm.makeProjectFolder("~/projects/", "site"))
+        assertEquals(listOf("""{"path":"~/projects/site"}"""), made)
+    }
+
+    @Test
+    fun aChangeWhileTheListIsClosedShowsOnceItOpens() = runTest(dispatcher) {
+        val socket = LiveGateway(live = emptyMap(), projects = mapOf("projects.tree" to tree(chats = 1)))
+        val vm = viewModel(socket = socket)
+        vm.bind(gateway)
+        vm.awaitLoaded()
+        vm.state.first { it.projects.isNotEmpty() }
+
+        // A chat starts in the project while the sidebar is closed, moments after the last ask.
+        socket.projects["projects.tree"] = tree(chats = 2)
+        vm.refreshQuietly()
+        vm.awaitLoaded()
+        vm.setVisible(true)
+        advanceTimeBy(1_000)
+        assertEquals(2, vm.state.value.projects.first().sessionCount)
+    }
+
+    @Test
+    fun aChangeInsideTheWaitIsAskedForOnceItEnds() = runTest(dispatcher) {
+        val socket = LiveGateway(live = emptyMap(), projects = mapOf("projects.tree" to tree(chats = 1)))
+        val vm = viewModel(socket = socket)
+        vm.bind(gateway)
+        vm.awaitLoaded()
+        vm.setVisible(true)
+        vm.state.first { it.projects.isNotEmpty() }
+
+        socket.projects["projects.tree"] = tree(chats = 2)
+        vm.refreshQuietly()
+        vm.awaitLoaded()
+        advanceTimeBy(30_001)
+        assertEquals(2, vm.state.value.projects.first().sessionCount)
+    }
+
+    private fun tree(chats: Int) = """{"projects":[
+        {"id":"p1","label":"herald","path":"/srv/herald","sessionCount":$chats},
+        {"id":"__no_project__","label":"Home","isNoProject":true,"sessionCount":1}]}"""
+
+    @Test
     fun undoInsideAProjectPutsTheRowBackInTheProject() = runTest(dispatcher) {
         val patches = mutableListOf<String>()
         val socket = LiveGateway(
@@ -401,7 +483,7 @@ class SessionsViewModelTest {
         socket.projects["projects.create"] = """{"project":{"id":"p_new","name":"Fresh"}}"""
         socket.projects["projects.tree"] = """{"projects":[{"id":"p_new","label":"Fresh","path":"/srv/fresh","isAuto":false,"sessionIds":[]},
             {"id":"__no_project__","label":"Home","isNoProject":true,"sessionCount":2}]}"""
-        var done: String? = "not yet"
+        var done: Said? = Said.Verbatim("not yet")
         vm.createProject("Fresh", "/srv/fresh") { done = it }
         val made = vm.state.first { it.projects.isNotEmpty() }
         assertEquals(listOf("p_new", "__no_project__"), made.projects.map { it.id })
@@ -452,7 +534,7 @@ class SessionsViewModelTest {
         vm.renameProject(project, "Taken")
         val after = vm.state.first { it.message != null }
         assertEquals("herald", after.projects.single().label)
-        assertEquals("name taken", after.message)
+        assertEquals(Said.Verbatim("name taken"), after.message)
     }
 
     @Test
@@ -468,10 +550,10 @@ class SessionsViewModelTest {
         vm.bind(gateway)
         vm.awaitLoaded()
         vm.state.first { it.canMakeProjects }
-        var done: String? = null
+        var done: Said? = null
         vm.createProject("site", "/srv/site") { done = it }
         assertFalse(vm.state.first { !it.canMakeProjects }.canMakeProjects)
-        assertEquals("This gateway can't change projects.", done)
+        assertEquals(said(Res.string.sessions_gateway_cant_change_projects), done)
         // A later tree doesn't bring the button back.
         vm.refresh()
         vm.awaitLoaded()
@@ -484,10 +566,10 @@ class SessionsViewModelTest {
         val vm = viewModel(socket = socket)
         vm.bind(gateway)
         vm.awaitLoaded()
-        var done: String? = null
+        var done: Said? = null
         vm.createProject("Dup", "/srv/herald") { done = it }
         vm.state.first { done != null }
-        assertTrue(done.orEmpty().contains("already belongs"))
+        assertTrue(assertIs<Said.Verbatim>(done).text.contains("already belongs"))
     }
 
     @Test
@@ -566,7 +648,7 @@ class SessionsViewModelTest {
 
         val state = vm.state.first { it.message != null }
         assertEquals(listOf("a", "b"), state.sessions.map { it.id })
-        assertTrue("Store is busy" in state.message!!)
+        assertTrue("Store is busy" in assertIs<Said.Verbatim>(state.message).text)
     }
 
     @Test
@@ -579,7 +661,7 @@ class SessionsViewModelTest {
         vm.toggleArchived(alpha)
         val archived = vm.state.first { it.undo != null }
         assertEquals(listOf("b"), archived.sessions.map { it.id })
-        assertEquals("Archived", archived.undo!!.message)
+        assertEquals(Res.string.sessions_archived, archived.undo!!.message)
 
         vm.undoArchive()
         val restored = vm.state.first { patches.size == 2 }

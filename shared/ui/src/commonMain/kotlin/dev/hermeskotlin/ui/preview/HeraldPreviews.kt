@@ -22,6 +22,7 @@ import dev.hermeskotlin.designsystem.components.LocalGlow
 import dev.hermeskotlin.designsystem.components.SheetHeader
 import dev.hermeskotlin.ui.chat.PendingComment
 import dev.hermeskotlin.ui.connect.AccessToken
+import dev.hermeskotlin.ui.connect.ClientCert
 import dev.hermeskotlin.ui.connect.ConnectUiState
 import dev.hermeskotlin.ui.connect.ConnectView
 import dev.hermeskotlin.ui.connect.ConnectionChecklist
@@ -48,7 +49,10 @@ import dev.hermeskotlin.designsystem.components.Toast
 import dev.hermeskotlin.core.capabilities.McpServer
 import dev.hermeskotlin.core.capabilities.Skill
 import dev.hermeskotlin.core.capabilities.Toolset
+import dev.hermeskotlin.core.phone.AgentScreens
+import dev.hermeskotlin.ui.chat.AgentScreenContext
 import dev.hermeskotlin.ui.chat.CheckpointsSheetView
+import dev.hermeskotlin.ui.chat.LocalAgentScreens
 import dev.hermeskotlin.ui.chat.FileDownload
 import dev.hermeskotlin.ui.chat.FileLoad
 import dev.hermeskotlin.ui.chat.FileViewerPage
@@ -98,13 +102,20 @@ import dev.hermeskotlin.ui.assistant.AssistantBackdrop
 import dev.hermeskotlin.ui.assistant.AssistantCard
 import dev.hermeskotlin.ui.sessions.ProjectDraft
 import dev.hermeskotlin.core.projects.FolderListing
+import dev.hermeskotlin.core.projects.Project
+import dev.hermeskotlin.core.projects.ProjectsApi
+import dev.hermeskotlin.core.profiles.Profile
+import dev.hermeskotlin.ui.chat.GreetingPlaces
 import dev.hermeskotlin.ui.sessions.ProjectActionsSheet
 import dev.hermeskotlin.ui.sessions.NewProjectDialog
 import dev.hermeskotlin.ui.settings.AppIconScreen
+import dev.hermeskotlin.ui.settings.ConnectedDevicesView
 import dev.hermeskotlin.ui.settings.ConnectionCheckSheet
 import dev.hermeskotlin.ui.settings.GatewayInfo
 import dev.hermeskotlin.ui.settings.SettingsView
 import dev.hermeskotlin.ui.settings.StartInstructionView
+import dev.hermeskotlin.ui.settings.SidebarPagesView
+import dev.hermeskotlin.ui.SidebarPage
 import dev.hermeskotlin.ui.update.LocalRenameOffer
 import dev.hermeskotlin.ui.update.RenameOffer
 import androidx.compose.ui.tooling.preview.Preview
@@ -136,12 +147,14 @@ enum class PreviewScene(val label: String) {
     VaultSaveLogin("A login to save"),
     Undelivered("Messages that lost their reply"),
     Subagents("Subagents"),
+    AgentScreen("A screen the agent drew, waiting for a tap"),
     Voice("Voice chat"),
     VoiceCutIn("A reply read in the voice chat, talking over it on"),
     ReadAloud("A reply being read aloud"),
     ReadAloudFailed("A reply the gateway couldn't voice"),
     NewChat("A new chat"),
     Sidebar("The sessions sidebar"),
+    SidebarProfiles("The sidebar's profile menu"),
     Renamed("The sidebar after updating from Herald, with the rename card"),
     Bots("The bots and rooms"),
     Room("A room of bots"),
@@ -150,6 +163,8 @@ enum class PreviewScene(val label: String) {
     Settings("Settings"),
     AppIcons("The app icons"),
     StartInstruction("The starting instruction for new chats"),
+    ConnectedDevices("Connected devices: the Pebble and its prompts"),
+    SidebarPages("The sidebar's page buttons, a few hidden"),
     Gateways("Saved gateways"),
     Journey("What the agent has learned"),
     Insights("Insights"),
@@ -231,11 +246,19 @@ fun HeraldPreview(scene: PreviewScene, dark: Boolean = true, accent: String = DE
                 PreviewScene.VaultSaveLogin -> SampleChat(ChatSamples.vaultSaveLogin)
                 PreviewScene.Undelivered -> SampleChat(ChatSamples.undelivered)
                 PreviewScene.Subagents -> SampleChat(ChatSamples.subagents)
+                PreviewScene.AgentScreen -> CompositionLocalProvider(
+                    LocalAgentScreens provides AgentScreenContext(
+                        live = listOf(AgentScreens.Live(null, setOf(ChatSamples.SCREEN_SURFACE))),
+                        onShown = { _, _ -> },
+                        onAnswer = { _, _, _ -> true },
+                        onFail = { _, _, _ -> },
+                    ),
+                ) { SampleChat(ChatSamples.agentScreen) }
                 PreviewScene.Voice -> SampleChat(ChatSamples.voice, voiceChat = ChatSamples.listening)
                 PreviewScene.VoiceCutIn -> SampleChat(ChatSamples.voice, voiceChat = ChatSamples.speakingCutIn)
                 PreviewScene.ReadAloud -> SampleChat(ChatSamples.reply, readAloud = ReadAloudState(key = "a1"))
                 PreviewScene.ReadAloudFailed -> SampleChat(ChatSamples.reply, readAloud = ReadAloudState(error = "Speech synthesis failed"))
-                PreviewScene.NewChat -> SampleChat(ChatSamples.empty, placeholder = "What are we building?")
+                PreviewScene.NewChat -> SampleChat(ChatSamples.empty, placeholder = "What are we building?", places = samplePlaces, cwd = "/srv/site")
                 PreviewScene.Sidebar -> OpenSidebar {
                     SessionsSidebarSample(
                         ChatSamples.sessions(),
@@ -244,6 +267,17 @@ fun HeraldPreview(scene: PreviewScene, dark: Boolean = true, accent: String = DE
                         statuses = ChatSamples.sessionStatuses,
                         drafts = ChatSamples.sessionDrafts,
                         projects = ChatSamples.projects,
+                    )
+                }
+                PreviewScene.SidebarProfiles -> OpenSidebar {
+                    SessionsSidebarSample(
+                        ChatSamples.sessions(),
+                        selectedId = "s1",
+                        userLabel = ChatSamples.USER,
+                        statuses = ChatSamples.sessionStatuses,
+                        projects = ChatSamples.projects,
+                        profiles = ChatSamples.profiles,
+                        profileMenuOpen = true,
                     )
                 }
                 PreviewScene.Renamed -> OpenSidebar {
@@ -331,6 +365,7 @@ fun HeraldPreview(scene: PreviewScene, dark: Boolean = true, accent: String = DE
                                     if (dir.endsWith("/projects/")) listOf("herald", "notes-app", "site") else listOf("androidApp", "docs", "shared"),
                                 )
                             },
+                            makeFolder = { _, _ -> null },
                         )
                     }
                 }
@@ -433,6 +468,7 @@ fun HeraldPreview(scene: PreviewScene, dark: Boolean = true, accent: String = DE
                         onSetPrimary = {},
                         onRename = { _, _ -> },
                         onRemove = {},
+                        onSetClientCert = { _, _ -> },
                     )
                 }
                 PreviewScene.BotEditor -> BotEditor(
@@ -594,6 +630,16 @@ fun HeraldPreview(scene: PreviewScene, dark: Boolean = true, accent: String = DE
                     onChange = {},
                     onBack = {},
                 )
+                PreviewScene.ConnectedDevices -> ConnectedDevicesView(
+                    settings = AppSettings(theme = if (dark) ThemeMode.Dark else ThemeMode.Light, glow = glow, pebbleAnswers = true),
+                    onUpdate = {},
+                    onBack = {},
+                )
+                PreviewScene.SidebarPages -> SidebarPagesView(
+                    settings = AppSettings(sidebarNavHidden = listOf(SidebarPage.Insights.name, SidebarPage.Config.name)),
+                    onUpdate = {},
+                    onBack = {},
+                )
                 PreviewScene.ConnectionCheck -> Box(Modifier.fillMaxSize()) {
                     SettingsView(
                         settings = AppSettings(theme = if (dark) ThemeMode.Dark else ThemeMode.Light, glow = glow),
@@ -701,6 +747,9 @@ private fun SampleChat(
     composerText: String = "",
     /** The gateway can't be reached and the link is being made again. */
     offline: Boolean = false,
+    /** An empty new chat's projects and profiles to pick from on its greeting. */
+    places: GreetingPlaces? = null,
+    cwd: String? = null,
 ) {
     ChatView(
         title = state.title ?: "New chat",
@@ -731,8 +780,21 @@ private fun SampleChat(
         onViewImage = {},
         onNotice = {},
         place = "homelab",
+        places = places,
+        cwd = cwd,
     )
 }
+
+/** Made-up projects and profiles for the new chat's greeting. */
+private val samplePlaces = GreetingPlaces(
+    projects = listOf(
+        Project("p1", "website", "/srv/site", sessionCount = 12),
+        Project("p2", "backups", "/srv/backup", sessionCount = 5),
+        Project(ProjectsApi.NO_PROJECT_ID, "Home", null, sessionCount = 30, isNoProject = true),
+    ),
+    profiles = listOf(Profile("default", isDefault = true), Profile("work")),
+    profile = "default",
+)
 
 @Preview(widthDp = 412, heightDp = 892)
 @Composable
@@ -754,6 +816,14 @@ private fun ApprovalPreview() = HeraldPreview(PreviewScene.Approval)
 @Composable
 private fun SubagentsPreview() = HeraldPreview(PreviewScene.Subagents)
 
+@Preview(widthDp = 360, heightDp = 800)
+@Composable
+private fun AgentScreenPreview() = HeraldPreview(PreviewScene.AgentScreen)
+
+@Preview(widthDp = 360, heightDp = 800)
+@Composable
+private fun AgentScreenLightPreview() = HeraldPreview(PreviewScene.AgentScreen, dark = false)
+
 @Preview(widthDp = 412, heightDp = 892)
 @Composable
 private fun VoicePreview() = HeraldPreview(PreviewScene.Voice)
@@ -762,9 +832,21 @@ private fun VoicePreview() = HeraldPreview(PreviewScene.Voice)
 @Composable
 private fun NewChatPreview() = HeraldPreview(PreviewScene.NewChat)
 
+@Preview(widthDp = 360, heightDp = 800)
+@Composable
+private fun NewChatNarrowLightPreview() = HeraldPreview(PreviewScene.NewChat, dark = false)
+
 @Preview(widthDp = 412, heightDp = 892)
 @Composable
 private fun SidebarPreview() = HeraldPreview(PreviewScene.Sidebar)
+
+@Preview(widthDp = 412, heightDp = 892)
+@Composable
+private fun SidebarProfilesPreview() = HeraldPreview(PreviewScene.SidebarProfiles)
+
+@Preview(widthDp = 412, heightDp = 892)
+@Composable
+private fun SidebarProfilesLightPreview() = HeraldPreview(PreviewScene.SidebarProfiles, dark = false)
 
 @Preview(widthDp = 412, heightDp = 892)
 @Composable
@@ -777,6 +859,14 @@ private fun SettingsPreview() = HeraldPreview(PreviewScene.Settings)
 @Preview(widthDp = 412, heightDp = 892)
 @Composable
 private fun StartInstructionPreview() = HeraldPreview(PreviewScene.StartInstruction)
+
+@Preview(widthDp = 412, heightDp = 892)
+@Composable
+private fun ConnectedDevicesPreview() = HeraldPreview(PreviewScene.ConnectedDevices)
+
+@Preview(widthDp = 412, heightDp = 892)
+@Composable
+private fun SidebarPagesPreview() = HeraldPreview(PreviewScene.SidebarPages)
 
 @Preview(widthDp = 412, heightDp = 892)
 @Composable
@@ -861,6 +951,7 @@ private fun SampleConnect(result: ProbeResult, address: String = "hermes.example
         url = remember { TextFieldState(address) },
         state = ConnectUiState(result = result),
         access = AccessToken(remember { TextFieldState() }, remember { TextFieldState() }, saved = false, onForget = {}),
+        cert = ClientCert(alias = null, onPick = {}, onClear = {}),
         onTest = {},
         onContinue = {},
         onCancel = null,

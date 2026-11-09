@@ -7,8 +7,12 @@ enum class AttachmentKind { Image, Pdf, File }
 
 /**
  * A file picked on this device, waiting to go out with the next prompt. Images are queued on the
- * session (`image.attach_bytes`), PDFs are rendered to page images (`pdf.attach`), and anything else
- * lands in the session workspace as an `@file:` reference in the prompt text (`file.attach`).
+ * session (`image.attach_bytes`); PDFs and other files land in the session workspace as an `@file:`
+ * reference in the prompt text (`file.attach`).
+ *
+ * A small one is held in [bytes] and goes inside the WebSocket message. One past [MAX_INLINE_BYTES]
+ * goes over HTTP first ([AttachmentUploads]) and is attached by its path on the gateway; it can come as
+ * a [source], read only as it's sent, so a large file is never held in memory whole.
  */
 class OutgoingAttachment(
     val id: String,
@@ -17,6 +21,8 @@ class OutgoingAttachment(
     val bytes: ByteArray,
     /** A small JPEG to show while composing and in the sent bubble; images only. */
     val thumbnail: ByteArray? = null,
+    /** The file, read as it's sent, in place of [bytes]. */
+    val source: AttachmentSource? = null,
 ) {
     val kind: AttachmentKind
         get() = when {
@@ -25,18 +31,51 @@ class OutgoingAttachment(
             else -> AttachmentKind.File
         }
 
+    /** How large the file is, held or read as it's sent. */
+    val size: Long get() = source?.size ?: bytes.size.toLong()
+
+    /** Whether it can go inside a WebSocket message, base64, rather than over HTTP first. */
+    val inline: Boolean get() = source == null && bytes.size <= MAX_INLINE_BYTES
+
     fun toShown() = ShownAttachment(id, name, kind, thumbnail, original = bytes.takeIf { kind == AttachmentKind.Image })
 
     @OptIn(ExperimentalEncodingApi::class)
     internal fun base64(): String = Base64.encode(bytes)
 
     companion object {
-        /** `image.attach_bytes` refuses more; other uploads are kept to the same size. */
-        const val MAX_BYTES = 25 * 1024 * 1024
+        /**
+         * The most a file can be to go inside one WebSocket message. It goes base64 (4/3 its size), and the
+         * message can't pass [dev.hermeskotlin.core.rpc.JsonRpcClient.MAX_FRAME_BYTES]: 12 MB is 16 MB on the
+         * wire. Also all a hosted room takes, as rooms have no other way in.
+         */
+        const val MAX_INLINE_BYTES = 12_000_000
+
+        /**
+         * The most one file can be: what the gateway's upload takes (`_MANAGED_FILE_MAX_BYTES`, 100 MiB) in
+         * millions of bytes. On a gateway without the upload, [MAX_INLINE_BYTES].
+         */
+        const val MAX_BYTES = 100_000_000
+
+        /** [MAX_BYTES] as the app says it, in megabytes of a million bytes like the system's file sizes. */
+        val MAX_SIZE = megabytes(MAX_BYTES.toLong())
+
+        /** [MAX_INLINE_BYTES] as the app says it. */
+        val MAX_INLINE_SIZE = megabytes(MAX_INLINE_BYTES.toLong())
 
         /** Per prompt, like a sensible composer tray. */
         const val MAX_COUNT = 10
+
+        private fun megabytes(bytes: Long) = "${bytes / 1_000_000} MB"
     }
+}
+
+/** A file read only as it goes out: [open] starts a fresh read each time, of exactly [size] bytes. */
+class AttachmentSource(val size: Long, val open: suspend () -> AttachmentReader)
+
+/** One read of an [AttachmentSource]. */
+interface AttachmentReader : AutoCloseable {
+    /** Fills [buffer] from the start: the count read, or -1 at the end. */
+    suspend fun read(buffer: ByteArray): Int
 }
 
 /**
@@ -60,10 +99,10 @@ internal const val IMAGE_ONLY_PROMPT = "What do you see in this image?"
 private val CONTEXT_FOOTER = Regex("""(?:^|\n)--- (?:Context Warnings|Attached Context) ---\s*\n""")
 
 /** An `@file:` reference anywhere in a line, as the attached-context block lists them. */
-private val INLINE_FILE_REF = Regex("""@file:(?:"([^"\n]+)"|(\S+))""")
+private val INLINE_FILE_REF = Regex("""@file:(?:(["'`])([^\r\n]+?)\1|(\S+))""")
 
 /** A whole line `@file:<path>` or `@image:<path>`; paths with spaces are quoted. */
-private val REF_LINE = Regex("""^@(file|image):(?:"([^"]+)"|(\S+))\s*$""")
+private val REF_LINE = Regex("""^@(file|image):(?:(["'`])([^\r\n]+?)\2|(\S+))\s*$""")
 
 /**
  * Pulls the attachment reference lines out of a stored prompt: `@file:` lines that clients put in
@@ -78,7 +117,7 @@ internal fun splitAttachmentRefs(text: String, keyPrefix: String): Pair<List<Sho
     val body = if (footer == null) text else text.substring(0, footer.range.first)
     footer?.let { match ->
         INLINE_FILE_REF.findAll(text.substring(match.range.first)).forEach { ref ->
-            val path = ref.groupValues[1].ifEmpty { ref.groupValues[2] }
+            val path = ref.groupValues[2].ifEmpty { ref.groupValues[3] }
             val name = path.substringAfterLast('/')
             if (attachments.none { it.name == name }) {
                 val kind = if (name.endsWith(".pdf", ignoreCase = true)) AttachmentKind.Pdf else AttachmentKind.File
@@ -88,7 +127,7 @@ internal fun splitAttachmentRefs(text: String, keyPrefix: String): Pair<List<Sho
     }
     val kept = body.lines().filter { line ->
         val match = REF_LINE.matchEntire(line.trim()) ?: return@filter true
-        val path = match.groupValues[2].ifEmpty { match.groupValues[3] }
+        val path = match.groupValues[3].ifEmpty { match.groupValues[4] }
         val name = path.substringAfterLast('/')
         if (attachments.any { it.name == name && it.kind != AttachmentKind.Image }) return@filter false
         attachments += when {
@@ -103,7 +142,7 @@ internal fun splitAttachmentRefs(text: String, keyPrefix: String): Pair<List<Sho
     if (footer != null) {
         text.lines().asReversed().map { it.trim() }.takeWhile { it.isEmpty() || REF_LINE.matches(it) }.asReversed().forEach { line ->
             val match = REF_LINE.matchEntire(line)?.takeIf { it.groupValues[1] == "image" } ?: return@forEach
-            val path = match.groupValues[2].ifEmpty { match.groupValues[3] }
+            val path = match.groupValues[3].ifEmpty { match.groupValues[4] }
             attachments += ShownAttachment("$keyPrefix-i${attachments.size}", path.substringAfterLast('/'), AttachmentKind.Image, gatewayPath = path)
         }
     }

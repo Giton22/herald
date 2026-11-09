@@ -53,7 +53,9 @@ class ConnectionCheckTest {
 
         CheckStage.entries.forEach { assertIs<StageResult.Passed>(report.results[it], "$it") }
         assertNull(report.failedStage)
-        assertTrue((report.results[CheckStage.SignIn] as StageResult.Passed).detail.contains("Zed"))
+        val signedIn = (report.results[CheckStage.SignIn] as StageResult.Passed).detail
+        assertEquals(CheckNote.Kind.SignedInAs, signedIn.kind)
+        assertTrue(signedIn.args.single().contains("Zed"))
     }
 
     @Test
@@ -61,7 +63,7 @@ class ConnectionCheckTest {
         val report = check(statusUp = false).run(url)
 
         assertEquals(CheckStage.Server, report.failedStage)
-        assertTrue((report.results[CheckStage.Server] as StageResult.Failed).fix.contains("Tailscale"))
+        assertEquals(CheckNote.Kind.FixTailscale, (report.results[CheckStage.Server] as StageResult.Failed).fix.kind)
         assertIs<StageResult.Skipped>(report.results[CheckStage.SignIn])
         assertIs<StageResult.Skipped>(report.results[CheckStage.Live])
     }
@@ -72,7 +74,7 @@ class ConnectionCheckTest {
 
         assertIs<StageResult.Passed>(report.results[CheckStage.Server])
         assertEquals(CheckStage.SignIn, report.failedStage)
-        assertTrue((report.results[CheckStage.SignIn] as StageResult.Failed).fix.contains("Sign in"))
+        assertEquals(CheckNote.Kind.FixSignInPasswordOrBrowser, (report.results[CheckStage.SignIn] as StageResult.Failed).fix.kind)
         assertIs<StageResult.Skipped>(report.results[CheckStage.Live])
     }
 
@@ -83,7 +85,7 @@ class ConnectionCheckTest {
         assertIs<StageResult.Passed>(report.results[CheckStage.Server])
         assertIs<StageResult.Passed>(report.results[CheckStage.SignIn])
         assertEquals(CheckStage.Live, report.failedStage)
-        assertTrue((report.results[CheckStage.Live] as StageResult.Failed).problem.contains("Host/Origin"))
+        assertEquals(CheckNote.Kind.ChatGuarded, (report.results[CheckStage.Live] as StageResult.Failed).problem.kind)
     }
 
     @Test
@@ -91,8 +93,8 @@ class ConnectionCheckTest {
         val report = check(openSocket = { _, _ -> throw HandshakeRejectedException(302, RuntimeException("302")) }).run(url)
 
         val live = assertIs<StageResult.Failed>(report.results[CheckStage.Live])
-        assertTrue("login page" in live.problem)
-        assertTrue("Cloudflare Access" in live.fix)
+        assertEquals(CheckNote(CheckNote.Kind.ChatLoginRedirect, listOf("302")), live.problem)
+        assertEquals(CheckNote.Kind.FixAccessTokenOrProxy, live.fix.kind)
     }
 
     @Test
@@ -100,28 +102,27 @@ class ConnectionCheckTest {
         val report = check(openSocket = { _, _ -> FakeTransport() }).run(url)
 
         assertEquals(CheckStage.Live, report.failedStage)
-        assertTrue((report.results[CheckStage.Live] as StageResult.Failed).problem.contains("never said it was ready"))
+        assertEquals(CheckNote.Kind.NeverReady, (report.results[CheckStage.Live] as StageResult.Failed).problem.kind)
     }
 
     @Test
     fun theReachFixFollowsTheKindOfAddress() {
-        assertTrue(reachFix(GatewayUrl.parse("hermes.tail1234.ts.net")).contains("Tailscale"))
-        assertTrue(reachFix(GatewayUrl.parse("192.168.1.20:9119")).contains("same Wi-Fi"))
-        assertTrue(reachFix(GatewayUrl.parse("https://hermes.example.com")).contains("certificate"))
+        assertEquals(CheckNote.Kind.FixTailscale, reachFix(GatewayUrl.parse("hermes.tail1234.ts.net")).kind)
+        assertEquals(CheckNote.Kind.FixLocalNetwork, reachFix(GatewayUrl.parse("192.168.1.20:9119")).kind)
+        assertEquals(CheckNote.Kind.FixHttps, reachFix(GatewayUrl.parse("https://hermes.example.com")).kind)
     }
 
     @Test
     fun aLoopbackAddressIsCalledOutAsThisPhone() {
         listOf("localhost:9119", "127.0.0.1:9119", "http://[::1]:9119").forEach {
-            val fix = reachFix(GatewayUrl.parse(it))
-            assertTrue(fix.contains("points at this phone"), "$it: $fix")
+            assertEquals(CheckNote.Kind.FixLoopback, reachFix(GatewayUrl.parse(it)).kind, it)
         }
     }
 
     @Test
     fun httpsOnAPrivateNameGetsTheCertificateFix() {
-        assertTrue(reachFix(GatewayUrl.parse("https://hermes.lan")).contains("certificate"))
-        assertTrue(reachFix(GatewayUrl.parse("https://hermes.tail1234.ts.net")).contains("Tailscale"))
+        assertEquals(CheckNote.Kind.FixHttps, reachFix(GatewayUrl.parse("https://hermes.lan")).kind)
+        assertEquals(CheckNote.Kind.FixTailscale, reachFix(GatewayUrl.parse("https://hermes.tail1234.ts.net")).kind)
     }
 
     @Test
@@ -131,6 +132,30 @@ class ConnectionCheckTest {
         assertIs<StageResult.Failed>(results[CheckStage.Server])
         assertIs<StageResult.Skipped>(results[CheckStage.SignIn])
         assertIs<StageResult.Skipped>(results[CheckStage.Live])
+    }
+
+    @Test
+    fun aCertDemandingServerFailsOnlyTheFirstStageWithACertFix() {
+        val results = ProbeResult.ClientCertRequired(url, "Received fatal alert: certificate_required").serverOnlyResults()
+
+        val server = assertIs<StageResult.Failed>(results[CheckStage.Server])
+        assertEquals(CheckNote.Kind.ServerCertRequired, server.problem.kind)
+        assertEquals(CheckNote.Kind.FixClientCert, server.fix.kind)
+        assertIs<StageResult.Skipped>(results[CheckStage.SignIn])
+        assertIs<StageResult.Skipped>(results[CheckStage.Live])
+    }
+
+    @Test
+    fun aCertDemandingSocketFailsOnlyTheLiveStageWithACertFix() = runTest {
+        val failure = SSLHandshakeException("Received fatal alert: bad_certificate")
+        val report = check(openSocket = { _, _ -> throw failure }).run(url)
+
+        assertIs<StageResult.Passed>(report.results[CheckStage.Server])
+        assertIs<StageResult.Passed>(report.results[CheckStage.SignIn])
+        assertEquals(CheckStage.Live, report.failedStage)
+        val live = assertIs<StageResult.Failed>(report.results[CheckStage.Live])
+        assertEquals(CheckNote.Kind.ChatCertRequired, live.problem.kind)
+        assertEquals(CheckNote.Kind.FixClientCert, live.fix.kind)
     }
 
     @Test

@@ -104,6 +104,11 @@ class UpdateCheckerTest {
         assertEquals("https://x/arm64.apk", parseRelease(renamed, listOf("arm64-v8a"))?.downloadUrl)
         assertEquals(null, parseRelease(release("Kyllene-Wear-0.9.0.apk" to "wear.apk"), listOf("arm64-v8a"))?.downloadUrl)
         assertEquals(null, parseRelease(release("kyllene-dev-wear-0.9.0.apk" to "wear.apk"), listOf("arm64-v8a"))?.downloadUrl)
+
+        // Nor the Pebble watchapp, listed before the phone's APKs.
+        val pebble = release("herald-0.9.0.pbw" to "pebble.pbw", "herald-0.9.0.apk" to "universal.apk")
+        assertEquals("https://x/universal.apk", parseRelease(pebble, listOf("x86"))?.downloadUrl)
+        assertEquals(null, parseRelease(release("herald-pebble-0.9.0.pbw" to "pebble.pbw"), listOf("arm64-v8a"))?.downloadUrl)
     }
 
     @Test

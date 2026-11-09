@@ -25,8 +25,12 @@ import dev.hermeskotlin.core.cron.CronJob
 import dev.hermeskotlin.core.cron.DeliveryTarget
 import dev.hermeskotlin.core.sessions.SessionSummary
 import dev.hermeskotlin.ui.sessions.ScheduledUiState
+import dev.hermeskotlin.ui.sessions.said
+import dev.hermeskotlin.ui.resources.Res
+import dev.hermeskotlin.ui.resources.sessions_hub_blocked
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.hours
+import dev.hermeskotlin.core.gateway.CheckNote
 import dev.hermeskotlin.core.gateway.CheckStage
 import dev.hermeskotlin.core.gateway.StageResult
 import dev.hermeskotlin.core.insights.ModelUsage
@@ -157,7 +161,7 @@ internal object PageSamples {
     val skillsHubCaution = skillsHub.copy(confirm = hubScan)
     val skillsHubBlocked = skillsHub.copy(
         detail = HubDetail(hubFeatured[1], preview = hubPreview, scan = hubScan.copy(verdict = "dangerous", policy = "block", summary = "1 high-risk finding", findings = hubScan.findings.take(1))),
-        message = "smart-disks was blocked by the security scan.",
+        message = said(Res.string.sessions_hub_blocked, "smart-disks"),
     )
 
     /** Hermes's settings on a sample gateway, open at [place]: the sections, or one of them by id. */
@@ -397,11 +401,11 @@ internal object PageSamples {
 
     /** Settings → Check connection, where the server and sign-in pass but the live link doesn't. */
     val connectionCheck = mapOf(
-        CheckStage.Server to StageResult.Passed("Hermes 0.9.0 answered at hermes.example.ts.net."),
-        CheckStage.SignIn to StageResult.Passed("Signed in as Alex Morgan."),
+        CheckStage.Server to StageResult.Passed(CheckNote(CheckNote.Kind.ServerAnswers, listOf("0.9.0", "hermes.example.ts.net"))),
+        CheckStage.SignIn to StageResult.Passed(CheckNote(CheckNote.Kind.SignedInAs, listOf("Alex Morgan"))),
         CheckStage.Live to StageResult.Failed(
-            problem = "The chat connection was refused at /api/ws.",
-            fix = "Your proxy must pass WebSocket upgrades: forward the Upgrade and Connection headers to the dashboard.",
+            problem = CheckNote(CheckNote.Kind.ChatRefused, listOf("400")),
+            fix = CheckNote(CheckNote.Kind.FixAllowUpgrades),
         ),
     )
 

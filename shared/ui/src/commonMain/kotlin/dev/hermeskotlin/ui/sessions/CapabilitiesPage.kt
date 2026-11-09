@@ -101,6 +101,9 @@ import dev.hermeskotlin.ui.components.EmptyState
 import dev.hermeskotlin.ui.components.ListSkeleton
 import kotlinx.coroutines.delay
 import org.koin.compose.viewmodel.koinViewModel
+import dev.hermeskotlin.ui.resources.*
+import org.jetbrains.compose.resources.pluralStringResource
+import org.jetbrains.compose.resources.stringResource
 
 /**
  * The sidebar's Capabilities page, after Desktop's: the profile's skills, toolsets and MCP servers,
@@ -114,7 +117,7 @@ internal fun CapabilitiesPage(
     onSessionExpired: () -> Unit,
     /** The profile's display name, e.g. a bot's label; the hub and the uninstall sheet name it instead of [profile]. */
     profileLabel: String? = null,
-    title: String = "Capabilities",
+    title: String = stringResource(Res.string.sessions_nav_capabilities),
     /** A line above the tabs, e.g. on when changes take effect. */
     note: String? = null,
     viewModel: CapabilitiesViewModel = koinViewModel(),
@@ -198,10 +201,17 @@ private fun UninstallSheet(skill: Skill?, profile: String?, onResult: (Boolean) 
     if (skill != null) kept = skill
     BottomSheet(visible = skill != null, onDismiss = { onResult(false) }) {
         val s = kept ?: return@BottomSheet
-        SheetHeader(s.name, "Remove ${s.name} from ${profile ?: "the main profile"}? Turning it off keeps it installed.")
+        SheetHeader(
+            s.name,
+            if (profile != null) {
+                stringResource(Res.string.sessions_uninstall_skill_detail, s.name, profile)
+            } else {
+                stringResource(Res.string.sessions_uninstall_skill_main_detail, s.name)
+            },
+        )
         Row(Modifier.padding(horizontal = 18.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Button("Uninstall", onClick = { onResult(true) }, variant = ButtonVariant.Danger)
-            Button("Cancel", onClick = { onResult(false) }, variant = ButtonVariant.Secondary)
+            Button(stringResource(Res.string.sessions_uninstall), onClick = { onResult(true) }, variant = ButtonVariant.Danger)
+            Button(stringResource(Res.string.common_cancel), onClick = { onResult(false) }, variant = ButtonVariant.Secondary)
         }
     }
 }
@@ -230,10 +240,10 @@ internal fun CapabilitiesView(
     skillQuery: TextFieldState,
     actions: CapabilitiesActions,
     onBack: () -> Unit,
-    title: String = "Capabilities",
+    title: String = stringResource(Res.string.sessions_nav_capabilities),
     note: String? = null,
     /** A message from the hub, e.g. after an uninstall, shown with the page's own. */
-    hubMessage: String? = null,
+    hubMessage: Said? = null,
     onDismissHubMessage: () -> Unit = {},
     /** Names of hub skills being removed; their "⋯" shows progress and can't be pressed. */
     removing: Set<String> = emptySet(),
@@ -241,12 +251,13 @@ internal fun CapabilitiesView(
     hubOpen: Boolean = false,
 ) {
     Column(Modifier.fillMaxSize().then(if (hubOpen) Modifier.alpha(0f).clearAndSetSemantics { } else Modifier)) {
-        SubpageHeader(title, onBack = onBack, subtitle = note ?: "What the agent can use in new chats")
+        SubpageHeader(title, onBack = onBack, subtitle = note ?: stringResource(Res.string.sessions_capabilities_detail))
+        val tabNames = CapabilityTab.entries.associateWith { stringResource(it.label) }
         SegmentedControl(
             options = CapabilityTab.entries,
             selected = state.tab,
             onSelect = actions::selectTab,
-            optionLabel = { it.label },
+            optionLabel = { tabNames.getValue(it) },
             // How many each tab holds, once loaded.
             optionBadge = { tab ->
                 when (tab) {
@@ -260,18 +271,18 @@ internal fun CapabilitiesView(
         Box(Modifier.weight(1f).fillMaxWidth()) {
             when (state.tab) {
                 CapabilityTab.Skills -> SkillsTab(state, skillQuery, actions, removing)
-                CapabilityTab.Tools -> TabList(state.toolsets, empty = "No toolsets configured.", onRetry = actions::refresh) { toolsets ->
-                    item(key = "note") { Hint("Toolsets the agent gets in new chats.") }
+                CapabilityTab.Tools -> TabList(state.toolsets, empty = stringResource(Res.string.sessions_no_toolsets), onRetry = actions::refresh) { toolsets ->
+                    item(key = "note") { Hint(stringResource(Res.string.sessions_toolsets_hint)) }
                     item(key = "toolsets") {
                         RowCard(toolsets, key = { it.name }) { ToolsetRow(it, onToggle = { on -> actions.setToolsetEnabled(it, on) }) }
                     }
                 }
                 CapabilityTab.Mcp -> TabList(
                     state.servers,
-                    empty = "No MCP servers. Add one on the gateway with `hermes mcp add`, or from Hermes Desktop.",
+                    empty = stringResource(Res.string.sessions_no_mcp_servers),
                     onRetry = actions::refresh,
                 ) { servers ->
-                    item(key = "note") { Hint("Changes apply from the next chat.") }
+                    item(key = "note") { Hint(stringResource(Res.string.sessions_changes_next_chat)) }
                     item(key = "servers") {
                         RowCard(servers, key = { it.name }) { server ->
                             ServerRow(
@@ -286,8 +297,8 @@ internal fun CapabilitiesView(
                 }
             }
         }
-        state.message?.let { MessageBanner(it, onDismiss = actions::dismissMessage, modifier = Modifier.padding(bottom = PageFoot)) }
-        hubMessage?.let { MessageBanner(it, onDismiss = onDismissHubMessage, modifier = Modifier.padding(bottom = PageFoot)) }
+        state.message?.let { MessageBanner(it.text(), onDismiss = actions::dismissMessage, modifier = Modifier.padding(bottom = PageFoot)) }
+        hubMessage?.let { MessageBanner(it.text(), onDismiss = onDismissHubMessage, modifier = Modifier.padding(bottom = PageFoot)) }
     }
 }
 
@@ -296,11 +307,11 @@ private fun SkillsTab(state: CapabilitiesUiState, skillQuery: TextFieldState, ac
     val query = skillQuery.text.toString().trim()
     val all = state.skills.items
     val groups = remember(all, query) { skillGroups(all.orEmpty(), query) }
-    TabList(state.skills, empty = "No skills yet. The agent writes them as it learns, or install them with `hermes skills`.", onRetry = actions::refresh) { skills ->
+    TabList(state.skills, empty = stringResource(Res.string.sessions_no_skills), onRetry = actions::refresh) { skills ->
         item(key = "search") {
             TextField(
                 state = skillQuery,
-                placeholder = "Search ${skills.size} skills",
+                placeholder = pluralStringResource(Res.plurals.sessions_search_skills, skills.size, skills.size),
                 leadingIcon = Lucide.Search,
                 clearable = true,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
@@ -308,11 +319,13 @@ private fun SkillsTab(state: CapabilitiesUiState, skillQuery: TextFieldState, ac
             )
         }
         item(key = "hub") {
-            Button("Browse hub", onClick = actions::openHub, variant = ButtonVariant.Secondary, size = ButtonSize.Small, modifier = Modifier.padding(start = 2.dp, bottom = 8.dp))
+            Button(stringResource(Res.string.sessions_browse_hub), onClick = actions::openHub, variant = ButtonVariant.Secondary, size = ButtonSize.Small, modifier = Modifier.padding(start = 2.dp, bottom = 8.dp))
         }
-        if (groups.isEmpty()) item(key = "none") { Hint("No skills match “$query”.") }
-        groups.forEach { (category, inGroup) ->
-            item(key = "c-$category") {
+        if (groups.isEmpty()) item(key = "none") { Hint(stringResource(Res.string.sessions_no_skills_match, query)) }
+        groups.forEach { (key, inGroup) ->
+            item(key = "c-$key") {
+                // Uncategorised skills group under "other", which is said in the user's language; a category is the skill's own.
+                val category = if (key == OTHER_CATEGORY) stringResource(Res.string.sessions_skills_other) else key
                 Text(
                     category.uppercase(),
                     style = Theme[typography][eyebrow],
@@ -323,7 +336,7 @@ private fun SkillsTab(state: CapabilitiesUiState, skillQuery: TextFieldState, ac
                     },
                 )
             }
-            item(key = "g-$category") {
+            item(key = "g-$key") {
                 RowCard(inGroup, key = { "s-${it.name}" }) { skill -> SkillRow(skill, removing = skill.name in removing, onToggle = { on -> actions.setSkillEnabled(skill, on) }, onMore = { actions.uninstallSkill(skill) }) }
             }
         }
@@ -338,18 +351,21 @@ private fun SkillsTab(state: CapabilitiesUiState, skillQuery: TextFieldState, ac
 internal fun skillGroups(skills: List<Skill>, query: String): Map<String, List<Skill>> =
     skills
         .filter { query.isEmpty() || listOfNotNull(it.name, it.description, it.category).any { f -> f.contains(query, ignoreCase = true) } }
-        .groupBy { it.category?.trim()?.lowercase()?.takeIf(String::isNotEmpty) ?: "other" }
+        .groupBy { it.category?.trim()?.lowercase()?.takeIf(String::isNotEmpty) ?: OTHER_CATEGORY }
         .entries
-        .sortedWith(compareBy<Map.Entry<String, List<Skill>>> { it.key == "other" }.thenBy { it.key })
+        .sortedWith(compareBy<Map.Entry<String, List<Skill>>> { it.key == OTHER_CATEGORY }.thenBy { it.key })
         .associate { it.key to it.value }
+
+/** The group uncategorised skills go in, last. */
+internal const val OTHER_CATEGORY = "other"
 
 /** A tab's loading, error and empty states around its list. */
 @Composable
 internal fun <T> TabList(loadable: Loadable<T>, empty: String, onRetry: () -> Unit, content: LazyListScope.(List<T>) -> Unit) {
     val items = loadable.items
     when {
-        items == null && loadable.error != null -> EmptyState(Lucide.CloudOff, "Couldn't load", loadable.error, error = true) {
-            Button("Try again", onClick = onRetry, variant = ButtonVariant.Secondary, leadingIcon = Lucide.RefreshCw)
+        items == null && loadable.error != null -> EmptyState(Lucide.CloudOff, stringResource(Res.string.sessions_couldnt_load), loadable.error, error = true) {
+            Button(stringResource(Res.string.sessions_try_again), onClick = onRetry, variant = ButtonVariant.Secondary, leadingIcon = Lucide.RefreshCw)
         }
         items == null -> ListSkeleton()
         items.isEmpty() -> Box(Modifier.fillMaxSize().padding(12.dp)) { ListNotice(empty) }
@@ -371,11 +387,13 @@ private fun SkillRow(skill: Skill, removing: Boolean, onToggle: (Boolean) -> Uni
         title = skill.name,
         detail = skill.description.ifBlank { null },
         tag = when (skill.provenance) {
-            "hub" -> "hub"
-            "agent" -> "learned"
-            "external" -> "external"
+            "hub" -> stringResource(Res.string.sessions_skill_tag_hub)
+            "agent" -> stringResource(Res.string.sessions_skill_tag_learned)
+            "external" -> stringResource(Res.string.sessions_skill_tag_external)
             else -> null
         },
+        // A skill the agent wrote itself.
+        tagAccent = skill.provenance == "agent",
         checked = skill.enabled,
         onToggle = onToggle,
         onMore = onMore.takeIf { skill.provenance == "hub" },
@@ -389,8 +407,8 @@ private fun ToolsetRow(toolset: Toolset, onToggle: (Boolean) -> Unit) {
         title = toolset.label,
         detail = toolset.description.ifBlank { null },
         tag = when {
-            !toolset.configured -> "needs setup"
-            toolset.tools.isNotEmpty() -> "${toolset.tools.size} tools"
+            !toolset.configured -> stringResource(Res.string.sessions_toolset_needs_setup)
+            toolset.tools.isNotEmpty() -> pluralStringResource(Res.plurals.sessions_tools_count, toolset.tools.size, toolset.tools.size)
             else -> null
         },
         checked = toolset.enabled,
@@ -404,29 +422,31 @@ private fun ServerRow(server: McpServer, test: McpTestResult?, testing: Boolean,
         SwitchRow(
             title = server.name,
             detail = server.target.ifBlank { null },
-            tag = server.plugin?.let { "from $it" } ?: server.transport,
+            tag = server.plugin?.let { stringResource(Res.string.sessions_mcp_from_plugin, it) } ?: server.transport,
             checked = server.enabled,
             // A plugin's server is the plugin's to switch.
             onToggle = onToggle.takeIf { server.plugin == null },
-            lockedNote = "set by ${server.plugin}",
+            lockedNote = server.plugin?.let { stringResource(Res.string.sessions_mcp_set_by_plugin, it) }
+                ?: stringResource(Res.string.sessions_locked_note),
         )
         Row(
             Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, bottom = 10.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Button("Test", onClick = onTest, variant = ButtonVariant.Outline, size = ButtonSize.Small, loading = testing)
+            Button(stringResource(Res.string.sessions_mcp_test), onClick = onTest, variant = ButtonVariant.Outline, size = ButtonSize.Small, loading = testing)
             when {
                 test == null -> Unit
                 test.ok -> Text(
-                    "Connected · ${test.tools.size} tools",
+                    pluralStringResource(Res.plurals.sessions_mcp_connected_tools, test.tools.size, test.tools.size),
                     style = Theme[typography][bodySmall],
                     color = Theme[colors][success],
                 )
                 else -> Box(Modifier.weight(1f)) {
+                    val reason = test.error ?: stringResource(Res.string.sessions_mcp_connect_failed)
                     CopyableOnDesktop {
                         Text(
-                            test.error ?: "Couldn't connect.",
+                            reason,
                             style = Theme[typography][bodySmall],
                             color = Theme[colors][danger],
                             maxLines = 3,
@@ -462,7 +482,7 @@ internal fun <T> RowCard(rows: List<T>, key: (T) -> Any, row: @Composable (T) ->
 /**
  * The name in mono with a small tag pill, the detail under it, a switch on the right; a row switched off
  * has its name in the secondary text. A null [onToggle] locks it, said as [lockedNote].
- * "learned" — a skill the agent wrote itself — takes the accent.
+ * [tagAccent] (a skill the agent wrote itself, "learned") puts the tag in the accent.
  */
 @Composable
 private fun SwitchRow(
@@ -471,12 +491,14 @@ private fun SwitchRow(
     tag: String?,
     checked: Boolean,
     onToggle: ((Boolean) -> Unit)?,
-    lockedNote: String = "can't be changed here",
+    tagAccent: Boolean = false,
+    lockedNote: String = stringResource(Res.string.sessions_locked_note),
     /** A "⋯" button after the switch, for a row with more to do. */
     onMore: (() -> Unit)? = null,
     /** Swaps the "⋯" for a spinner of the same size while its action runs. */
     moreBusy: Boolean = false,
 ) {
+    val lockedState = stringResource(if (checked) Res.string.sessions_switch_on_locked else Res.string.sessions_switch_off_locked, lockedNote)
     Row(
         Modifier
             .fillMaxWidth()
@@ -485,7 +507,7 @@ private fun SwitchRow(
                 if (onToggle != null) {
                     Modifier.handCursor().toggleable(value = checked, role = Role.Switch, onValueChange = onToggle)
                 } else {
-                    Modifier.semantics(mergeDescendants = true) { stateDescription = "${if (checked) "On" else "Off"}, $lockedNote" }
+                    Modifier.semantics(mergeDescendants = true) { stateDescription = lockedState }
                 },
             )
             .padding(horizontal = 14.dp, vertical = 12.dp),
@@ -502,7 +524,7 @@ private fun SwitchRow(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                tag?.let { Tag(it, accent = it == "learned") }
+                tag?.let { Tag(it, accent = tagAccent) }
             }
             detail?.let {
                 Text(it, style = Theme[typography][bodySmall].copy(fontSize = 12.5.sp, lineHeight = 17.5.sp), color = Theme[colors][textTertiary], maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -511,7 +533,7 @@ private fun SwitchRow(
         Switch(checked)
         onMore?.let {
             if (moreBusy) Box(Modifier.size(MinTouchTarget), contentAlignment = Alignment.Center) { Spinner(Modifier.size(16.dp)) }
-            else IconButton(Lucide.Ellipsis, contentDescription = "More for $title", onClick = it)
+            else IconButton(Lucide.Ellipsis, contentDescription = stringResource(Res.string.sessions_more_for, title), onClick = it)
         }
     }
 }

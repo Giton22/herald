@@ -9,22 +9,27 @@ import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerIcon
+import androidx.compose.ui.input.pointer.pointerHoverIcon
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import dev.hermeskotlin.ui.clearOfWindowControls
+import dev.hermeskotlin.ui.hasSpeechPlayback
 import dev.hermeskotlin.ui.hasVoice
 import dev.hermeskotlin.ui.windowControlsHeight
 import dev.hermeskotlin.ui.isDesktop
 import dev.hermeskotlin.ui.frostedPanel
-import dev.hermeskotlin.ui.tapVerb
 import dev.hermeskotlin.ui.stepChat
 import dev.hermeskotlin.core.bots.MentionQuery
 import dev.hermeskotlin.core.chat.PathRefKind
 import dev.hermeskotlin.core.chat.PathRefQuery
 import dev.hermeskotlin.core.chat.completion
 import dev.hermeskotlin.core.chat.pathRefQuery
+import dev.hermeskotlin.core.chat.screenViews
 import dev.hermeskotlin.core.projects.PathEntry
 import dev.hermeskotlin.core.projects.ProjectsApi
 import kotlin.coroutines.cancellation.CancellationException
@@ -151,10 +156,12 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
 import dev.hermeskotlin.core.bots.botLook
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.input.TextFieldLineLimits
 import androidx.compose.foundation.text.selection.LocalTextSelectionColors
@@ -169,6 +176,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.key
 import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -176,6 +184,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.util.lerp
 import androidx.compose.foundation.layout.offset
 import androidx.compose.animation.core.animateFloatAsState
@@ -190,8 +199,10 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.composables.icons.lucide.ArrowDown
@@ -255,10 +266,8 @@ import com.composables.icons.lucide.Wrench
 import com.composables.icons.lucide.X
 import com.composables.icons.lucide.Zap
 import com.composeunstyled.Text
-import com.composeunstyled.TextInput
 import com.composeunstyled.UnstyledButton
 import com.composeunstyled.UnstyledIcon
-import com.composeunstyled.UnstyledTextField
 import com.composeunstyled.theme.Theme
 import dev.hermeskotlin.designsystem.rememberHoverIndication
 import dev.hermeskotlin.core.chat.Attachment
@@ -387,6 +396,11 @@ import dev.hermeskotlin.ui.sessions.SessionsBadge
 import dev.hermeskotlin.ui.sessions.RowContextMenu
 import dev.hermeskotlin.ui.sessions.RowMenuItem
 import dev.hermeskotlin.ui.sessions.onSecondaryPress
+import dev.hermeskotlin.ui.resources.*
+import org.jetbrains.compose.resources.StringResource
+import org.jetbrains.compose.resources.getString
+import org.jetbrains.compose.resources.pluralStringResource
+import org.jetbrains.compose.resources.stringResource
 
 @Composable
 fun ChatScreen(
@@ -410,15 +424,23 @@ fun ChatScreen(
     onDismissOtherChat: (OtherChatEvent) -> Unit = {},
     /** Goes to the next chat needing the user; false when none does. Null offers no Next. */
     onNextChat: (() -> Boolean)? = null,
+    /** The projects, profiles and gateways an empty new chat can start in instead, from its greeting. */
+    greetingPlaces: GreetingPlaces? = null,
 ) {
     LaunchedEffect(target) { viewModel.open(target) }
     val transcript = viewModel.transcript.collectAsStateWithLifecycle().value
     val state = transcript.state
+    // The same chat reopened with a new position (a notification for it) keeps the last one until the new one is read.
+    val readPosition = viewModel.readPosition.collectAsStateWithLifecycle().value
+        ?.takeIf { it.target.copy(readUpTo = null) == target.copy(readUpTo = null) }
+    val ownsTranscript = transcript.owner?.copy(readUpTo = null) == target.copy(readUpTo = null)
+    // Keep this small lifecycle signal observable through stop/start, when transcript collection is paused.
+    val screenShown = viewModel.screenShown.collectAsState().value
     val picker = viewModel.picker.collectAsStateWithLifecycle().value
     val connection = viewModel.connectionState.collectAsStateWithLifecycle().value
     val connected = connection is ConnectionState.Connected
     val attachments = viewModel.attachments.collectAsStateWithLifecycle().value
-    val attachmentError = viewModel.attachmentError.collectAsStateWithLifecycle().value
+    val attachmentError = viewModel.attachmentError.collectAsStateWithLifecycle().value?.text()
     var modelsOpen by remember { mutableStateOf(false) }
     var attachOpen by remember { mutableStateOf(false) }
     var petsOpen by remember { mutableStateOf(false) }
@@ -427,6 +449,7 @@ fun ChatScreen(
     var processesOpen by remember { mutableStateOf(false) }
     var checkpointsOpen by remember { mutableStateOf(false) }
     var controlOpen by remember { mutableStateOf(false) }
+    var focusComposer by remember { mutableIntStateOf(0) }
     // Cleared (here or on another client) while open, there is nothing left to show.
     val hasControl = state.control != null
     LaunchedEffect(hasControl) { if (!hasControl) controlOpen = false }
@@ -449,6 +472,14 @@ fun ChatScreen(
         (shortcut == Shortcut.ToggleRail).also { if (it) railShown = !railShown }
     }
     var notice by remember { mutableStateOf<String?>(null) }
+    // The notices below are set from callbacks, outside composition, so their words are read here first.
+    val voiceNeedsMic = stringResource(Res.string.chat_notice_voice_mic)
+    val dictationNeedsMic = stringResource(Res.string.chat_notice_dictation_mic)
+    val noDesktopVoice = stringResource(Res.string.chat_notice_no_desktop_voice)
+    val noDesktopDictation = stringResource(Res.string.chat_notice_no_desktop_dictation)
+    val voiceNeedsDecoder = stringResource(Res.string.chat_notice_voice_needs_ffmpeg)
+    val nothingWaiting = stringResource(Res.string.chat_notice_nothing_waiting)
+    val noticeScope = rememberCoroutineScope()
     LaunchedEffect(notice) {
         if (notice != null) {
             delay(2_500)
@@ -457,13 +488,13 @@ fun ChatScreen(
     }
     val attachmentPicker = rememberAttachmentPicker(onPicked = viewModel::addAttachments, onError = viewModel::showAttachmentError)
     val microphone = rememberMicrophonePermission()
-    val startVoiceChat = {
-        microphone.withMicrophone(onDenied = { notice = "Voice needs the microphone. Allow it in Android's settings." }) {
-            viewModel.startVoiceChat()
+    val startVoiceChat = { ringback: Boolean ->
+        microphone.withMicrophone(onDenied = { notice = voiceNeedsMic }) {
+            viewModel.startVoiceChat(ringback)
         }
     }
     val toggleDictation = {
-        microphone.withMicrophone(onDenied = { notice = "Dictation needs the microphone. Allow it in Android's settings." }) {
+        microphone.withMicrophone(onDenied = { notice = dictationNeedsMic }) {
             viewModel.toggleDictation()
         }
     }
@@ -473,10 +504,15 @@ fun ChatScreen(
     LifecycleEventEffect(Lifecycle.Event.ON_STOP) {
         if (!changingConfigurations()) viewModel.voice.onBackground()
         viewModel.onScreen(false)
-        // What's on screen now counts as read, so a reply that comes in while away is new.
+        // Preserve the actual reading position and remember a turn still running while away.
         viewModel.markLooked()
     }
-    LifecycleEventEffect(Lifecycle.Event.ON_START) { viewModel.onScreen(true) }
+    LifecycleEventEffect(Lifecycle.Event.ON_START) {
+        viewModel.onScreen(true)
+        // The way back in sight is the only moment a chat that missed live events asks again: a socket that
+        // never reported a drop leaves the connection Connected, so no attach catches up on its own.
+        viewModel.resync()
+    }
     // A room replacing the chat takes it off screen without a stop; a reply read aloud stops with it, but not
     // with a turn of the phone.
     DisposableEffect(viewModel) {
@@ -501,8 +537,15 @@ fun ChatScreen(
                 // The goal may have been cleared since the menu offered it; an empty sheet would stay up.
                 ChatRequest.OpenControl -> controlOpen = viewModel.state.value.control != null
                 // `/voice` and the like on the desktop, which has no voice yet: say so, as a silent no-op reads as broken.
-                ChatRequest.StartVoice -> if (hasVoice) startVoiceChat() else notice = "Voice chat isn't on the desktop yet."
-                ChatRequest.StartDictation -> if (hasVoice) toggleDictation() else notice = "Dictation isn't on the desktop yet."
+                // A voice chat answers aloud, so it also needs spoken replies; a call and dictation don't.
+                ChatRequest.StartVoice -> when {
+                    hasSpeechPlayback -> startVoiceChat(false)
+                    hasVoice -> notice = voiceNeedsDecoder
+                    else -> notice = noDesktopVoice
+                }
+                ChatRequest.StartCall -> if (hasVoice) startVoiceChat(true) else notice = noDesktopVoice
+                ChatRequest.StartDictation -> if (hasVoice) toggleDictation() else notice = noDesktopDictation
+                ChatRequest.FocusComposer -> focusComposer++
             }
         }
     }
@@ -543,15 +586,16 @@ fun ChatScreen(
     CompositionLocalProvider(LocalModelPillBounds provides modelPillBounds) {
     ChatView(
         // A bot's chat is titled "Bot Chat" on the gateway; the bot's name says more.
-        title = target.bot?.label ?: state.title?.takeIf { it.isNotBlank() } ?: target.title ?: "New chat",
+        title = target.bot?.label ?: state.title?.takeIf { it.isNotBlank() } ?: target.title ?: stringResource(Res.string.chat_new_chat),
         titleFace = LocalBotFaces.current.let { faces ->
             faces.find(target.bot?.name)?.let { bot -> { BotAvatar(bot, faces.picture(bot), size = 22.dp) } }
         },
-        state = state,
+        state = if (readPosition == null || !ownsTranscript) state.copy(historyLoaded = false) else state,
+        conversationKey = Triple(target.gateway.gatewayUrl, target.profile, target.storedSessionId),
         picker = picker,
         connected = connected,
         connectionLabel = connectionLabel(connection),
-        linkStatus = linkStatus(connection),
+        linkStatus = linkStatus(connection)?.let { stringResource(it) },
         onRetryConnection = viewModel::retryConnection,
         attachments = attachments,
         attachmentError = attachmentError,
@@ -574,14 +618,17 @@ fun ChatScreen(
             }
         },
         sprite = viewModel.pets.sprite.collectAsStateWithLifecycle().value,
-        // Re-rolled per conversation, kept while a new chat gets its stored id.
-        placeholder = remember(target) { (if (target.storedSessionId == null) NEW_CHAT_PROMPTS else FOLLOW_UP_PROMPTS).random() },
+        // Re-rolled per conversation, kept while a new chat gets its stored id or moves to another project.
+        placeholder = stringResource(remember(target.copy(cwd = null, draft = null)) { (if (target.storedSessionId == null) NEW_CHAT_PROMPTS else FOLLOW_UP_PROMPTS).random() }),
         notice = notice,
         actions = viewModel,
         widgetFiles = transcript.widgetFiles,
         editing = viewModel.editing.collectAsStateWithLifecycle().value,
         // Only for the chat it was taken for, not one the screen moved on to (a branch, a fresh start).
-        readUpTo = target.readUpTo?.takeIf { state.storedSessionId == target.storedSessionId },
+        readUpTo = readPosition?.readUpTo?.takeIf { state.storedSessionId == target.storedSessionId },
+        onReadLatest = if (readPosition != null && ownsTranscript && screenShown && connected && state.historyRead && !state.running) {
+            { viewModel.readLatest(target, state) }
+        } else null,
         onOpenSidebar = onOpenSidebar,
         // Already on an untouched new chat: nothing to start over from.
         onNewChat = onNewChat.takeIf { target.storedSessionId != null || state.messages.isNotEmpty() },
@@ -590,7 +637,7 @@ fun ChatScreen(
         // A desktop has no camera, and its file dialog picks photos as well: + goes straight to it.
         onAttach = { if (isDesktop) attachmentPicker.pickFiles() else attachOpen = true },
         onDictate = toggleDictation,
-        onVoiceChat = startVoiceChat,
+        onVoiceChat = { startVoiceChat(false) },
         onOpenPets = { petsOpen = true },
         onOpenControl = viewModel::openControl,
         onViewImage = { viewing = it },
@@ -600,11 +647,15 @@ fun ChatScreen(
         wallpaper = rememberChatWallpaper(),
         place = target.gateway.label,
         profile = target.profile,
+        // Only while nothing has been sent: a stored chat stays where it began.
+        places = greetingPlaces?.takeIf { target.storedSessionId == null && state.storedSessionId == null && target.bot == null },
+        cwd = target.cwd,
         sessionsBadge = sessionsBadge,
         otherChatBanner = otherChatBanner,
         onOpenOtherChat = onOpenOtherChat,
         onDismissOtherChat = onDismissOtherChat,
-        onNextChat = onNextChat?.let { next -> { if (!next()) notice = "Nothing waiting" } },
+        onNextChat = onNextChat?.let { next -> { if (!next()) notice = nothingWaiting } },
+        focusComposer = focusComposer,
         keysEnabled = keysEnabled && !dialogOpen,
         attachmentPicker = attachmentPicker.takeIf { isDesktop },
         rail = railFile?.let { file ->
@@ -624,7 +675,7 @@ fun ChatScreen(
         onAdopted = { name ->
             viewModel.showPet()
             petsOpen = false
-            notice = "Adopted $name"
+            noticeScope.launch { notice = getString(Res.string.chat_notice_adopted, name) }
         },
     )
     JourneySheet(visible = journeyOpen, controller = viewModel.journey, onLoad = viewModel::loadJourney, onDismiss = { journeyOpen = false })
@@ -686,7 +737,7 @@ fun ChatScreen(
         // Read in the sheet, so the pill moving doesn't recompose the whole chat.
         anchor = { modelPillBounds.value.takeIf { isDesktop } },
         // A Bot Chat's model is its bot's (selectModel sets it there), so say what a pick changes.
-        note = target.bot?.let { "A model picked here becomes ${it.label}'s own, for all its chats and routines." },
+        note = target.bot?.let { stringResource(Res.string.chat_model_bot_note, it.label) },
     )
     ModelConfirmDialog(
         pending = picker.confirm,
@@ -705,10 +756,12 @@ internal fun ChatView(
     /** Drawn beside the title, e.g. the face of the bot whose chat this is. */
     titleFace: (@Composable () -> Unit)? = null,
     state: ChatState,
+    /** Isolates the transcript's scroll state across gateways, profiles and chats. */
+    conversationKey: Any? = null,
     picker: ModelPickerState,
     connected: Boolean,
     /** Which way the link is down, shown under the title while not [connected]. */
-    connectionLabel: String = "No connection",
+    connectionLabel: String = stringResource(Res.string.chat_link_none),
     /** Shown in the chat while the link is being made again, so a reply that stopped streaming says why. */
     linkStatus: String? = null,
     /** Tries the gateway again now, from the offline banner. */
@@ -739,6 +792,7 @@ internal fun ChatView(
     editing: String? = null,
     /** How far this chat had been read when it was opened (epoch seconds); later messages are marked new. */
     readUpTo: Double? = null,
+    onReadLatest: (() -> Unit)? = null,
     onOpenSidebar: () -> Unit,
     onNewChat: (() -> Unit)?,
     onOpenMenu: ((Rect?) -> Unit)?,
@@ -759,11 +813,17 @@ internal fun ChatView(
     place: String? = null,
     /** The profile the chat runs in; null is the launch profile, shown as "default". */
     profile: String? = null,
+    /** On an empty new chat, where else it can start: picked on its greeting. */
+    places: GreetingPlaces? = null,
+    /** The folder a new chat starts in, named on its greeting; null: no project. */
+    cwd: String? = null,
     sessionsBadge: SessionsBadge = SessionsBadge(),
     otherChatBanner: OtherChatEvent? = null,
     onOpenOtherChat: (OtherChatEvent) -> Unit = {},
     onDismissOtherChat: (OtherChatEvent) -> Unit = {},
     onNextChat: (() -> Unit)? = null,
+    /** Goes up each time the composer should take the keyboard (a chat opened to type in). */
+    focusComposer: Int = 0,
     /** The desktop's keys reach the chat; off while something covers it. */
     keysEnabled: Boolean = true,
     /** Takes files dropped on the chat and pasted into it (the desktop's). */
@@ -866,18 +926,24 @@ internal fun ChatView(
             val findQuery = remember { TextFieldState() }
             val findFocus = remember { FocusRequester() }
             val findText = findQuery.text.toString()
+            // What the list shows; find and its scrolling count the same rows.
+            val showReasoning = LocalAppSettings.current.showReasoning
+            val listed = remember(state.messages, showReasoning) { state.messages.withoutBlankReplies(showReasoning) }
             // The matched messages by key, so older history loading above them keeps the one shown; worked out only
             // while the bar is open, not on every streamed word.
-            val matches = remember(state.messages.size, state.messages.lastOrNull()?.key, findText, findOpen) {
-                if (findOpen) findMatches(state.messages, findText).map { state.messages[it].key } else emptyList()
+            val matches = remember(listed.size, listed.lastOrNull()?.key, findText, findOpen) {
+                if (findOpen) findMatches(listed, findText).map { listed[it].key } else emptyList()
             }
             var foundKey by remember { mutableStateOf<String?>(null) }
             LaunchedEffect(findText, findOpen) { foundKey = matches.lastOrNull() }
             val match = matches.indexOf(foundKey)
             val found = foundKey.takeIf { findOpen && match >= 0 }
             LaunchedEffect(found) {
-                val index = state.messages.indexOfFirst { it.key == found }
-                if (index >= 0) composerFold.list?.animateScrollToItem(index)
+                val index = listed.indexOfFirst { it.key == found }
+                if (index >= 0) {
+                    composerFold.onNavigate()
+                    composerFold.list?.animateScrollToItem(index)
+                }
             }
             if (findOpen) {
                 FindBar(
@@ -912,6 +978,11 @@ internal fun ChatView(
                 typeAfterVoice = false
                 if (composerShown) composerFocus.requestFocus()
             }
+            // Asked for once: a question waiting in the composer's place doesn't take the keyboard when it's answered.
+            LaunchedEffect(focusComposer) {
+                // Not laid out yet (the chat still coming up), the field just isn't focused: nothing to type over.
+                if (focusComposer > 0 && composerShown) runCatching { composerFocus.requestFocus() }
+            }
             val shortcutScope = rememberCoroutineScope()
             // The desktop's keys for the chat; a voice chat over it has the screen.
             ShortcutHandler(enabled = keysEnabled && !voiceFull) { shortcut ->
@@ -929,6 +1000,7 @@ internal fun ChatView(
                     Shortcut.ModelPicker -> true.also { onOpenModels() }
                     Shortcut.PageUp, Shortcut.PageDown -> {
                         val list = composerFold.list ?: return@ShortcutHandler false
+                        composerFold.onNavigate()
                         val page = list.layoutInfo.viewportSize.height * PAGE_SCROLL
                         shortcutScope.launch { list.animateScrollBy(if (shortcut == Shortcut.PageUp) -page else page) }
                         true
@@ -939,6 +1011,7 @@ internal fun ChatView(
                         val list = composerFold.list ?: return@ShortcutHandler false
                         if (actions.composer.text.isNotEmpty()) return@ShortcutHandler false
                         if (focusHeld.value && !composerFold.typing) return@ShortcutHandler false
+                        composerFold.onNavigate()
                         shortcutScope.launch { if (shortcut == Shortcut.ScrollTop) list.scrollToItem(0) else list.animateToEnd() }
                         true
                     }
@@ -1010,26 +1083,40 @@ internal fun ChatView(
                             LocalFileLinks provides { link -> GatewayFile.fromLink(link)?.let(onOpenFile) },
                             LocalNotice provides onNotice,
                             LocalSubagents provides SubagentContext(state.subagents, actions::stopSubagent),
+                            LocalAgentScreenChat provides state.storedSessionId,
+                            LocalScreenViews provides LocalAgentScreens.current.let { screens ->
+                                // Worked out again when a tool call changes, not on every token of a reply.
+                                val calls = ScreenViews.calls(state.messages)
+                                val newest = ScreenViews.newest(state.messages)
+                                remember(calls, newest, screens, state.storedSessionId) {
+                                    ScreenViews(screenViews(calls) { screens.took(state.storedSessionId, it) }, newest)
+                                }
+                            },
+                            LocalAgentScreenSend provides actions::sendPrompt,
                             LocalCommentHost provides commentHost,
                         ) {
-                            Messages(
-                                state.messages,
-                                olderMessages = state.olderMessages,
-                                loadingOlder = state.loadingOlder,
-                                bottomInset = listInset,
-                                controlsInset = dockInset,
-                                fold = composerFold,
-                                actions = actions,
-                                connected = connected,
-                                // A saved copy may lack what changed since; edits wait for the gateway's transcript.
-                                canChange = state.canChangeChat(connected && state.savedCopyAt == null),
-                                editing = editing,
-                                readUpTo = readUpTo,
-                                reading = readAloud.key,
-                                // The voice chat and dictation have the speaker and the microphone.
-                                canReadAloud = hasVoice && !voiceOn && !dictation.active,
-                                found = found,
-                            )
+                            key(conversationKey) {
+                                Messages(
+                                    listed,
+                                    olderMessages = state.olderMessages,
+                                    loadingOlder = state.loadingOlder,
+                                    savedCopy = state.savedCopyAt != null,
+                                    bottomInset = listInset,
+                                    controlsInset = dockInset,
+                                    fold = composerFold,
+                                    actions = actions,
+                                    connected = connected,
+                                    // A saved copy may lack what changed since; edits wait for the gateway's transcript.
+                                    canChange = state.canChangeChat(connected && state.savedCopyAt == null),
+                                    editing = editing,
+                                    readUpTo = readUpTo,
+                                    onReadLatest = onReadLatest,
+                                    reading = readAloud.key,
+                                    // The voice chat and dictation have the speaker and the microphone.
+                                    canReadAloud = hasSpeechPlayback && !voiceOn && !dictation.active,
+                                    found = found,
+                                )
+                            }
                         }
                     } else Box(
                         Modifier.align(Alignment.TopCenter).widthIn(max = READING_WIDTH).fillMaxSize()
@@ -1038,8 +1125,8 @@ internal fun ChatView(
                         when {
                             !state.historyLoaded -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Spinner() }
                             state.historyError != null ->
-                                EmptyState(Lucide.CloudOff, "Couldn't load the conversation", state.historyError.orEmpty(), error = true) {
-                                    Button("Try again", onClick = actions::retry, variant = ButtonVariant.Secondary, leadingIcon = Lucide.RefreshCw)
+                                EmptyState(Lucide.CloudOff, stringResource(Res.string.chat_history_failed), state.historyError.orEmpty(), error = true) {
+                                    Button(stringResource(Res.string.chat_try_again), onClick = actions::retry, variant = ButtonVariant.Secondary, leadingIcon = Lucide.RefreshCw)
                                 }
                             else -> Greeting(
                                 onAttach = onAttach,
@@ -1050,6 +1137,8 @@ internal fun ChatView(
                                 canAttach = attachments.size < OutgoingAttachment.MAX_COUNT,
                                 place = place,
                                 profile = profile,
+                                places = places,
+                                cwd = cwd,
                                 overComposer = centred,
                             )
                         }
@@ -1092,7 +1181,7 @@ internal fun ChatView(
                         SavedCopyPill(lastSavedAt, onRetry = if (connected) actions::retry else null)
                     }
                     AnimatedVisibility(visible = state.loadingOlder, enter = fadeIn(), exit = fadeOut()) {
-                        StatusPill("Loading earlier messages…")
+                        StatusPill(stringResource(Res.string.chat_loading_older))
                     }
                 }
                 Column(
@@ -1204,8 +1293,12 @@ private fun DropOverlay() {
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
             UnstyledIcon(Lucide.Paperclip, contentDescription = null, tint = accentColor, modifier = Modifier.size(28.dp))
-            Text("Drop to attach", style = Theme[typography][body].copy(fontWeight = FontWeight.SemiBold), color = Theme[colors][textColor])
-            Text("Up to ${OutgoingAttachment.MAX_COUNT} files, 25 MB each.", style = Theme[typography][bodySmall], color = Theme[colors][textTertiary])
+            Text(stringResource(Res.string.chat_drop_title), style = Theme[typography][body].copy(fontWeight = FontWeight.SemiBold), color = Theme[colors][textColor])
+            Text(
+                stringResource(Res.string.chat_drop_limits, OutgoingAttachment.MAX_COUNT, OutgoingAttachment.MAX_BYTES / 1_000_000),
+                style = Theme[typography][bodySmall],
+                color = Theme[colors][textTertiary],
+            )
         }
     }
 }
@@ -1253,7 +1346,7 @@ private fun ColumnScope.Dock(
     onPasteFiles: () -> Boolean = { false },
 ) {
     (state.attachment as? Attachment.Failed)?.let {
-        Banner(it.message, actionLabel = "Retry", onAction = actions::retry)
+        Banner(it.message, actionLabel = stringResource(Res.string.chat_retry), onAction = actions::retry)
     }
     state.error?.let { Banner(it, actionLabel = null, onAction = actions::dismissError) }
     state.notices.forEach { notice -> key(notice.key) { NoticeBanner(notice, actions::dismissNotice) } }
@@ -1263,7 +1356,7 @@ private fun ColumnScope.Dock(
         val canResend = actions.composer.text.isNotBlank()
         Banner(
             "${refused.title}. ${refused.detail}",
-            actionLabel = "Send again".takeIf { canResend },
+            actionLabel = stringResource(Res.string.chat_send_again).takeIf { canResend },
             onAction = { if (canResend) actions.send(null) else actions.dismissError() },
             icon = if (refused == SessionRefusal.OpenElsewhere) Lucide.MonitorSmartphone else Lucide.Hourglass,
         )
@@ -1343,8 +1436,19 @@ private fun ColumnScope.Dock(
         AnimatedVisibility(visible = refs.isNotEmpty() && suggestions.isEmpty() && !listsAway, enter = fadeIn(), exit = fadeOut()) {
             var shown by remember { mutableStateOf(refs) }
             if (refs.isNotEmpty()) shown = refs
+            val fileLabel = stringResource(Res.string.chat_ref_file)
+            val folderLabel = stringResource(Res.string.chat_ref_folder)
             MentionSuggestions(
-                remember(shown) { shown.map { MentionChoice(it.label, it.shown, null, it.icon) } },
+                remember(shown, fileLabel, folderLabel) {
+                    shown.map { ref ->
+                        val label = when (ref.kind) {
+                            PathRefKind.File -> fileLabel
+                            PathRefKind.Folder -> folderLabel
+                            null -> ref.label
+                        }
+                        MentionChoice(label, ref.shown, null, ref.icon)
+                    }
+                },
                 hazeState,
                 onPick = { choice -> shown.firstOrNull { it.shown == choice.handle }?.let(onRef) },
                 // While bots are listed too, the keys walk theirs: only one list shows a mark.
@@ -1370,8 +1474,8 @@ private fun ColumnScope.Dock(
         }
         if (editing) {
             Banner(
-                "Editing a message. Sending replaces it and everything after it.",
-                actionLabel = "Cancel",
+                stringResource(Res.string.chat_editing_banner),
+                actionLabel = stringResource(Res.string.common_cancel),
                 onAction = actions::cancelEdit,
                 icon = Lucide.Pencil,
             )
@@ -1425,39 +1529,60 @@ private fun ColumnScope.Dock(
     }
 }
 
+@Composable
+private fun ComposerNotice.text(): String = when (this) {
+    is ComposerNotice.Said -> text
+    ComposerNotice.PromptNotSent -> stringResource(Res.string.chat_notice_prompt_not_sent)
+    ComposerNotice.CallNotStarted -> stringResource(Res.string.chat_notice_call_not_started)
+    is ComposerNotice.TooManyAttachments -> stringResource(Res.string.chat_notice_too_many_files, max)
+    is ComposerNotice.FileTooLarge -> stringResource(Res.string.chat_notice_file_too_large, name, megabytes)
+}
+
 /** How things stand, by the color of the dot beside a status line. */
 internal enum class StatusTone { Ok, Busy, Waiting, Trouble, Neutral }
 
 /** The line under the top bar's title, with its dot. */
 internal data class BarStatus(val text: String, val tone: StatusTone)
 
+/** [BarStatus] before it's put into words: chosen in plain code, so a test can check the choice. */
+internal data class ChatStatusPick(val text: Words, val tone: StatusTone)
+
 /** The status line for a chat: the link first, then a question waiting, the agent at work, else where it runs. */
-internal fun chatStatus(state: ChatState, connected: Boolean, connectionLabel: String, place: String?): BarStatus = when {
-    !connected -> BarStatus(connectionLabel, StatusTone.Trouble)
-    state.attachment is Attachment.Attaching -> BarStatus("Opening…", StatusTone.Busy)
-    state.inputRequests.isNotEmpty() -> BarStatus("Needs your answer", StatusTone.Waiting)
+@Composable
+internal fun chatStatus(state: ChatState, connected: Boolean, connectionLabel: String, place: String?): BarStatus =
+    chatStatusPick(state, connected, connectionLabel, place).let { BarStatus(it.text.text(), it.tone) }
+
+/** [chatStatus]'s choice. */
+internal fun chatStatusPick(state: ChatState, connected: Boolean, connectionLabel: String, place: String?): ChatStatusPick = when {
+    !connected -> ChatStatusPick(Words.Said(connectionLabel), StatusTone.Trouble)
+    state.attachment is Attachment.Attaching -> ChatStatusPick(Words.Of(Res.string.chat_screen_opening), StatusTone.Busy)
+    state.inputRequests.isNotEmpty() -> ChatStatusPick(Words.Of(Res.string.chat_status_needs_answer), StatusTone.Waiting)
     state.running -> {
         // Once every step is done the agent is wrapping up, not on a step.
         val plan = state.livePlan()
         val step = planStep(plan)
         // Only the delegation running now: a subagent whose end never arrived mustn't haunt later turns.
         val working = currentStep(state).team.count { it == SubagentStatus.Running }
-        BarStatus(
+        ChatStatusPick(
             when {
-                plan != null && step != null -> "Working · step $step of ${plan.total}"
-                working == 1 -> "Working · 1 subagent"
-                working > 1 -> "Working · $working subagents"
-                else -> "Working"
+                plan != null && step != null -> Words.Of(Res.string.chat_status_working_step, listOf(step, plan.total))
+                working > 0 -> Words.Count(Res.plurals.chat_status_working_subagents, working)
+                else -> Words.Of(Res.string.chat_status_working)
             },
             StatusTone.Busy,
         )
     }
-    else -> BarStatus(listOfNotNull("Hermes", place).joinToString(" · "), StatusTone.Ok)
+    // Product and place names: nothing to translate.
+    else -> ChatStatusPick(Words.Said(listOfNotNull("Hermes", place).joinToString(" · ")), StatusTone.Ok)
 }
 
 /** Where the empty chat says Hermes runs: "Hermes on homelab · default profile". */
-internal fun greetingPlace(place: String?, profile: String?): String =
-    "${place?.let { "Hermes on $it" } ?: "Hermes"} · ${profile ?: "default"} profile"
+internal fun greetingPlace(place: String?, profile: String?): Words = when {
+    place != null && profile != null -> Words.Of(Res.string.chat_greeting_place_profile, listOf(place, profile))
+    place != null -> Words.Of(Res.string.chat_greeting_place_default, listOf(place))
+    profile != null -> Words.Of(Res.string.chat_greeting_profile, listOf(profile))
+    else -> Words.Of(Res.string.chat_greeting_default)
+}
 
 /**
  * The sessions button, the title with a status line under it, and new chat with the chat's options
@@ -1516,12 +1641,12 @@ internal fun TopBar(
             if (trailing != null) {
                 trailing()
             } else {
-                BarButton(Lucide.SquarePen, "New chat", onClick = { onNewChat?.invoke() }, enabled = onNewChat != null, keys = "Ctrl+N")
+                BarButton(Lucide.SquarePen, stringResource(Res.string.chat_new_chat), onClick = { onNewChat?.invoke() }, enabled = onNewChat != null, keys = "Ctrl+N")
                 // A plain holder: only the click reads it. The desktop's menu hangs from the button.
                 val menuButton = remember { arrayOfNulls<Rect>(1) }
                 BarButton(
                     Lucide.Ellipsis,
-                    "Chat options",
+                    stringResource(Res.string.chat_options),
                     onClick = { onOpenMenu?.invoke(menuButton[0]) },
                     enabled = onOpenMenu != null,
                     modifier = Modifier.onGloballyPositioned { menuButton[0] = it.boundsInWindow() },
@@ -1599,6 +1724,10 @@ private fun Greeting(
     canAttach: Boolean,
     place: String?,
     profile: String?,
+    /** Where the new chat can start instead, picked on it; null while it can't move (it has begun, or is a bot's). */
+    places: GreetingPlaces? = null,
+    /** The folder the new chat starts in; null: no project. */
+    cwd: String? = null,
     /** The composer sits right under it, in the middle: it stands on the composer rather than in its own middle. */
     overComposer: Boolean = false,
 ) {
@@ -1607,40 +1736,48 @@ private fun Greeting(
         Column(Modifier.fillMaxWidth().padding(bottom = if (overComposer) 22.dp else 30.dp), verticalArrangement = Arrangement.spacedBy(22.dp)) {
             AppMark(52.dp)
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(
-                    remember(accentWord) {
-                        buildAnnotatedString {
-                            append("What are we\n")
-                            withStyle(SpanStyle(color = accentWord)) { append("building") }
-                            append(" today?")
-                        }
-                    },
-                    style = Theme[typography][display],
-                    color = Theme[colors][textColor],
-                )
-                Text(
-                    greetingPlace(place, profile),
-                    style = Theme[typography][bodySmall],
-                    color = Theme[colors][textTertiary],
-                )
+                // A chat already set to start in a folder names it even while the projects are still loading (or
+                // couldn't be), so a send never goes somewhere the screen didn't say.
+                if (places != null && (places.hasProjects || cwd != null)) {
+                    ProjectQuestion(places, cwd)
+                } else {
+                    // The question keeps its word order per language; the accent word goes where its placeholder is.
+                    val question = stringResource(Res.string.chat_greeting_question, ACCENT_MARK).split(ACCENT_MARK)
+                    val accented = stringResource(Res.string.chat_greeting_accent)
+                    Text(
+                        remember(accentWord, question, accented) {
+                            buildAnnotatedString {
+                                append(question.first())
+                                withStyle(SpanStyle(color = accentWord)) { append(accented) }
+                                append(question.drop(1).joinToString(""))
+                            }
+                        },
+                        style = Theme[typography][display],
+                        color = Theme[colors][textColor],
+                    )
+                }
+                PlaceLine(places, greetingPlace(place, profile).text())
             }
             // Other ways to begin than typing, named rather than left to the composer's icons.
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                StartPill(Lucide.Paperclip, "Attach", onClick = onAttach, enabled = canAttach)
+                StartPill(Lucide.Paperclip, stringResource(Res.string.chat_attach), onClick = onAttach, enabled = canAttach)
                 // Tracks the composer's mic: while recording the same tap finishes it.
                 if (showMic(dictation)) {
                     StartPill(
                         if (dictation.recording) Lucide.Square else Lucide.Mic,
-                        dictateLabel(dictation),
+                        stringResource(dictateLabel(dictation)),
                         onClick = onDictate,
                         enabled = connected && !dictation.transcribing,
                     )
                 }
-                if (hasVoice) StartPill(Lucide.AudioLines, "Voice chat", onClick = onVoiceChat, enabled = connected)
+                if (hasSpeechPlayback) StartPill(Lucide.AudioLines, stringResource(Res.string.chat_voice_chat), onClick = onVoiceChat, enabled = connected)
             }
         }
     }
 }
+
+/** Stands in for the greeting's accent word while its question is split around it; never shown. */
+private const val ACCENT_MARK = "\u0000"
 
 /** Where an empty desktop chat holds its composer: a little below the middle, the greeting over it. */
 private const val CENTRED_DOCK_BIAS = 0.2f
@@ -1695,31 +1832,31 @@ private fun StartPill(icon: ImageVector, text: String, onClick: () -> Unit, enab
 }
 
 /** What the empty chat's dictation pill says for [state]. */
-internal fun dictateLabel(state: DictationState): String = when {
-    state.transcribing -> "Transcribing…"
-    state.recording -> "Finish dictating"
-    else -> "Dictate"
+internal fun dictateLabel(state: DictationState): StringResource = when {
+    state.transcribing -> Res.string.chat_transcribing
+    state.recording -> Res.string.chat_finish_dictating
+    else -> Res.string.chat_dictate
 }
 
 /** Hermes Desktop's composer lines (`composer.newSessionPlaceholders` / `followUpPlaceholders`). */
 private val NEW_CHAT_PROMPTS = listOf(
-    "What are we building?",
-    "Give Hermes a task",
-    "What's on your mind?",
-    "Describe what you need",
-    "What should we tackle?",
-    "Ask anything",
-    "Start with a goal",
+    Res.string.chat_prompt_new_1,
+    Res.string.chat_prompt_new_2,
+    Res.string.chat_prompt_new_3,
+    Res.string.chat_prompt_new_4,
+    Res.string.chat_prompt_new_5,
+    Res.string.chat_prompt_new_6,
+    Res.string.chat_prompt_new_7,
 )
 
 private val FOLLOW_UP_PROMPTS = listOf(
-    "Send a follow-up",
-    "Add more context",
-    "Refine the request",
-    "What's next?",
-    "Keep it going",
-    "Push it further",
-    "Adjust or continue",
+    Res.string.chat_prompt_follow_1,
+    Res.string.chat_prompt_follow_2,
+    Res.string.chat_prompt_follow_3,
+    Res.string.chat_prompt_follow_4,
+    Res.string.chat_prompt_follow_5,
+    Res.string.chat_prompt_follow_6,
+    Res.string.chat_prompt_follow_7,
 )
 
 @Composable
@@ -1728,6 +1865,8 @@ private fun Messages(
     /** The conversation goes back further than [messages]; nearing the top loads the page before. */
     olderMessages: Boolean,
     loadingOlder: Boolean,
+    /** Replaced by current history when the gateway answers; its unread position is provisional. */
+    savedCopy: Boolean,
     bottomInset: Dp,
     /** How high the dock really stands, for what floats just above it. */
     controlsInset: Dp,
@@ -1739,6 +1878,7 @@ private fun Messages(
     editing: String?,
     /** How far the chat had been read when it was opened (epoch seconds); later messages are marked new. */
     readUpTo: Double? = null,
+    onReadLatest: (() -> Unit)? = null,
     /** The reply being read aloud, by its key. */
     reading: String? = null,
     /** Replies offer Read aloud. */
@@ -1770,6 +1910,12 @@ private fun Messages(
     val awayFromBottom by remember { derivedStateOf { listState.layoutInfo.hiddenBelow() > 600 } }
     // Following while the reader sits right at the end; where they drag to decides whether it carries on.
     var pinned by remember { mutableStateOf(true) }
+    var readerNavigated by remember(readUpTo) { mutableStateOf(false) }
+    // Once the user sends from here, what follows is their own conversation, not news to mark or jump to.
+    var unreadSettled by remember(readUpTo) { mutableStateOf(false) }
+    // The opening jump is done; only then may reaching the end mark the chat read. A saved copy giving way to
+    // current history looks for the unread line again, so it waits for that too.
+    var positioned by remember(readUpTo, savedCopy) { mutableStateOf(readUpTo == null || unreadSettled) }
     LaunchedEffect(listState) {
         snapshotFlow { listState.layoutInfo }.collect { info ->
             when (followStep(pinned, info.hiddenBelow(), listState.isScrollInProgress)) {
@@ -1781,10 +1927,12 @@ private fun Messages(
         }
     }
     // The composer folds by how near the end the list stands; scrolling back up lets go of one opened by a tap.
-    DisposableEffect(listState, fold) {
+    DisposableEffect(listState, fold, readUpTo) {
         fold.list = listState
+        fold.onNavigate = { readerNavigated = true }
         onDispose {
             fold.list = null
+            fold.onNavigate = {}
             fold.heldOpen = false
         }
     }
@@ -1796,9 +1944,16 @@ private fun Messages(
     }
     val readBackTravel = with(LocalDensity.current) { READ_BACK_TRAVEL.toPx() }
     val readBack = remember(readBackTravel, fold) { ReadBackDetector(readBackTravel) { fold.heldOpen = false } }
-    // A prompt just sent is always shown, wherever the reader was.
+    // A prompt just sent here is always shown, wherever the reader was. One sent elsewhere, or a stored one coming
+    // in with history, only pulls a reader who hasn't moved.
     LaunchedEffect(newest?.key) {
-        if (newest is ChatMessage.User) {
+        // A fast submit can acknowledge the local prompt before the screen ever draws it pending.
+        val sentHere = newest is ChatMessage.User && (newest.pending || newest.key.startsWith("local-"))
+        if (sentHere) {
+            unreadSettled = true
+            positioned = true
+        }
+        if (newest is ChatMessage.User && (sentHere || !readerNavigated)) {
             pinned = true
             listState.scrollToItem(messages.lastIndex, LIST_END)
         }
@@ -1811,16 +1966,17 @@ private fun Messages(
     // Where the messages that came since the chat was last read begin. It stays put for the rest of this visit,
     // so reading on doesn't move or remove it under the reader; the next visit starts from the new last look.
     // Older pages load first while every loaded message is still new.
-    var unreadFrom by remember(readUpTo) { mutableStateOf<String?>(null) }
-    var unreadPagesLoaded by remember(readUpTo) { mutableStateOf(0) }
+    // A saved copy may omit older unread messages or contain rows the gateway no longer serves.
+    // Discover the boundary again against current history, without pulling a reader who has taken over.
+    var unreadFrom by remember(readUpTo, savedCopy) { mutableStateOf<String?>(null) }
+    var unreadPagesLoaded by remember(readUpTo, savedCopy) { mutableStateOf(0) }
     // The oldest message when a page was last asked for: a reply streaming in reruns this before the page loads.
-    var unreadPageAskedAt by remember(readUpTo) { mutableStateOf<String?>(null) }
-    // Once the user sends from here, what follows is their own conversation, not news to mark or jump to.
-    var unreadSettled by remember(readUpTo) { mutableStateOf(false) }
-    LaunchedEffect(readUpTo, messages, olderMessages, loadingOlder) {
+    var unreadPageAskedAt by remember(readUpTo, savedCopy) { mutableStateOf<String?>(null) }
+    LaunchedEffect(readUpTo, messages, olderMessages, loadingOlder, savedCopy) {
         if (readUpTo == null || unreadFrom != null || unreadSettled) return@LaunchedEffect
         if (messages.any { it is ChatMessage.User && it.pending }) {
             unreadSettled = true
+            positioned = true
             return@LaunchedEffect
         }
         if (loadingOlder) return@LaunchedEffect
@@ -1834,20 +1990,58 @@ private fun Messages(
                 }
                 return@LaunchedEffect
             }
-            UnreadLineStep.None -> return@LaunchedEffect
+            UnreadLineStep.None -> {
+                if (!savedCopy) unreadSettled = true
+                if (!readerNavigated && messages.isNotEmpty()) {
+                    pinned = true
+                    listState.scrollToItem(messages.lastIndex, LIST_END)
+                }
+                positioned = true
+                return@LaunchedEffect
+            }
             is UnreadLineStep.Above -> step.key
         }
         unreadFrom = key
         val index = messages.indexOfFirst { it.key == key }
-        if (index >= 0) {
+        if (index >= 0 && !readerNavigated) {
             // Opened at the line instead of the end, so reading starts where it was left.
             pinned = false
             listState.scrollToItem(index)
         }
+        positioned = true
+    }
+    val readLatest by rememberUpdatedState(onReadLatest)
+    val messageCount by rememberUpdatedState(messages.size)
+    // Asked again whenever the messages change, not just the tail: a page loaded above, or a row redrawn, can turn
+    // down an ask made while the rendered list and the chat's differed for a frame.
+    LaunchedEffect(listState, positioned, onReadLatest != null, messages) {
+        if (!positioned || onReadLatest == null) return@LaunchedEffect
+        snapshotFlow {
+            listState.layoutInfo.visibleItemsInfo.isNotEmpty() &&
+                listState.layoutInfo.totalItemsCount == messageCount && !listState.canScrollForward
+        }.collect { atEnd -> if (atEnd) readLatest?.invoke() }
     }
     val unservable = remember(messages) { unservableEchoes(messages) }
     val unreadLine = remember(messages, unreadFrom, readUpTo) { unreadLineKey(messages, unreadFrom, readUpTo) }
-    BoxWithConstraints(Modifier.fillMaxSize()) {
+    BoxWithConstraints(Modifier.fillMaxSize().pointerInput(readUpTo) {
+        awaitPointerEventScope {
+            var down: Offset? = null
+            while (true) {
+                val event = awaitPointerEvent(PointerEventPass.Initial)
+                val change = event.changes.firstOrNull() ?: continue
+                // The wheel, or a drag on the list, seen before children consume it. A tap on a link or an icon
+                // doesn't move the list, so it leaves the jump to the unread line alone.
+                when (event.type) {
+                    PointerEventType.Scroll -> readerNavigated = true
+                    PointerEventType.Press -> down = change.position
+                    PointerEventType.Release -> if (event.changes.none { it.pressed }) down = null
+                    PointerEventType.Move -> if (change.pressed && down?.let { (change.position - it).getDistance() > viewConfiguration.touchSlop } == true) {
+                        readerNavigated = true
+                    }
+                }
+            }
+        }
+    }) {
         // The list spans the pane, so the wheel and the scrollbar work at its edges; what's read keeps to the
         // reading width in the middle. Desktop messages sit a little closer together, as a pointer's eye reads them.
         val side = 16.dp + ((maxWidth - READING_WIDTH) / 2).coerceAtLeast(0.dp)
@@ -1910,7 +2104,7 @@ private fun Messages(
                             connected,
                             // Any prompt with a stored row is edited in place; the last one without can still go through /undo.
                             // Not while the prompt is still on its way or its delivery is in doubt.
-                            editLabel = if (chat.canEdit(message.key)) "Edit" else "Edit last prompt",
+                            editLabel = stringResource(if (chat.canEdit(message.key)) Res.string.chat_edit else Res.string.chat_edit_last_prompt),
                             onEdit = if (chat.canEdit(message.key)) {
                                 rewind(MessageChange.Edit, message.key, message.key) { actions.startEdit(message.key) }
                             } else {
@@ -1947,10 +2141,17 @@ private fun Messages(
                 }
             }
         }
-        // Clear of the composer floating over the chat's end.
+        // Clear of the composer floating over the chat's end. Any press on it moves the list, even a click on its track.
         VerticalScrollbar(
             listState,
-            Modifier.align(Alignment.TopEnd).fillMaxHeight().padding(top = windowControlsHeight() + 4.dp, bottom = bottomInset + 4.dp, end = 2.dp),
+            Modifier.align(Alignment.TopEnd).fillMaxHeight().padding(top = windowControlsHeight() + 4.dp, bottom = bottomInset + 4.dp, end = 2.dp)
+                .pointerInput(readUpTo) {
+                    awaitPointerEventScope {
+                        while (true) {
+                            if (awaitPointerEvent(PointerEventPass.Initial).type == PointerEventType.Press) readerNavigated = true
+                        }
+                    }
+                },
         )
         AnimatedVisibility(
             visible = awayFromBottom,
@@ -1961,8 +2162,10 @@ private fun Messages(
             val shape = RoundedCornerShape(Theme[radii][radiusMedium])
             // A pointer-sized button on the desktop, named on a rest over it.
             val size = if (isDesktop) 34.dp else 40.dp
-            Tooltip(if (isDesktop && !newBelow) "Jump to latest" else "") { UnstyledButton(
+            val jumpLabel = stringResource(Res.string.chat_jump_latest)
+            Tooltip(if (isDesktop && !newBelow) jumpLabel else "") { UnstyledButton(
                 onClick = {
+                    readerNavigated = true
                     scope.launch {
                         listState.animateToEnd()
                         pinned = true
@@ -1987,11 +2190,11 @@ private fun Messages(
                 ) {
                     UnstyledIcon(
                         Lucide.ArrowDown,
-                        contentDescription = if (newBelow) null else "Jump to latest",
+                        contentDescription = if (newBelow) null else jumpLabel,
                         tint = tint,
                         modifier = Modifier.size(18.dp),
                     )
-                    if (newBelow) Text("New reply", style = Theme[typography][label], color = tint)
+                    if (newBelow) Text(stringResource(Res.string.chat_new_reply), style = Theme[typography][label], color = tint)
                 }
             } }
         }
@@ -2015,6 +2218,9 @@ private const val PAGE_SCROLL = 0.85f
 internal class ComposerFold {
     /** The conversation while it's on screen; none (an empty chat) leaves the composer open. */
     var list: LazyListState? by mutableStateOf(null)
+
+    /** Explicit navigation takes precedence over a delayed initial unread jump. */
+    var onNavigate: () -> Unit = {}
 
     /** The list is following the end; a reply growing there never folds the composer between two frames. */
     var following: Boolean by mutableStateOf(true)
@@ -2104,19 +2310,23 @@ private fun ChatMessage.contentSize(): Int = when (this) {
 }
 
 /** Tells apart the ways the link can be down: none, being re-made, or needing a new sign-in. */
-internal fun connectionLabel(state: ConnectionState): String = when (state) {
-    is ConnectionState.Connecting, is ConnectionState.Reconnecting -> "No connection · connecting again…"
-    ConnectionState.SessionExpired -> "Signed out · sign in again"
-    is ConnectionState.Failed, ConnectionState.Idle, is ConnectionState.Connected -> "No connection"
+@Composable
+internal fun connectionLabel(state: ConnectionState): String = stringResource(connectionLabelKey(state))
+
+/** [connectionLabel]'s choice. */
+internal fun connectionLabelKey(state: ConnectionState): StringResource = when (state) {
+    is ConnectionState.Connecting, is ConnectionState.Reconnecting -> Res.string.chat_link_connecting_again
+    ConnectionState.SessionExpired -> Res.string.chat_link_signed_out
+    is ConnectionState.Failed, ConnectionState.Idle, is ConnectionState.Connected -> Res.string.chat_link_none
 }
 
 /**
  * What the chat says while the link is being made again: waiting for the network when the gateway can't be reached
  * at all, else reconnecting. Null when it's up, or down for good (the title says so then).
  */
-internal fun linkStatus(state: ConnectionState): String? = when (state) {
-    is ConnectionState.Reconnecting -> if (state.reason.startsWith(UNREACHABLE)) "Waiting for network…" else "Reconnecting…"
-    is ConnectionState.Connecting -> if (state.attempt > 1) "Reconnecting…" else null
+internal fun linkStatus(state: ConnectionState): StringResource? = when (state) {
+    is ConnectionState.Reconnecting -> if (state.reason.startsWith(UNREACHABLE)) Res.string.chat_link_waiting_network else Res.string.chat_link_reconnecting
+    is ConnectionState.Connecting -> if (state.attempt > 1) Res.string.chat_link_reconnecting else null
     is ConnectionState.Connected, ConnectionState.Idle, ConnectionState.SessionExpired, is ConnectionState.Failed -> null
 }
 
@@ -2125,12 +2335,13 @@ private const val UNREACHABLE = "Can't reach gateway"
 
 /** The banner over the chat while the gateway can't be reached: where, what's being done about it, and Retry now. */
 @Composable
-private fun OfflineBanner(place: String?, status: String, onRetry: () -> Unit) {
+internal fun OfflineBanner(place: String?, status: String, onRetry: () -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
             .padding(horizontal = 14.dp)
-            .background(Theme[colors][dangerSoft], RoundedCornerShape(Theme[radii][radiusMedium]))
+            // The tint laid on the chat's page colour: the red wash it had on a plain page, but nothing under it shows through.
+            .background(Theme[colors][dangerSoft].compositeOver(Theme[colors][background]), RoundedCornerShape(Theme[radii][radiusMedium]))
             .padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 4.dp)
             .semantics(mergeDescendants = true) {},
         horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -2140,19 +2351,20 @@ private fun OfflineBanner(place: String?, status: String, onRetry: () -> Unit) {
         Column(Modifier.weight(1f).padding(vertical = 6.dp)) {
             // Announced once as it appears: the line under it changes with every attempt, and isn't.
             Text(
-                offlineTitle(place),
+                stringResource(Res.string.chat_offline_title, offlineTitle(place)),
                 style = Theme[typography][bodySmall].copy(fontWeight = FontWeight.Medium),
                 color = Theme[colors][textColor],
                 modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
             )
-            CopyableOnDesktop { Text("$status Your draft is kept.", style = Theme[typography][caption], color = Theme[colors][textSecondary]) }
+            val line = stringResource(Res.string.chat_offline_draft_kept, status)
+            CopyableOnDesktop { Text(line, style = Theme[typography][caption], color = Theme[colors][textSecondary]) }
         }
-        RetryChip("Retry now", onClick = onRetry)
+        RetryChip(stringResource(Res.string.chat_retry_now), onClick = onRetry)
     }
 }
 
-/** What the offline banner leads with. */
-internal fun offlineTitle(place: String?): String = "Can't reach ${place?.takeIf { it.isNotBlank() } ?: "Hermes"}"
+/** Who the offline banner says can't be reached: the place, else Hermes. */
+internal fun offlineTitle(place: String?): String = place?.takeIf { it.isNotBlank() } ?: "Hermes"
 
 /** A small pill button, drawn 30dp tall with the full touch height around it. */
 @Composable
@@ -2203,12 +2415,12 @@ private fun SavedCopyPill(savedAt: Long, onRetry: (() -> Unit)?) {
     ) {
         UnstyledIcon(Lucide.History, contentDescription = null, tint = Theme[colors][textSecondary], modifier = Modifier.size(12.dp))
         Text(
-            savedCopyLabel(savedAt, now) + if (onRetry != null) " · couldn't load the latest" else "",
+            if (onRetry != null) stringResource(Res.string.chat_saved_copy_stale, savedCopyLabel(savedAt, now)) else savedCopyLabel(savedAt, now),
             style = Theme[typography][caption],
             color = Theme[colors][textSecondary],
             modifier = Modifier.padding(vertical = 4.dp),
         )
-        if (onRetry != null) RetryChip("Try again", onClick = onRetry)
+        if (onRetry != null) RetryChip(stringResource(Res.string.chat_try_again), onClick = onRetry)
     }
 }
 
@@ -2231,7 +2443,7 @@ private fun StatusPill(text: String) {
 
 /** Desktop's turn marker: the prompt in a full-width box with a tinted fill and outline; replies run bare beneath. */
 @Composable
-private fun UserBubble(
+internal fun UserBubble(
     message: ChatMessage.User,
     actions: ChatActions,
     connected: Boolean,
@@ -2262,12 +2474,17 @@ private fun UserBubble(
         // A long press opens the prompt's actions just under it; on a phone the text itself isn't selectable, Copy is in there.
         // The bubble hugs its text, up to most of the row, against the end edge.
         Box(Modifier.fillMaxWidth(USER_BUBBLE_WIDTH), contentAlignment = Alignment.TopEnd) {
+            // The menu is built when it opens, outside composition: its words are read here.
+            val copyLabel = stringResource(Res.string.chat_copy)
+            val commentLabel = stringResource(Res.string.chat_select_comment)
+            val plainEditLabel = stringResource(Res.string.chat_edit)
+            val branchLabel = stringResource(Res.string.chat_branch_here)
             val menuItems = {
                 listOfNotNull(
-                    RowMenuItem("Copy", Lucide.Copy) { scope.launch { clipboard.setClipEntry(plainTextClipEntry(message.text)) } }
+                    RowMenuItem(copyLabel, Lucide.Copy) { scope.launch { clipboard.setClipEntry(plainTextClipEntry(message.text)) } }
                         .takeIf { message.text.isNotBlank() },
                     // From here the comment is on all of the prompt; a desktop selection's menu comments on part of it.
-                    RowMenuItem("Comment", Lucide.MessageSquare) {
+                    RowMenuItem(commentLabel, Lucide.MessageSquare) {
                         commentHost?.onSelection(
                             SelectionAction.Comment,
                             CommentSource(message.key, "my message that starts “${openingWords(message.text)}”"),
@@ -2276,9 +2493,9 @@ private fun UserBubble(
                     }.takeIf { commentHost != null && review == null && message.text.isNotBlank() && !message.pending },
                     onEdit?.let { RowMenuItem(editLabel, Lucide.Pencil, run = it) },
                     // A prompt in doubt has only Check and Resend under it; taking it back to edit is here.
-                    RowMenuItem("Edit", Lucide.Pencil) { actions.editMessage(message.key) }
+                    RowMenuItem(plainEditLabel, Lucide.Pencil) { actions.editMessage(message.key) }
                         .takeIf { onEdit == null && message.check == SendCheck.Unknown },
-                    onBranch?.let { RowMenuItem("Branch from here", Lucide.GitBranch, run = it) },
+                    onBranch?.let { RowMenuItem(branchLabel, Lucide.GitBranch, run = it) },
                 )
             }
             // A right-click's menu opens at the pointer, as a desktop's context menus do.
@@ -2321,7 +2538,7 @@ private fun UserBubble(
                                             haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                                             menuOpen = true
                                         },
-                                        onLongClickLabel = "Message actions",
+                                        onLongClickLabel = stringResource(Res.string.chat_message_actions),
                                         interactionSource = null,
                                         indication = rememberHoverIndication(onBubble),
                                     )
@@ -2366,16 +2583,26 @@ private fun UserBubble(
                 Row(Modifier.alpha(alpha).onFocusChanged { keysInside = it.hasFocus }, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                     if (message.text.isNotBlank()) CopyButton(message.text, Modifier.requiredSize(30.dp))
                     onEdit?.let { ReplyAction(Lucide.Pencil, editLabel, it, Modifier.requiredSize(30.dp)) }
-                    onBranch?.let { ReplyAction(Lucide.GitBranch, "Branch from here", it, Modifier.requiredSize(30.dp)) }
+                    onBranch?.let { ReplyAction(Lucide.GitBranch, stringResource(Res.string.chat_branch_here), it, Modifier.requiredSize(30.dp)) }
                 }
                 MessageTimeLabel(message.timestamp)
             }
         } else if (!message.pending) MessageTimeLabel(message.timestamp)
+        // A large file over a slow link takes minutes; how far it has gone shows it isn't stuck.
+        message.upload?.let {
+            Text(
+                stringResource(Res.string.chat_uploading, it.name, it.percent),
+                style = Theme[typography][caption],
+                color = Theme[colors][textTertiary],
+                maxLines = 1,
+                overflow = TextOverflow.MiddleEllipsis,
+            )
+        }
         if (message.queued) {
-            Text("Queued · sends after this task", style = Theme[typography][caption], color = Theme[colors][textTertiary])
+            Text(stringResource(Res.string.chat_queued), style = Theme[typography][caption], color = Theme[colors][textTertiary])
         }
         if (editing) {
-            Text("Editing in the composer", style = Theme[typography][caption], color = Theme[colors][accentText])
+            Text(stringResource(Res.string.chat_editing_in_composer), style = Theme[typography][caption], color = Theme[colors][accentText])
         }
         message.check?.let { UnsettledActions(it, message.key, actions, connected) }
     }
@@ -2407,10 +2634,10 @@ private fun DeliveryMark(check: SendCheck) {
 }
 
 /** What's said under a prompt whose delivery is in doubt. */
-internal fun deliveryLabel(check: SendCheck): String = when (check) {
-    SendCheck.Checking -> "Checking whether Hermes got this…"
-    SendCheck.Unknown -> "May not have arrived"
-    SendCheck.NotReceived -> "Not delivered"
+internal fun deliveryLabel(check: SendCheck): StringResource = when (check) {
+    SendCheck.Checking -> Res.string.chat_delivery_checking
+    SendCheck.Unknown -> Res.string.chat_delivery_unknown
+    SendCheck.NotReceived -> Res.string.chat_delivery_not_received
 }
 
 /**
@@ -2426,7 +2653,7 @@ private fun UnsettledActions(check: SendCheck, key: String, actions: ChatActions
         itemVerticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            deliveryLabel(check),
+            stringResource(deliveryLabel(check)),
             style = Theme[typography][caption],
             color = Theme[colors][textTertiary],
             modifier = Modifier.padding(end = 4.dp),
@@ -2434,24 +2661,23 @@ private fun UnsettledActions(check: SendCheck, key: String, actions: ChatActions
         when (check) {
             SendCheck.Checking -> {}
             SendCheck.Unknown -> {
-                DeliveryChip("Check", Lucide.SearchCheck, description = "Check delivery", onClick = { actions.checkDelivery(key) })
-                DeliveryChip("Resend", Lucide.RotateCw, enabled = connected, onClick = { confirmResend = true })
+                DeliveryChip(stringResource(Res.string.common_check), Lucide.SearchCheck, description = stringResource(Res.string.chat_check_delivery), onClick = { actions.checkDelivery(key) })
+                DeliveryChip(stringResource(Res.string.chat_resend), Lucide.RotateCw, enabled = connected, onClick = { confirmResend = true })
             }
             SendCheck.NotReceived -> {
-                DeliveryChip("Resend", Lucide.RotateCw, enabled = connected, onClick = { actions.resend(key) })
-                DeliveryChip("Edit", Lucide.Pencil, onClick = { actions.editMessage(key) })
+                DeliveryChip(stringResource(Res.string.chat_resend), Lucide.RotateCw, enabled = connected, onClick = { actions.resend(key) })
+                DeliveryChip(stringResource(Res.string.chat_edit), Lucide.Pencil, onClick = { actions.editMessage(key) })
             }
         }
     }
     Dialog(
         visible = confirmResend,
         onDismissRequest = { confirmResend = false },
-        title = "Resend this message?",
-        message = "Hermes may already have it. If it does, resending makes Hermes get the same request twice and run it again. " +
-            "$tapVerb Check first to be sure.",
+        title = stringResource(Res.string.chat_resend_title),
+        message = stringResource(if (isDesktop) Res.string.chat_resend_message_click else Res.string.chat_resend_message_tap),
         actions = {
-            Button("Cancel", onClick = { confirmResend = false }, variant = ButtonVariant.Ghost)
-            Button("Resend", onClick = { confirmResend = false; actions.resend(key) })
+            Button(stringResource(Res.string.common_cancel), onClick = { confirmResend = false }, variant = ButtonVariant.Ghost)
+            Button(stringResource(Res.string.chat_resend), onClick = { confirmResend = false; actions.resend(key) })
         },
     )
 }
@@ -2523,36 +2749,33 @@ private fun ConfirmChange(
     val promptKey = shown?.let { (change, key) -> if (change == MessageChange.Regenerate) chat.regenerateTarget(key)?.key else key }
     var discarded by remember { mutableIntStateOf(0) }
     if (pending != null && promptKey != null) discarded = chat.discardedAfter(promptKey)
-    val later = if (discarded == 1) "1 later message" else "$discarded later messages"
     Dialog(
         visible = pending != null,
         onDismissRequest = onDismiss,
-        title = when (shown?.first) {
-            MessageChange.Branch -> "Branch from here?"
-            MessageChange.Regenerate -> "Regenerate this reply?"
-            MessageChange.Edit -> "Edit this message?"
-            else -> "Edit your last prompt?"
-        },
+        title = stringResource(
+            when (shown?.first) {
+                MessageChange.Branch -> Res.string.chat_change_branch_title
+                MessageChange.Regenerate -> Res.string.chat_change_regenerate_title
+                MessageChange.Edit -> Res.string.chat_change_edit_title
+                else -> Res.string.chat_change_last_title
+            },
+        ),
         message = when (shown?.first) {
-            MessageChange.Branch ->
-                "Copies this chat up to this message into a new chat and opens it. This chat stays as it is. " +
-                    "No task starts until you send something in the new chat."
-            MessageChange.Regenerate ->
-                "This will discard $later, here and on Hermes, and send the prompt again."
-            MessageChange.Edit ->
-                "Sending the edit will discard $later, here and on Hermes. Nothing changes until you send it."
-            else ->
-                "Takes your last message and Hermes's reply to it off this chat and puts the message back in the composer. " +
-                    "No task starts until you send it again."
+            MessageChange.Branch -> stringResource(Res.string.chat_change_branch_message)
+            MessageChange.Regenerate -> pluralStringResource(Res.plurals.chat_change_regenerate_message, discarded, discarded)
+            MessageChange.Edit -> pluralStringResource(Res.plurals.chat_change_edit_message, discarded, discarded)
+            else -> stringResource(Res.string.chat_change_last_message)
         },
         actions = {
-            Button("Cancel", onClick = onDismiss, variant = ButtonVariant.Ghost)
+            Button(stringResource(Res.string.common_cancel), onClick = onDismiss, variant = ButtonVariant.Ghost)
             Button(
-                when (shown?.first) {
-                    MessageChange.Branch -> "Branch"
-                    MessageChange.Regenerate -> "Regenerate"
-                    else -> "Edit"
-                },
+                stringResource(
+                    when (shown?.first) {
+                        MessageChange.Branch -> Res.string.chat_branch
+                        MessageChange.Regenerate -> Res.string.chat_regenerate
+                        else -> Res.string.chat_edit
+                    },
+                ),
                 onClick = {
                     onDismiss()
                     when (pending?.first) {
@@ -2569,7 +2792,7 @@ private fun ConfirmChange(
 }
 
 @Composable
-private fun AssistantReply(
+internal fun AssistantReply(
     message: ChatMessage.Assistant,
     onBranch: (() -> Unit)?,
     /** Drops this reply and what follows and sends its prompt again; null when it can't. */
@@ -2602,14 +2825,20 @@ private fun AssistantReply(
     val clipboard = LocalClipboard.current
     val scope = rememberCoroutineScope()
     val canMenu = isDesktop && !message.streaming && text.isNotBlank()
+    // Said by the menu and the icons alike; read here, as the menu is built outside composition.
+    val copyLabel = stringResource(Res.string.chat_copy)
+    val regenerateLabel = stringResource(Res.string.chat_regenerate)
+    val branchLabel = stringResource(Res.string.chat_branch_here)
+    val stopReadingLabel = stringResource(Res.string.chat_stop_reading)
+    val readAloudLabel = stringResource(Res.string.chat_read_aloud)
     if (canMenu) {
         RowContextMenu(contextMenuOpen, onDismiss = { contextMenuOpen = false }) {
             listOfNotNull(
-                RowMenuItem("Copy", Lucide.Copy) { scope.launch { clipboard.setClipEntry(plainTextClipEntry(text)) } },
-                onRegenerate?.let { RowMenuItem("Regenerate", Lucide.RefreshCw, run = it) },
-                onBranch?.let { RowMenuItem("Branch from here", Lucide.GitBranch, run = it) },
-                if (reading) RowMenuItem("Stop reading", Lucide.Square, run = onStopReading)
-                else onReadAloud?.let { read -> RowMenuItem("Read aloud", Lucide.Volume2) { read(text) } },
+                RowMenuItem(copyLabel, Lucide.Copy) { scope.launch { clipboard.setClipEntry(plainTextClipEntry(text)) } },
+                onRegenerate?.let { RowMenuItem(regenerateLabel, Lucide.RefreshCw, run = it) },
+                onBranch?.let { RowMenuItem(branchLabel, Lucide.GitBranch, run = it) },
+                if (reading) RowMenuItem(stopReadingLabel, Lucide.Square, run = onStopReading)
+                else onReadAloud?.let { read -> RowMenuItem(readAloudLabel, Lucide.Volume2) { read(text) } },
             )
         }
     }
@@ -2643,14 +2872,20 @@ private fun AssistantReply(
                 MarkdownText(remember(text) { linkFileUris(text) }, streaming = message.streaming)
             }
         }
+        // Screens the agent drew, under what it said and whatever the tool-activity setting: they're for the user to answer.
+        val screens = LocalScreenViews.current
+        message.tools.forEach { call ->
+            screens.byCall[call.id]?.let { key(call.id) { AgentScreenCard(it, newest = it.latest.id in screens.newest) } }
+        }
         if (settings.showLinkPreviews && !message.streaming) LinkPreviewCards(text)
         if (media.isNotEmpty()) ReplyMediaList(media)
         when (message.outcome) {
             TurnOutcome.Error -> Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                 UnstyledIcon(Lucide.CircleAlert, contentDescription = null, tint = Theme[colors][danger], modifier = Modifier.size(16.dp))
-                CopyableOnDesktop { Text(message.error ?: "The turn failed.", style = Theme[typography][bodySmall], color = Theme[colors][danger]) }
+                val error = message.error ?: stringResource(Res.string.chat_turn_failed)
+                CopyableOnDesktop { Text(error, style = Theme[typography][bodySmall], color = Theme[colors][danger]) }
             }
-            TurnOutcome.Interrupted -> Text("Stopped", style = Theme[typography][caption], color = Theme[colors][textTertiary])
+            TurnOutcome.Interrupted -> Text(stringResource(Res.string.chat_stopped), style = Theme[typography][caption], color = Theme[colors][textTertiary])
             else -> Unit
         }
         message.warning?.let { warningText ->
@@ -2678,38 +2913,47 @@ private fun AssistantReply(
                 if (actionable) {
                     // Pointer-sized, as the icons beside it are.
                     CopyButton(text, Modifier.size(32.dp))
-                    onRegenerate?.let { ReplyAction(Lucide.RefreshCw, "Regenerate", it, Modifier) }
-                    onBranch?.let { ReplyAction(Lucide.GitBranch, "Branch from here", it, Modifier) }
+                    onRegenerate?.let { ReplyAction(Lucide.RefreshCw, regenerateLabel, it, Modifier) }
+                    onBranch?.let { ReplyAction(Lucide.GitBranch, branchLabel, it, Modifier) }
                 }
                 usage?.let {
+                    val spoken = stringResource(Res.string.chat_reply_tokens_spoken, compactCount(it.input), compactCount(it.output))
                     Text(
                         replyUsage(it.input, it.output),
                         style = Theme[typography][caption].copy(fontFamily = Theme[typography][code].fontFamily),
                         color = Theme[colors][textMuted],
-                        modifier = Modifier.padding(start = 8.dp).semantics { contentDescription = "${compactCount(it.input)} tokens in, ${compactCount(it.output)} out" },
+                        // On one line in a narrow window at the largest text, as on the phone.
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(start = 8.dp).semantics { contentDescription = spoken },
                     )
                 }
             }
         } else if (actionable || usage != null) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                usage?.let {
+                // The count takes only what the actions leave: at the largest text it ellipsizes instead of squeezing them out.
+                if (usage != null) {
+                    val spoken = stringResource(Res.string.chat_reply_tokens_spoken, compactCount(usage.input), compactCount(usage.output))
                     Text(
-                        replyUsage(it.input, it.output),
+                        replyUsage(usage.input, usage.output),
                         style = Theme[typography][caption].copy(fontFamily = Theme[typography][code].fontFamily),
                         color = Theme[colors][textMuted],
-                        modifier = Modifier.semantics { contentDescription = "${compactCount(it.input)} tokens in, ${compactCount(it.output)} out" },
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f).semantics { contentDescription = spoken },
                     )
+                } else {
+                    Spacer(Modifier.weight(1f))
                 }
-                Spacer(Modifier.weight(1f))
                 if (actionable) {
                     // On the end, under the thumb of the hand holding the phone; Copy, the one used most, sits last.
                     // Copy's padding trimmed off the end lines its icon up with the reply's edge; all of them lose 4dp on top to sit close under it.
                     val action = Modifier.trimEndTop(end = 0.dp, top = 4.dp)
-                    onBranch?.let { ReplyAction(Lucide.GitBranch, "Branch from here", it, action) }
-                    onRegenerate?.let { ReplyAction(Lucide.RefreshCw, "Regenerate", it, action) }
+                    onBranch?.let { ReplyAction(Lucide.GitBranch, branchLabel, it, action) }
+                    onRegenerate?.let { ReplyAction(Lucide.RefreshCw, regenerateLabel, it, action) }
                     when {
-                        reading -> ReplyAction(Lucide.Square, "Stop reading", onStopReading, action)
-                        speakable && onReadAloud != null -> ReplyAction(Lucide.Volume2, "Read aloud", { onReadAloud(text) }, action)
+                        reading -> ReplyAction(Lucide.Square, stopReadingLabel, onStopReading, action)
+                        speakable && onReadAloud != null -> ReplyAction(Lucide.Volume2, readAloudLabel, { onReadAloud(text) }, action)
                     }
                     CopyButton(text, Modifier.trimEndTop(end = 16.dp, top = 4.dp).size(MinTouchTarget))
                 }
@@ -2777,10 +3021,20 @@ private fun UnreadDivider(modifier: Modifier = Modifier) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(Modifier.weight(1f).height(1.dp).background(line))
-        Text("New messages", style = Theme[typography][caption], color = Theme[colors][accentText])
+        Text(stringResource(Res.string.chat_new_messages), style = Theme[typography][caption], color = Theme[colors][accentText])
         Box(Modifier.weight(1f).height(1.dp).background(line))
     }
 }
+
+/**
+ * With reasoning hidden, a finished reply of nothing but reasoning (a step that only thought, or only commented
+ * on its way) would be a bare header: it isn't listed.
+ */
+internal fun List<ChatMessage>.withoutBlankReplies(showReasoning: Boolean): List<ChatMessage> =
+    if (showReasoning) this else filterNot {
+        it is ChatMessage.Assistant && !it.streaming && it.text.isBlank() && it.tools.isEmpty() && it.error == null &&
+            it.warning == null && it.outcome != TurnOutcome.Error && it.outcome != TurnOutcome.Interrupted
+    }
 
 /**
  * The first message newer than [readUpTo] (epoch seconds) that the person would call new: a reply, a prompt
@@ -3016,12 +3270,12 @@ internal fun SuggestedReplyChip(text: String, hazeState: HazeState?, onUse: () -
                 .weight(1f)
                 .heightIn(min = MinTouchTarget)
                 .handCursor()
-                .clickable(role = Role.Button, onClickLabel = "Put in the composer", onClick = onUse)
+                .clickable(role = Role.Button, onClickLabel = stringResource(Res.string.chat_suggestion_use), onClick = onUse)
                 .padding(start = 14.dp, top = 8.dp, bottom = 8.dp, end = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            UnstyledIcon(Lucide.Lightbulb, contentDescription = "Suggested reply", tint = Theme[colors][accentText], modifier = Modifier.size(16.dp))
+            UnstyledIcon(Lucide.Lightbulb, contentDescription = stringResource(Res.string.chat_suggestion), tint = Theme[colors][accentText], modifier = Modifier.size(16.dp))
             Text(
                 text,
                 style = Theme[typography][label],
@@ -3030,7 +3284,7 @@ internal fun SuggestedReplyChip(text: String, hazeState: HazeState?, onUse: () -
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        IconButton(Lucide.X, contentDescription = "Dismiss the suggestion", onClick = onDismiss)
+        IconButton(Lucide.X, contentDescription = stringResource(Res.string.chat_suggestion_dismiss), onClick = onDismiss)
     }
 }
 
@@ -3041,7 +3295,16 @@ internal fun SuggestedReplyChip(text: String, hazeState: HazeState?, onUse: () -
 internal data class MentionChoice(val label: String, val handle: String, val bot: Bot?, val icon: ImageVector? = null)
 
 /** An `@file:` or `@folder:` reference to put in the composer: [insert] in place of the text from [start] to [end]. */
-internal data class RefChoice(val label: String, val shown: String, val icon: ImageVector, val start: Int, val end: Int, val insert: String)
+internal data class RefChoice(
+    val label: String,
+    val shown: String,
+    val icon: ImageVector,
+    val start: Int,
+    val end: Int,
+    val insert: String,
+    /** Set on a reference kind (A file, A folder), which the list names in the app's language instead of [label]. */
+    val kind: PathRefKind? = null,
+)
 
 /**
  * The `@` list's file references for what's being typed, on the desktop: the reference kinds while a bare `@`
@@ -3062,8 +3325,7 @@ internal fun refChoices(mention: MentionQuery?, ref: PathRefQuery?, entries: Lis
     return PathRefKind.entries
         .filter { it.prefix.removePrefix("@").startsWith(mention.query, ignoreCase = true) }
         .map { kind ->
-            val label = if (kind == PathRefKind.File) "A file" else "A folder"
-            RefChoice(label, kind.prefix.removePrefix("@"), if (kind == PathRefKind.File) Lucide.File else Lucide.Folder, mention.start, mention.end, kind.prefix)
+            RefChoice(kind.prefix, kind.prefix.removePrefix("@"), if (kind == PathRefKind.File) Lucide.File else Lucide.Folder, mention.start, mention.end, kind.prefix, kind)
         }
 }
 
@@ -3129,7 +3391,7 @@ internal fun MentionSuggestions(
                     .clickable(
                         interactionSource = null,
                         indication = if (onMark != null) null else LocalIndication.current,
-                        onClickLabel = "Mention ${choice.label}",
+                        onClickLabel = stringResource(Res.string.chat_mention, choice.label),
                     ) { onPick(choice) }
                     .padding(horizontal = 14.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -3151,7 +3413,7 @@ internal fun MentionSuggestions(
 
 /** A tappable one-line header that opens to show more, as the reply's reasoning does. */
 @Composable
-private fun Disclosure(
+internal fun Disclosure(
     icon: @Composable () -> Unit,
     label: String,
     expanded: Boolean,
@@ -3168,7 +3430,7 @@ private fun Disclosure(
             Text(label, style = Theme[typography][bodySmall], color = Theme[colors][textSecondary], maxLines = 1, overflow = TextOverflow.Ellipsis)
             UnstyledIcon(
                 if (expanded) Lucide.ChevronDown else Lucide.ChevronRight,
-                contentDescription = if (expanded) "Collapse" else "Expand",
+                contentDescription = stringResource(if (expanded) Res.string.chat_collapse else Res.string.chat_expand),
                 tint = Theme[colors][textTertiary],
                 modifier = Modifier.size(14.dp),
             )
@@ -3185,13 +3447,13 @@ private fun Disclosure(
     }
 }
 
-/** The reply's reasoning, folded; live progress is the dock's to show. */
+/** The reply's reasoning, folded; live progress is the dock's to show. Opened, it stays open when the activity is made again. */
 @Composable
-private fun Reasoning(text: String, streaming: Boolean) {
-    var expanded by remember { mutableStateOf(false) }
+internal fun Reasoning(text: String, streaming: Boolean) {
+    var expanded by rememberSaveable { mutableStateOf(false) }
     Disclosure(
         icon = { UnstyledIcon(Lucide.Brain, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(16.dp)) },
-        label = "Reasoning",
+        label = stringResource(Res.string.chat_usage_reasoning),
         expanded = expanded,
         onToggle = { expanded = !expanded },
     ) {
@@ -3203,12 +3465,17 @@ private fun Reasoning(text: String, streaming: Boolean) {
     }
 }
 
-/** The tools the reply used, folded; the one running now is named above the composer instead. */
+/**
+ * The tools the reply used, folded; the one running now is named above the composer instead. Opened, it stays open
+ * when the activity is made again, as on unfolding a foldable.
+ */
 @Composable
-private fun Tools(tools: List<ToolActivity>, messageKey: String) {
-    var expanded by remember { mutableStateOf(false) }
+internal fun Tools(tools: List<ToolActivity>, messageKey: String) {
+    var expanded by rememberSaveable(messageKey) { mutableStateOf(false) }
     val icons = remember(tools) { tools.map { toolIcon(it.name) }.distinct().take(3) }
-    val (ran, took) = workedLabel(tools)
+    val (ranWords, took) = workedLabel(tools)
+    val ran = ranWords.text()
+    val expandedState = stringResource(if (expanded) Res.string.chat_expanded else Res.string.chat_collapsed)
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         // A pill: up to three of the kinds of tool it used, overlapping, then how many ran and for how long.
         // It's drawn 36dp tall, but the full touch height around it takes the tap.
@@ -3221,7 +3488,7 @@ private fun Tools(tools: List<ToolActivity>, messageKey: String) {
                 .clickable(interaction, indication = null) { expanded = !expanded }
                 .semantics {
                     contentDescription = listOfNotNull(ran, took).joinToString(", ")
-                    stateDescription = if (expanded) "Expanded" else "Collapsed"
+                    stateDescription = expandedState
                 },
             contentAlignment = Alignment.CenterStart,
         ) {
@@ -3257,7 +3524,8 @@ private fun Tools(tools: List<ToolActivity>, messageKey: String) {
                     .padding(12.dp),
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    tools.forEach { ToolRow(it, messageKey) }
+                    // Keyed, so a row opened before the activity was made again is restored by its tool, not its place.
+                    tools.forEach { key(it.id) { ToolRow(it, messageKey) } }
                 }
             }
         }
@@ -3266,10 +3534,11 @@ private fun Tools(tools: List<ToolActivity>, messageKey: String) {
 
 /**
  * A running reply's finished steps, newest last: a check (or a cross) in a soft circle, what was done, and
- * how long it took. The step in hand is on the live task card instead. Only the last few show.
+ * how long it took. The step in hand is on the live task card instead. Only the last few show. One opened stays
+ * open when the activity is made again, as on unfolding a foldable.
  */
 @Composable
-private fun LiveSteps(tools: List<ToolActivity>, messageKey: String) {
+internal fun LiveSteps(tools: List<ToolActivity>, messageKey: String) {
     val done = tools.filterNot { it.running }
     if (done.isEmpty()) return
     val shown = done.takeLast(LIVE_STEPS_SHOWN)
@@ -3277,7 +3546,7 @@ private fun LiveSteps(tools: List<ToolActivity>, messageKey: String) {
         if (done.size > shown.size) {
             val earlier = done.size - shown.size
             Text(
-                if (earlier == 1) "1 earlier step" else "$earlier earlier steps",
+                pluralStringResource(Res.plurals.chat_earlier_steps, earlier, earlier),
                 style = Theme[typography][caption],
                 color = Theme[colors][textMuted],
                 modifier = Modifier.padding(start = 30.dp, bottom = 4.dp),
@@ -3291,14 +3560,14 @@ private fun LiveSteps(tools: List<ToolActivity>, messageKey: String) {
 @Composable
 private fun LiveStepRow(tool: ToolActivity, messageKey: String) {
     val step = remember(tool) { toolDone(tool) }
-    var open by remember(tool.id) { mutableStateOf(false) }
+    var open by rememberSaveable(tool.id) { mutableStateOf(false) }
     Row(
         Modifier
             .fillMaxWidth()
             .heightIn(min = 36.dp)
             .clip(RoundedCornerShape(Theme[radii][radiusSmall]))
             .handCursor()
-            .clickable(onClickLabel = if (open) "Hide details" else "Show details") { open = !open },
+            .clickable(onClickLabel = stringResource(if (open) Res.string.chat_hide_details else Res.string.chat_show_details)) { open = !open },
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -3308,13 +3577,13 @@ private fun LiveStepRow(tool: ToolActivity, messageKey: String) {
         ) {
             UnstyledIcon(
                 if (tool.failed) Lucide.X else Lucide.Check,
-                contentDescription = if (tool.failed) "Failed" else null,
+                contentDescription = if (tool.failed) stringResource(Res.string.chat_tool_failed) else null,
                 tint = Theme[colors][if (tool.failed) danger else success],
                 modifier = Modifier.size(11.dp),
             )
         }
         Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(step.title, style = Theme[typography][bodySmall], color = Theme[colors][textTertiary], maxLines = 1)
+            Text(step.title.text(), style = Theme[typography][bodySmall], color = Theme[colors][textTertiary], maxLines = 1)
             step.detail?.let {
                 Text(
                     it,
@@ -3331,7 +3600,7 @@ private fun LiveStepRow(tool: ToolActivity, messageKey: String) {
         }
         // A scan flagged its output: said on the row, so it's seen while Stop is still worth pressing.
         if (tool.risk != null) {
-            UnstyledIcon(Lucide.ShieldAlert, contentDescription = "Suspicious output", tint = Theme[colors][warning], modifier = Modifier.size(14.dp))
+            UnstyledIcon(Lucide.ShieldAlert, contentDescription = stringResource(Res.string.chat_tool_suspicious), tint = Theme[colors][warning], modifier = Modifier.size(14.dp))
         }
         tool.durationSeconds?.let { Text(formatDuration(it), style = Theme[typography][caption], color = Theme[colors][textMuted]) }
     }
@@ -3368,9 +3637,9 @@ private fun ToolKindIcon(icon: ImageVector) {
  * "Ran 3 tools" and the time they took between them ("42s"), for the reply's tool pill; no time when none
  * was timed. It's the tools' own time added up, not the turn's: calls run side by side each count.
  */
-internal fun workedLabel(tools: List<ToolActivity>): Pair<String, String?> {
+internal fun workedLabel(tools: List<ToolActivity>): Pair<Words, String?> {
     val timed = tools.mapNotNull { it.durationSeconds }
-    val ran = if (tools.size == 1) "Ran 1 tool" else "Ran ${tools.size} tools"
+    val ran = Words.Count(Res.plurals.chat_tools_ran, tools.size)
     return ran to timed.takeIf { it.isNotEmpty() }?.let { formatDuration(it.sum()) }
 }
 
@@ -3398,26 +3667,28 @@ private fun ChatState.livePlan(): TodoList? = todos?.takeIf { todosLive }
  * The one line that says what the agent is doing now, most specific first: waiting on the user, a tool
  * at work, the plan's step in hand, the gateway's status text, else thinking.
  */
+@Composable
 internal fun currentAction(state: ChatState): String = currentStep(state).let { step ->
-    val title = step.teamProgress?.let { "${step.title} · $it" } ?: step.title
-    step.detail?.let { "$title: $it" } ?: title
+    val title = step.teamProgress?.let { "${step.title.text()} · ${it.text()}" } ?: step.title.text()
+    step.detail?.let { stringResource(Res.string.chat_detail_line, title, it) } ?: title
 }
 
 /**
  * What the agent is doing now, in words, and what it's doing it to (a path, a command) when a tool says.
  * [team] is how each subagent of the running delegation stands, in task order.
  */
-internal data class LiveStep(val title: String, val detail: String? = null, val team: List<SubagentStatus> = emptyList()) {
+internal data class LiveStep(val title: Words, val detail: String? = null, val team: List<SubagentStatus> = emptyList()) {
     /** "1 of 3 done", while subagents work; "finished" once any of those ended without succeeding. */
-    val teamProgress: String? get() = team.takeIf { it.isNotEmpty() }?.let { all ->
+    val teamProgress: Words? get() = team.takeIf { it.isNotEmpty() }?.let { all ->
         val ended = all.filterNot { it.live }
-        "${ended.size} of ${all.size} ${if (ended.all { it == SubagentStatus.Done }) "done" else "finished"}"
+        val res = if (ended.all { it == SubagentStatus.Done }) Res.string.chat_team_done else Res.string.chat_team_finished
+        Words.Of(res, listOf(ended.size, all.size))
     }
 }
 
 /** [currentAction] in its two parts, for the live task card. */
 internal fun currentStep(state: ChatState): LiveStep {
-    if (state.inputRequests.isNotEmpty()) return LiveStep("Waiting for your answer")
+    if (state.inputRequests.isNotEmpty()) return LiveStep(Words.Of(Res.string.chat_screen_waiting))
     state.runningTool()?.let { tool ->
         if (tool.name == "delegate_task") {
             // The same rows the delegation's cards show, tasks not started yet included.
@@ -3426,12 +3697,12 @@ internal fun currentStep(state: ChatState): LiveStep {
         }
         return LiveStep(tool.name.toolVerb(), tool.firstDetailLine())
     }
-    state.livePlan()?.items?.firstOrNull { it.status == TodoStatus.InProgress }?.let { return LiveStep(it.content) }
+    state.livePlan()?.items?.firstOrNull { it.status == TodoStatus.InProgress }?.let { return LiveStep(Words.Said(it.content)) }
     state.status?.takeIf { it.isNotBlank() }?.let { status ->
         // A turn woken by another bot's reply arriving says so, not the runner's command line.
-        return LiveStep(if (BOT_DELIVERY_STATUS.containsMatchIn(status)) "Reading another bot's reply" else status)
+        return LiveStep(if (BOT_DELIVERY_STATUS.containsMatchIn(status)) Words.Of(Res.string.chat_step_reading_bot_reply) else Words.Said(status))
     }
-    return LiveStep(state.thinkingFrame ?: "Thinking…")
+    return LiveStep(state.thinkingFrame?.let { Words.Said(it) } ?: Words.Of(Res.string.chat_thinking))
 }
 
 /** What the tool is working on, in one line: its description, else what it was given when that's plain (a command, a query) rather than JSON. */
@@ -3451,22 +3722,34 @@ internal fun runningTurnKey(state: ChatState): String? =
 
 /** A finished step in a running reply, said in the past: "Ran" and the command, "Read" and the file. */
 internal fun toolDone(tool: ToolActivity): LiveStep {
-    val verb = when (tool.name) {
-        "terminal", "shell", "bash", "execute_code" -> "Ran"
-        "read_file", "file_read", "web_extract", "browser", "fetch" -> "Read"
-        "write_file", "patch", "edit_file" -> "Edited"
-        "web_search", "search", "search_files", "session_search" -> "Searched"
-        "delegate_task" -> "Delegated"
-        MESSAGE_AGENT_TOOL -> "Messaged"
-        else -> return LiveStep("Used ${tool.name.replace('_', ' ')}", tool.firstDetailLine())
+    val name = tool.name.replace('_', ' ')
+    // The verb alone goes before the detail; without one, the verb says which tool did it.
+    val (verb, verbWith) = when (tool.name) {
+        "terminal", "shell", "bash", "execute_code" -> Res.string.chat_done_ran to Res.string.chat_done_ran_with
+        "read_file", "file_read", "web_extract", "browser", "fetch" -> Res.string.chat_done_read to Res.string.chat_done_read_with
+        "write_file", "patch", "edit_file" -> Res.string.chat_done_edited to Res.string.chat_done_edited_with
+        "web_search", "search", "search_files", "session_search" -> Res.string.chat_done_searched to Res.string.chat_done_searched_with
+        "delegate_task" -> Res.string.chat_done_delegated to Res.string.chat_done_delegated_with
+        MESSAGE_AGENT_TOOL -> Res.string.chat_done_messaged to Res.string.chat_done_messaged_with
+        else -> return LiveStep(Words.Of(Res.string.chat_done_used, listOf(name)), tool.firstDetailLine())
     }
-    return tool.firstDetailLine()?.let { LiveStep(verb, it) } ?: LiveStep("$verb with ${tool.name.replace('_', ' ')}")
+    return tool.firstDetailLine()?.let { LiveStep(Words.Of(verb), it) } ?: LiveStep(Words.Of(verbWith, listOf(name)))
 }
 
 /** The status of a turn started by a bot-to-bot delivery finishing (tools/bot_mode_dm.py's runner). */
 private val BOT_DELIVERY_STATUS = Regex("""Background Process Finished:.*(?:bot_mode_dm\.py|--run-delivery)""", RegexOption.IGNORE_CASE)
 
-private fun String.toolVerb(): String = toolInProgress(this)
+/** What a tool at work is doing, as core's [toolInProgress] says it, in the app's language. */
+private fun String.toolVerb(): Words = when (this) {
+    "terminal", "shell", "bash" -> Words.Of(Res.string.chat_step_running_command)
+    "read_file", "file_read" -> Words.Of(Res.string.chat_step_reading_file)
+    "write_file", "patch", "edit_file" -> Words.Of(Res.string.chat_step_editing_file)
+    "web_search", "search" -> Words.Of(Res.string.chat_step_searching_web)
+    "web_extract", "browser", "fetch" -> Words.Of(Res.string.chat_step_reading_page)
+    "delegate_task" -> Words.Of(Res.string.chat_step_delegating)
+    MESSAGE_AGENT_TOOL -> Words.Of(Res.string.chat_step_messaging_bot)
+    else -> Words.Of(Res.string.chat_step_using, listOf(replace('_', ' ')))
+}
 
 /** A passing message, like where a file was saved. */
 @Composable
@@ -3513,10 +3796,45 @@ private fun Banner(message: String, actionLabel: String?, onAction: () -> Unit, 
             if (actionLabel != null) {
                 Button(actionLabel, onClick = onAction, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
             } else {
-                IconButton(Lucide.X, contentDescription = "Dismiss", onClick = onAction)
+                IconButton(Lucide.X, contentDescription = stringResource(Res.string.chat_dismiss), onClick = onAction)
             }
         }
     }
+}
+
+/**
+ * The composer's editable field: UnstyledTextField and its TextInput, except that the text gets the field's
+ * full width. TextInput's Box measured the text at its own width and put it at the start, so a Hebrew line in
+ * an English UI sat on the left, and a Hebrew paragraph above an English one lined up with it. The body
+ * style already resolves direction per paragraph; at full width each paragraph also goes to its own side.
+ * Split out of [Composer] so a host test can measure it.
+ */
+@Composable
+internal fun ComposerTextInput(
+    state: TextFieldState,
+    modifier: Modifier = Modifier,
+    maxHeightInLines: Int = 8,
+    onTextLayout: (Density.(getResult: () -> TextLayoutResult?) -> Unit)? = null,
+    placeholder: @Composable () -> Unit,
+) {
+    BasicTextField(
+        state = state,
+        textStyle = Theme[typography][body].copy(color = Theme[colors][textColor]),
+        cursorBrush = SolidColor(Theme[colors][accent]),
+        lineLimits = TextFieldLineLimits.MultiLine(maxHeightInLines = maxHeightInLines),
+        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
+        onTextLayout = onTextLayout,
+        modifier = modifier.semantics(mergeDescendants = true) {},
+        decorator = { innerTextField ->
+            Box(Modifier.fillMaxWidth().pointerHoverIcon(PointerIcon.Text, overrideDescendants = true).clipToBounds()) {
+                if (state.text.isEmpty()) {
+                    Box(Modifier.matchParentSize(), contentAlignment = Alignment.TopStart) { placeholder() }
+                }
+                // The text measures at the width it's given as a minimum; without this it shrinks to its widest line.
+                Box(Modifier.fillMaxWidth(), propagateMinConstraints = true) { innerTextField() }
+            }
+        },
+    )
 }
 
 /**
@@ -3605,16 +3923,8 @@ private fun Composer(
                         CommentTray(comments, focusComment = focusComment, onFocused = onCommentFocused, onRemove = actions::removeComment)
                     }
                     if (attachments.isNotEmpty()) ComposerTray(attachments, onRemove = actions::removeAttachment)
-                    UnstyledTextField(
+                    ComposerTextInput(
                         state = actions.composer,
-                        textStyle = Theme[typography][body],
-                        textColor = Theme[colors][textColor],
-                        cursorBrush = SolidColor(Theme[colors][accent]),
-                        // UnstyledTextField defaults to unspecified colors, which hides the selection and its handles.
-                        selectionColors = LocalTextSelectionColors.current,
-                        // A desktop window is tall enough to see more of a long prompt before it scrolls.
-                        lineLimits = TextFieldLineLimits.MultiLine(maxHeightInLines = if (isDesktop) 14 else 8),
-                        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
                         modifier = Modifier.fillMaxWidth().heightIn(min = 28.dp).padding(horizontal = 12.dp).focusRequester(focus)
                             .onFocusChanged { fold.typing = it.hasFocus }
                             .then(
@@ -3627,23 +3937,21 @@ private fun Composer(
                                     }
                                 },
                             ),
-                    ) {
-                        TextInput(
-                            placeholder = {
-                                Text(
-                                    when {
-                                        !connected -> "Reconnecting to Hermes…"
-                                        comments.isNotEmpty() -> "Anything else? (optional)"
-                                        // Mid-task a message joins the running task, by Queue or Steer.
-                                        state.running -> "Add to this task…"
-                                        else -> placeholder
-                                    },
-                                    style = Theme[typography][body],
-                                    color = Theme[colors][textTertiary],
-                                )
-                            },
-                        )
-                    }
+                        maxHeightInLines = if (isDesktop) 14 else 8,
+                        placeholder = {
+                            Text(
+                                when {
+                                    !connected -> stringResource(Res.string.chat_composer_reconnecting)
+                                    comments.isNotEmpty() -> stringResource(Res.string.chat_composer_anything_else)
+                                    // Mid-task a message joins the running task, by Queue or Steer.
+                                    state.running -> stringResource(Res.string.chat_composer_add_to_task)
+                                    else -> placeholder
+                                },
+                                style = Theme[typography][body],
+                                color = Theme[colors][textTertiary],
+                            )
+                        },
+                    )
                     // The same test send() makes: with attachments, slash text goes out as a prompt, not a command.
                     val command = attachments.isEmpty() && SlashCommand.parse(actions.composer.text.toString().trim()) != null
                     // A steer can't carry files; send() queues those instead, so say that.
@@ -3651,7 +3959,7 @@ private fun Composer(
                     // Mid-turn, say what Send will do with the message.
                     if (state.running && editing) {
                         Text(
-                            "Send the edit once this reply finishes.",
+                            stringResource(Res.string.chat_composer_edit_waits),
                             style = Theme[typography][caption],
                             color = Theme[colors][textTertiary],
                             modifier = Modifier.padding(start = 12.dp, top = 10.dp),
@@ -3672,7 +3980,7 @@ private fun Composer(
                         }
                         if (showMic(dictation)) Snug { DictationButton(dictation, onClick = onDictate, enabled = connected) }
                         // Voice chat waits for the task to end, so while one runs its place goes to the ways to send.
-                        if (hasVoice && !state.running) Snug { VoiceChatButton(onClick = onVoiceChat, enabled = connected && !dictation.active) }
+                        if (hasSpeechPlayback && !state.running) Snug { VoiceChatButton(onClick = onVoiceChat, enabled = connected && !dictation.active) }
                         // Stop is on the live task card above; a message typed meanwhile is queued or steers the task.
                         if (state.running && hasText && !editing) {
                             if (command) {
@@ -3696,8 +4004,8 @@ private fun Composer(
             {
                 FoldedComposer(
                     placeholder = when {
-                        !connected -> "Reconnecting to Hermes…"
-                        state.running -> "Add to this task…"
+                        !connected -> stringResource(Res.string.chat_composer_reconnecting)
+                        state.running -> stringResource(Res.string.chat_composer_add_to_task)
                         else -> placeholder
                     },
                     state = state,
@@ -3795,9 +4103,10 @@ private fun FoldedComposer(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         AttachButton(onClick = onAttach, enabled = canAttach)
+        val writeLabel = stringResource(Res.string.chat_write_message)
         UnstyledButton(
             onClick = onOpen,
-            modifier = Modifier.weight(1f).heightIn(min = MinTouchTarget).handCursor().semantics { contentDescription = "Write a message" },
+            modifier = Modifier.weight(1f).heightIn(min = MinTouchTarget).handCursor().semantics { contentDescription = writeLabel },
             indication = null,
         ) {
             Box(Modifier.fillMaxWidth().padding(horizontal = 4.dp), contentAlignment = Alignment.CenterStart) {
@@ -3812,7 +4121,7 @@ private fun FoldedComposer(
         }
         if (showMic(dictation)) Snug { DictationButton(dictation, onClick = onDictate, enabled = connected) }
         // Stop is on the live task card above, so this stays voice chat, which waits for the task to end.
-        if (hasVoice) Snug { VoiceChatButton(onClick = onVoiceChat, enabled = connected && !dictation.active && !state.running) }
+        if (hasSpeechPlayback) Snug { VoiceChatButton(onClick = onVoiceChat, enabled = connected && !dictation.active && !state.running) }
     }
 }
 
@@ -3824,7 +4133,7 @@ private fun showMic(dictation: DictationState): Boolean = hasVoice && LocalAppSe
 @Composable
 private fun CommandHint() {
     Text(
-        "Commands run right away.",
+        stringResource(Res.string.chat_commands_run_now),
         style = Theme[typography][caption],
         color = Theme[colors][textTertiary],
         modifier = Modifier.padding(start = 12.dp, end = 4.dp, top = 10.dp),
@@ -3846,6 +4155,12 @@ private fun RunningSendSegments(mode: RunningSend, attachments: Boolean, enabled
     var menuOpen by remember { mutableStateOf(false) }
     val shown = runningSegments(mode)
     val others = RunningSend.entries.filter { it !in shown && !(it == RunningSend.Steer && attachments) }
+    // Read for every mode up front: the semantics below are set outside composition.
+    val labels = RunningSend.entries.associateWith { stringResource(it.label) }
+    val summaries = RunningSend.entries.associateWith { stringResource(it.summary) }
+    val sendLabel = stringResource(Res.string.chat_send)
+    val otherWaysLabel = stringResource(Res.string.chat_send_other_ways)
+    val noFilesState = stringResource(Res.string.chat_send_no_files)
     DropdownMenu(
         expanded = menuOpen,
         onExpandedChange = { menuOpen = it },
@@ -3853,7 +4168,7 @@ private fun RunningSendSegments(mode: RunningSend, attachments: Boolean, enabled
         above = true,
         items = {
             others.forEach { choice ->
-                MenuAction(choice.label, choice.icon, onClick = {
+                MenuAction(labels.getValue(choice), choice.icon, onClick = {
                     menuOpen = false
                     onSend(choice)
                 })
@@ -3894,19 +4209,19 @@ private fun RunningSendSegments(mode: RunningSend, attachments: Boolean, enabled
                                     menuOpen = true
                                 }
                             },
-                            onClickLabel = "Send",
-                            onLongClickLabel = "Other ways to send",
+                            onClickLabel = sendLabel,
+                            onLongClickLabel = otherWaysLabel,
                             interactionSource = interaction,
                             indication = null,
                         )
                         // A mouse finds the other ways with a right-click, as it can't feel a long press.
                         .then(if (isDesktop && others.isNotEmpty()) Modifier.onSecondaryPress { menuOpen = true } else Modifier)
                         .semantics {
-                            contentDescription = "${way.label}: ${way.summary}"
+                            contentDescription = "${labels.getValue(way)}: ${summaries.getValue(way)}"
                             role = Role.Button
                             // The filled half is the setting's way; a steer can't carry files.
                             selected = on
-                            if (enabled && !usable) stateDescription = "Can't carry files"
+                            if (enabled && !usable) stateDescription = noFilesState
                         },
                     contentAlignment = Alignment.Center,
                 ) {
@@ -3924,7 +4239,7 @@ private fun RunningSendSegments(mode: RunningSend, attachments: Boolean, enabled
                     ) {
                         UnstyledIcon(way.icon, contentDescription = null, tint = tint, modifier = Modifier.size(13.dp))
                         Text(
-                            way.label,
+                            labels.getValue(way),
                             style = Theme[typography][label].copy(fontWeight = if (on) FontWeight.SemiBold else FontWeight.Medium),
                             color = tint,
                             maxLines = 1,
@@ -3942,12 +4257,12 @@ internal val DockShadow =Shadow(radius = 24.dp, color = Color.Black.copy(alpha =
 /** The composer's +. */
 @Composable
 private fun AttachButton(onClick: () -> Unit, enabled: Boolean) =
-    DiscButton(Lucide.Plus, contentDescription = "Add photos or files", onClick = onClick, enabled = enabled, iconSize = 20.dp)
+    DiscButton(Lucide.Plus, contentDescription = stringResource(Res.string.chat_add_files), onClick = onClick, enabled = enabled, iconSize = 20.dp)
 
 /** Voice chat, on a disc like + and Send so the row reads as three round buttons and the mic. */
 @Composable
 private fun VoiceChatButton(onClick: () -> Unit, enabled: Boolean) =
-    DiscButton(Lucide.AudioLines, contentDescription = "Start a voice chat", onClick = onClick, enabled = enabled, iconSize = 19.dp)
+    DiscButton(Lucide.AudioLines, contentDescription = stringResource(Res.string.chat_start_voice), onClick = onClick, enabled = enabled, iconSize = 19.dp)
 
 /** A composer button drawn as a 36dp disc, with the full touch target around it. */
 @Composable
@@ -4029,10 +4344,12 @@ internal fun SendButton(icon: SendIcon, onClick: () -> Unit, enabled: Boolean) {
     val interaction = remember { MutableInteractionSource() }
     // With its key on the desktop, where Enter sends and Esc stops.
     Tooltip(
-        when (icon) {
-            SendIcon.Send -> "Send (Enter)"
-            SendIcon.Stop -> "Stop the task (Esc)"
-        },
+        stringResource(
+            when (icon) {
+                SendIcon.Send -> Res.string.chat_send_tooltip
+                SendIcon.Stop -> Res.string.chat_stop_task_tooltip
+            },
+        ),
     ) {
     Box(
         Modifier
@@ -4047,10 +4364,12 @@ internal fun SendButton(icon: SendIcon, onClick: () -> Unit, enabled: Boolean) {
                     SendIcon.Send -> Lucide.ArrowUp
                     SendIcon.Stop -> Lucide.Square
                 },
-                contentDescription = when (icon) {
-                    SendIcon.Send -> "Send"
-                    SendIcon.Stop -> "Stop the task"
-                },
+                contentDescription = stringResource(
+                    when (icon) {
+                        SendIcon.Send -> Res.string.chat_send
+                        SendIcon.Stop -> Res.string.chat_stop_task
+                    },
+                ),
                 tint = tint,
                 modifier = Modifier.size(if (icon == SendIcon.Stop) 15.dp else 19.dp),
             )
@@ -4101,12 +4420,12 @@ internal fun DictationButton(state: DictationState, onClick: () -> Unit, enabled
         onClick = onClick,
         enabled = enabled,
         tint = tint,
-        label = if (recording) "Finish dictating" else "Dictate",
+        label = stringResource(if (recording) Res.string.chat_finish_dictating else Res.string.chat_dictate),
         disc = if (recording) Modifier.border(2.dp, tint.copy(alpha = 0.25f + 0.75f * state.level), CircleShape) else Modifier,
     ) {
         UnstyledIcon(
             if (recording) Lucide.Square else Lucide.Mic,
-            contentDescription = if (recording) "Finish dictating" else "Dictate",
+            contentDescription = stringResource(if (recording) Res.string.chat_finish_dictating else Res.string.chat_dictate),
             tint = tint,
             modifier = Modifier.size(if (recording) 15.dp else 19.dp),
         )
@@ -4135,15 +4454,22 @@ private fun ModelPill(
     val bounds = LocalModelPillBounds.current
     // Gone (no model, a question in the composer's place), the picker opens centred rather than over where it was.
     if (bounds != null) DisposableEffect(bounds) { onDispose { bounds.value = null } }
+    val effortName = effort?.let { effortLabel(it) }
+    val changeModel = stringResource(Res.string.chat_change_model)
+    val spoken = stringResource(
+        Res.string.chat_model_pill_spoken,
+        listOfNotNull(name, effortName, stringResource(Res.string.chat_model_fast_spoken).takeIf { fast }).joinToString(", "),
+        changeModel,
+    )
     // Drawn 36dp tall; the full touch height around it takes the tap.
-    Tooltip("Change model (${keysLabel("Ctrl+Shift+M")})", modifier) { Box(
+    Tooltip("$changeModel (${keysLabel("Ctrl+Shift+M")})", modifier) { Box(
         Modifier
             .then(if (bounds != null) Modifier.onGloballyPositioned { bounds.value = it.boundsInWindow() } else Modifier)
             .heightIn(min = MinTouchTarget)
             .handCursor()
             .clickable(interaction, indication = null, role = Role.Button, onClick = onClick)
             .semantics {
-                contentDescription = listOfNotNull(name, effort?.label, "fast mode".takeIf { fast }).joinToString(", ") + ". Change model"
+                contentDescription = spoken
             },
         contentAlignment = Alignment.CenterStart,
     ) {
@@ -4178,7 +4504,7 @@ private fun ModelPill(
             )
             if (effort != null) {
                 Text("|", style = Theme[typography][caption], color = Theme[colors][textMuted])
-                Text(effort.label, style = Theme[typography][caption], color = Theme[colors][textTertiary], maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(effortName.orEmpty(), style = Theme[typography][caption], color = Theme[colors][textTertiary], maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             UnstyledIcon(Lucide.ChevronDown, contentDescription = null, tint = Theme[colors][textMuted], modifier = Modifier.size(12.dp))
         }
@@ -4192,5 +4518,10 @@ private fun ModelPill(
 private fun Modifier.trimEndTop(end: Dp, top: Dp) = layout { measurable, constraints ->
     val placeable = measurable.measure(constraints)
     val dy = top.roundToPx()
-    layout(placeable.width - end.roundToPx(), placeable.height - dy) { placeable.placeRelative(0, -dy) }
+    val size = trimmedSize(placeable.width, placeable.height, end.roundToPx(), dy)
+    layout(size.width, size.height) { placeable.placeRelative(0, -dy) }
 }
+
+/** What [trimEndTop] leaves of a [width] by [height] element, never below nothing: the largest text can squeeze one narrower than its trim. */
+internal fun trimmedSize(width: Int, height: Int, end: Int, top: Int): IntSize =
+    IntSize((width - end).coerceAtLeast(0), (height - top).coerceAtLeast(0))

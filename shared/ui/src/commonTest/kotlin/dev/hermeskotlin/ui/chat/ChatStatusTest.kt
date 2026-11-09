@@ -6,31 +6,35 @@ import dev.hermeskotlin.core.chat.InputRequest
 import dev.hermeskotlin.core.chat.TodoItem
 import dev.hermeskotlin.core.chat.TodoList
 import dev.hermeskotlin.core.chat.TodoStatus
+import dev.hermeskotlin.ui.resources.*
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
+/** The status line's choice of words; the words themselves are the catalogue's. */
 class ChatStatusTest {
 
     private fun plan(vararg statuses: TodoStatus) =
         TodoList(statuses.mapIndexed { i, s -> TodoItem("$i", "Step $i", s) }, revision = 1)
 
     private fun status(state: ChatState, connected: Boolean = true, place: String? = "homelab") =
-        chatStatus(state, connected, connectionLabel = "Reconnecting…", place = place)
+        chatStatusPick(state, connected, connectionLabel = "Reconnecting…", place = place)
+
+    private val working = ChatStatusPick(Words.Of(Res.string.chat_status_working), StatusTone.Busy)
 
     @Test
     fun beingOfflineOutranksEverything() {
         val state = ChatState(running = true, inputRequests = listOf(InputRequest.Clarify("r1", emptyList())))
 
-        assertEquals(BarStatus("Reconnecting…", StatusTone.Trouble), status(state, connected = false))
+        assertEquals(ChatStatusPick(Words.Said("Reconnecting…"), StatusTone.Trouble), status(state, connected = false))
     }
 
     @Test
     fun openingThenAnAnswerThenWork() {
         val asking = ChatState(running = true, inputRequests = listOf(InputRequest.Clarify("r1", emptyList())))
 
-        assertEquals(BarStatus("Opening…", StatusTone.Busy), status(asking.copy(attachment = Attachment.Attaching)))
-        assertEquals(BarStatus("Needs your answer", StatusTone.Waiting), status(asking))
-        assertEquals(BarStatus("Working", StatusTone.Busy), status(ChatState(running = true)))
+        assertEquals(ChatStatusPick(Words.Of(Res.string.chat_screen_opening), StatusTone.Busy), status(asking.copy(attachment = Attachment.Attaching)))
+        assertEquals(ChatStatusPick(Words.Of(Res.string.chat_status_needs_answer), StatusTone.Waiting), status(asking))
+        assertEquals(working, status(ChatState(running = true)))
     }
 
     @Test
@@ -42,7 +46,7 @@ class ChatStatusTest {
         )
 
         // The cancelled step counts on neither side.
-        assertEquals(BarStatus("Working · step 2 of 3", StatusTone.Busy), status(state))
+        assertEquals(ChatStatusPick(Words.Of(Res.string.chat_status_working_step, listOf(2, 3)), StatusTone.Busy), status(state))
     }
 
     @Test
@@ -51,26 +55,27 @@ class ChatStatusTest {
         val allCancelled = ChatState(running = true, todos = plan(TodoStatus.Cancelled), todosLive = true)
         val empty = ChatState(running = true, todos = TodoList(emptyList(), revision = 2), todosLive = true)
 
-        listOf(allDone, allCancelled, empty).forEach { assertEquals(BarStatus("Working", StatusTone.Busy), status(it)) }
+        listOf(allDone, allCancelled, empty).forEach { assertEquals(working, status(it)) }
     }
 
     @Test
     fun aPlanFromAnEarlierTurnIsNotCounted() {
         val state = ChatState(running = true, todos = plan(TodoStatus.Completed, TodoStatus.InProgress), todosLive = false)
 
-        assertEquals(BarStatus("Working", StatusTone.Busy), status(state))
+        assertEquals(working, status(state))
     }
 
     @Test
     fun idleSaysWhereHermesRuns() {
-        assertEquals(BarStatus("Hermes · homelab", StatusTone.Ok), status(ChatState()))
-        assertEquals(BarStatus("Hermes", StatusTone.Ok), status(ChatState(), place = null))
+        assertEquals(ChatStatusPick(Words.Said("Hermes · homelab"), StatusTone.Ok), status(ChatState()))
+        assertEquals(ChatStatusPick(Words.Said("Hermes"), StatusTone.Ok), status(ChatState(), place = null))
     }
 
     @Test
     fun theGreetingNamesThePlaceAndProfile() {
-        assertEquals("Hermes on homelab · work profile", greetingPlace("homelab", "work"))
-        assertEquals("Hermes on homelab · default profile", greetingPlace("homelab", null))
-        assertEquals("Hermes · default profile", greetingPlace(null, null))
+        assertEquals(Words.Of(Res.string.chat_greeting_place_profile, listOf("homelab", "work")), greetingPlace("homelab", "work"))
+        assertEquals(Words.Of(Res.string.chat_greeting_place_default, listOf("homelab")), greetingPlace("homelab", null))
+        assertEquals(Words.Of(Res.string.chat_greeting_profile, listOf("work")), greetingPlace(null, "work"))
+        assertEquals(Words.Of(Res.string.chat_greeting_default), greetingPlace(null, null))
     }
 }

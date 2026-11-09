@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="phone_intro">Laissez l’agent utiliser ce téléphone : lire son état, ou y faire quelque chose. Chaque outil est désactivé tant que vous ne l’activez pas, et tout ce qui modifie le téléphone vous demande d’abord : dans Kyllene quand l’app est ouverte, sinon par une notification. Un outil que vous désactivez est retiré à l’agent aussitôt.</string>
+    <string name="phone_install_what">Il propose à l’agent les outils que vous activez ici et transmet leurs appels à ce téléphone.</string>
+    <string name="phone_let_agent">Laisser l’agent utiliser ce téléphone</string>
+    <string name="phone_set_up">Configurer sur le Gateway</string>
+    <string name="phone_allow">Autoriser sur ce téléphone</string>
+    <string name="phone_section_tools">Outils</string>
+    <string name="phone_section_calls">Appels</string>
+    <string name="phone_section_phones">Téléphones</string>
+    <string name="phone_section_used">Utilisés récemment</string>
+
+    <string name="phone_status_off">Désactivé. L’agent ne peut pas utiliser ce téléphone.</string>
+    <string name="phone_status_none">Activé. Activez ci-dessous chaque outil que l’agent peut utiliser.</string>
+    <plurals name="phone_status_count">
+        <item quantity="one">Activé. Les nouveaux chats peuvent utiliser %1$d outil.</item>
+        <item quantity="other">Activé. Les nouveaux chats peuvent utiliser %1$d outils.</item>
+    </plurals>
+    <string name="phone_status_offline">En attente de connexion au Gateway.</string>
+    <string name="phone_status_working">Configuration avec le Gateway…</string>
+    <string name="phone_status_not_installed">Nécessite le plugin herald-push sur le Gateway.</string>
+    <string name="phone_status_outdated">Le plugin herald-push du Gateway est en %1$s ; les outils du téléphone demandent %2$s. Mettez-le à jour ci-dessous.</string>
+    <string name="phone_status_too_old">Le plugin herald-push du Gateway est trop ancien.</string>
+    <string name="phone_status_refused">Le Gateway a refusé.</string>
+
+    <string name="phone_rings_title">M’appeler pour une réponse</string>
+    <string name="phone_rings_detail">Chaque approbation ou question d’un chat que vous ne regardez pas sonne comme un appel. Refusez-le pour la notification habituelle. Ça ne sonne que chez vous : l’agent n’appelle jamais personne depuis ce téléphone.</string>
+    <string name="phone_rings_talk_title">Parler quand je réponds</string>
+    <string name="phone_rings_talk_detail">Répondre met Hermes en ligne : il pose la question à sa façon, vous répondez à voix haute et pouvez continuer à parler. Désactivé, Répondre ouvre le chat.</string>
+    <string name="phone_watch_rings_title">Faire sonner ma montre aussi</string>
+    <string name="phone_watch_rings_detail">Kyllene sonne aussi sur votre montre. Sur une montre Wear OS, Répondre lance un appel depuis la montre, si votre Gateway parle en direct. Sur une Pebble, Répondre y affiche la question si Répondre sur la Pebble est activé ; sinon, répondez sur le téléphone.</string>
+    <string name="phone_quiet_title">Heures calmes</string>
+    <string name="phone_quiet_empty">Elles commencent et finissent à %1$s, donc rien n’est calme : choisissez une autre heure.</string>
+    <string name="phone_quiet_window">Rien ne sonne de %1$s à %2$s.</string>
+    <string name="phone_quiet_off">Rien ne sonne entre les heures choisies.</string>
+    <string name="phone_quiet_detail">%1$s L’agent est invité à vous joindre autrement ; approbations et questions arrivent en notifications. Ne pas déranger les coupe aussi, sauf si vous laissez Kyllene l’interrompre. Un deuxième appel du même chat en 15 minutes passe, comme un appel répété.</string>
+    <string name="phone_quiet_starts">Début</string>
+    <string name="phone_quiet_ends">Fin</string>
+    <string name="phone_quiet_start_title">Début des heures calmes</string>
+    <string name="phone_quiet_end_title">Fin des heures calmes</string>
+    <string name="phone_quiet_set">Valider</string>
+    <string name="phone_later_hour">Heure suivante</string>
+    <string name="phone_earlier_hour">Heure précédente</string>
+    <string name="phone_later_minutes">Minutes suivantes</string>
+    <string name="phone_earlier_minutes">Minutes précédentes</string>
+
+    <string name="phone_phones_note">Un chat envoyé depuis un téléphone utilise ce téléphone. Les tâches planifiées et les chats de Hermes Desktop ou du tableau de bord utilisent le premier téléphone de cette liste où l’outil est activé. Un téléphone retiré revient si Kyllene y est encore connecté avec les outils du téléphone activés.</string>
+    <string name="phone_this_phone">%1$s · Ce téléphone</string>
+    <string name="phone_move_up">Monter %1$s</string>
+    <string name="phone_move_down">Descendre %1$s</string>
+    <string name="phone_remove">Retirer %1$s</string>
+    <string name="phone_no_tools">Aucun outil activé</string>
+    <plurals name="phone_tools_on">
+        <item quantity="one">%1$d outil activé</item>
+        <item quantity="other">%1$d outils activés</item>
+    </plurals>
+    <string name="phone_used_ago">%1$s · utilisé il y a %2$s</string>
+    <string name="phone_used_just_now">%1$s · utilisé à l’instant</string>
+    <string name="phone_seen_ago">%1$s · vu il y a %2$s</string>
+    <string name="phone_seen_just_now">%1$s · vu à l’instant</string>
+    <string name="phone_remove_title">Retirer %1$s ?</string>
+    <string name="phone_remove_message">L’agent cesse d’utiliser ses outils de téléphone, et les appels en attente sont refusés. Si Kyllene est encore connecté sur ce téléphone avec les outils activés, il revient à sa prochaine connexion.</string>
+
+    <string name="phone_places_note_on">Android vérifie toutes les quelques minutes, un message peut donc arriver un peu en retard. Il est envoyé en votre nom, marqué comme venant du lieu.</string>
+    <string name="phone_places_note_off">Lieux surveillés est désactivé : aucun ne se déclenche.</string>
+    <string name="phone_place_arriving">Arrivée à %1$s · %2$d m</string>
+    <string name="phone_place_leaving">Départ de %1$s · %2$d m</string>
+    <string name="phone_place_sends">Envoie : %1$s</string>
+    <string name="phone_place_sends_to">Envoie à %1$s : %2$s</string>
+    <string name="phone_place_stop">Ne plus surveiller %1$s</string>
+    <string name="phone_just_now">À l’instant</string>
+    <string name="phone_ago">Il y a %1$s</string>
+
+    <string name="phone_need_notifications">Activez les notifications de Kyllene : les changements y sont demandés.</string>
+    <string name="phone_need_dnd">Autorisez Kyllene à modifier Ne pas déranger.</string>
+    <string name="phone_need_usage">Donnez à Kyllene l’accès aux données d’utilisation, pour voir quelles apps vous utilisez.</string>
+    <string name="phone_need_location">Autorisez Kyllene à utiliser la position de ce téléphone.</string>
+    <string name="phone_need_precise">Autorisez la position précise : Android ne surveille les lieux qu’avec elle.</string>
+    <string name="phone_need_always">Autorisez la position tout le temps : les lieux sont surveillés quand Kyllene est fermé. Choisissez « Toujours autoriser ».</string>
+    <string name="phone_need_calendar">Autorisez Kyllene à utiliser votre agenda.</string>
+    <string name="phone_need_contacts">Autorisez Kyllene à lire vos contacts.</string>
+    <string name="phone_need_health_update">Mettez à jour Health Connect, d’où viennent les données.</string>
+    <string name="phone_need_health_install">Installez Health Connect, d’où viennent les données.</string>
+    <string name="phone_need_health_none">Ce téléphone n’a pas Health Connect.</string>
+    <string name="phone_need_health_read">Autorisez Kyllene à lire les pas, le sommeil ou le rythme cardiaque dans Health Connect.</string>
+    <string name="phone_need_call_notifications">Activez les notifications de Kyllene : l’appel y sonne.</string>
+    <string name="phone_need_full_screen">Autorisez les notifications en plein écran, pour que l’appel s’affiche sur l’écran de verrouillage.</string>
+    <string name="phone_need_android">Les outils du téléphone fonctionnent depuis Kyllene sur un téléphone Android.</string>
+    <string name="phone_optional_closed">Aussi quand Kyllene est fermé (facultatif)</string>
+    <string name="phone_optional_health">Aussi les pas, le sommeil ou le rythme cardiaque (facultatif)</string>
+
+    <string name="phone_tool_battery">Batterie</string>
+    <string name="phone_tool_battery_detail">Le niveau, s’il charge, et le temps avant la charge complète.</string>
+    <string name="phone_tool_network">Réseau</string>
+    <string name="phone_tool_network_detail">Wi-Fi, données mobiles ou hors ligne, s’il est limité, et un VPN.</string>
+    <string name="phone_tool_sound">Son</string>
+    <string name="phone_tool_sound_detail">Ne pas déranger, la sonnerie et les volumes. Un changement vous demande d’abord.</string>
+    <string name="phone_tool_alarms">Alarmes et minuteurs</string>
+    <string name="phone_tool_alarms_detail">En règle un dans votre app Horloge une fois que vous l’autorisez.</string>
+    <string name="phone_tool_screen_time">Temps d’écran</string>
+    <string name="phone_tool_screen_time_detail">Les apps utilisées et combien de temps, le temps d’écran allumé et les déverrouillages, jusqu’à une semaine.</string>
+    <string name="phone_tool_open">Ouvrir liens, cartes et apps</string>
+    <string name="phone_tool_open_detail">Ouvre un lien, un lieu, une app ou le menu de partage une fois que vous l’autorisez.</string>
+    <string name="phone_tool_clipboard">Copier dans le presse-papiers</string>
+    <string name="phone_tool_clipboard_detail">Met du texte dans votre presse-papiers une fois que vous l’autorisez. Ne lit jamais ce qui s’y trouve.</string>
+    <string name="phone_tool_location">Position</string>
+    <string name="phone_tool_location_detail">Où se trouve le téléphone et l’adresse la plus proche, aussi précisément que vous l’autorisez. Quand Kyllene est ouvert, sauf si vous l’autorisez aussi fermé.</string>
+    <string name="phone_tool_geofences">Lieux surveillés</string>
+    <string name="phone_tool_geofences_detail">Arriver à un lieu ou le quitter envoie son message au chat d’où il a été ajouté. En ajouter ou en retirer un vous demande d’abord ; nécessite la position précise en permanence.</string>
+    <string name="phone_tool_calendar">Agenda</string>
+    <string name="phone_tool_calendar_detail">Vos événements sur une période. En ajouter ou en déplacer un vous demande d’abord.</string>
+    <string name="phone_tool_contacts">Contacts</string>
+    <string name="phone_tool_contacts_detail">Cherche des personnes par nom, numéro ou e-mail : seulement leurs noms, numéros et e-mails, quelques-uns à la fois.</string>
+    <string name="phone_tool_health">Santé</string>
+    <string name="phone_tool_health_detail">Pas, sommeil et rythme cardiaque depuis Health Connect, autant que vous l’y autorisez. Quand Kyllene est ouvert, sauf si vous l’autorisez aussi fermé.</string>
+    <string name="phone_tool_show_ui">Écrans dans le chat (expérimental)</string>
+    <string name="phone_tool_show_ui_detail">L’agent dessine un petit écran sous sa réponse, avec des boutons, des choix ou un formulaire, et attend votre toucher jusqu’à 5 minutes. Android uniquement.</string>
+    <string name="phone_tool_call_me">Hermes peut m’appeler</string>
+    <string name="phone_tool_call_me_detail">L’agent vous appelle quand quelque chose ne peut pas attendre, ou quand vous le lui demandez, y compris depuis une tâche planifiée. Répondez, et Hermes vous explique pourquoi au téléphone. Il n’appelle que vous.</string>
+</resources>

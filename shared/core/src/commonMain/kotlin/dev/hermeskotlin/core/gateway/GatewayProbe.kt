@@ -6,6 +6,7 @@ import io.ktor.client.plugins.HttpRequestTimeoutException
 import io.ktor.client.plugins.timeout
 import io.ktor.client.request.accept
 import io.ktor.client.request.get
+import io.ktor.client.statement.bodyAsText
 import io.ktor.client.statement.request
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
@@ -33,6 +34,13 @@ sealed interface ProbeResult {
 
     /** Nothing answered (DNS, refused, timeout, TLS...). */
     data class Unreachable(val url: GatewayUrl, val reason: String) : ProbeResult
+
+    /**
+     * The server asked for a client certificate and got none it accepts: nginx with `ssl_verify_client on`
+     * answers 400 "No required SSL certificate was sent" (or 495/496); other servers fail the TLS handshake.
+     * Attaching the certificate gets past it.
+     */
+    data class ClientCertRequired(val url: GatewayUrl, val reason: String) : ProbeResult
 }
 
 /** Public liveness probe used by "Test connection" before any sign-in. */
@@ -49,6 +57,8 @@ class GatewayProbe(private val client: HttpClient) {
         val cloudflareRefused = isCloudflareRefusal(code, response.headers[HttpHeaders.Server], isJson)
         if (isAccessLoginRedirect(code, response.headers[HttpHeaders.Location]) || cloudflareRefused && tokenSent) {
             ProbeResult.AccessBlocked(url, code, tokenSent)
+        } else if (!isJson && code in CERT_REPLY_CODES && isClientCertReply(code, response.bodyAsText().take(CERT_REPLY_SCAN))) {
+            ProbeResult.ClientCertRequired(url, "HTTP $code")
         } else if (!response.status.isSuccess() || !isJson) {
             ProbeResult.NotHermes(url, response.status.value)
         } else {
@@ -65,10 +75,48 @@ class GatewayProbe(private val client: HttpClient) {
     } catch (_: HttpRequestTimeoutException) {
         ProbeResult.Unreachable(url, "Timed out. Check the address, VPN or Tailscale connection.")
     } catch (e: Exception) {
-        ProbeResult.Unreachable(url, e.message ?: e::class.simpleName ?: "Connection failed")
+        if (isClientCertDemand(e)) ProbeResult.ClientCertRequired(url, e.message ?: e::class.simpleName ?: "TLS handshake failed")
+        else ProbeResult.Unreachable(url, e.message ?: e::class.simpleName ?: "Connection failed")
     }
 
     private companion object {
         const val PROBE_TIMEOUT_MS = 15_000L
     }
 }
+
+/**
+ * Whether a non-JSON reply is a proxy turning the request down for want of a client certificate: nginx with
+ * `ssl_verify_client on` finishes the handshake and answers 400 "No required SSL certificate was sent" (or
+ * "The SSL certificate error" for one it rejects), and 495/496 where those codes aren't rewritten.
+ */
+internal fun isClientCertReply(code: Int, body: String): Boolean {
+    if (code == 495 || code == 496) return true
+    if (code != 400) return false
+    val text = body.lowercase()
+    return "no required ssl certificate was sent" in text || "the ssl certificate error" in text
+}
+
+/** The codes [isClientCertReply] can match, checked first so no other reply's body is read. */
+private val CERT_REPLY_CODES = setOf(400, 495, 496)
+
+/** How much of a reply [isClientCertReply] reads: nginx's error page names the certificate near its top. */
+private const val CERT_REPLY_SCAN = 2_048
+
+/**
+ * Whether [error] looks like a TLS handshake that failed because the server demanded a client certificate and
+ * got none it accepts: an SSL/TLS/handshake failure in the cause chain carrying a certificate alert *sent by
+ * the server* ("Received fatal alert: …" on the JVM, `…_ALERT_…` from BoringSSL). When the app itself turns
+ * down the server's certificate, the error names the certificate path instead, so that, a refused connection
+ * or a timeout is not this.
+ */
+fun isClientCertDemand(error: Throwable): Boolean {
+    val chain = generateSequence<Throwable>(error) { it.cause }.toList()
+    if (chain.none { it::class.simpleName?.lowercase()?.contains(TLS_FAILURE) == true }) return false
+    val text = chain.mapNotNull { it.message }.joinToString(" ").lowercase()
+    return CERT_ALERTS.any { "received fatal alert: $it" in text || "_alert_$it" in text }
+}
+
+private val TLS_FAILURE = Regex("ssl|tls|handshake")
+
+/** TLS alerts a server sends when the client certificate is missing or not one it accepts. */
+private val CERT_ALERTS = listOf("certificate_required", "bad_certificate", "certificate_unknown", "unknown_ca")

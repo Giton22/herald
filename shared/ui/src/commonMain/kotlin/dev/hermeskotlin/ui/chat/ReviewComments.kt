@@ -2,6 +2,7 @@ package dev.hermeskotlin.ui.chat
 
 import androidx.compose.foundation.text.input.TextFieldState
 import dev.hermeskotlin.designsystem.components.TextHighlight
+import dev.hermeskotlin.designsystem.components.stripBidiIsolates
 
 /** Something in the chat a comment can be about, named the way the message to the agent names it. */
 data class CommentSource(
@@ -71,13 +72,14 @@ data class SentReview(val comments: List<SentComment>, val before: String, val a
 
 /** Builds a comment on [anchor]'s selection, with the name of its place and the words around it. */
 internal fun newComment(id: Long, source: CommentSource, anchor: SelectionAnchor, note: String = ""): PendingComment {
-    val quote = anchor.text
+    // The selection comes off the rendered text, so it carries the bidi isolates; the agent must not.
+    val quote = stripBidiIsolates(anchor.text)
     return PendingComment(
         id = id,
         source = source,
         quote = quote,
         where = whereOf(source, anchor),
-        context = contextOf(source, anchor),
+        context = contextOf(source, anchor)?.let(::stripBidiIsolates),
         highlights = anchor.highlights,
         note = note,
     )

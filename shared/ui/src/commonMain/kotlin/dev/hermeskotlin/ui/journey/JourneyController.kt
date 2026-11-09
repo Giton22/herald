@@ -13,6 +13,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import dev.hermeskotlin.ui.resources.*
+import org.jetbrains.compose.resources.getString
 
 data class JourneyState(
     val graph: JourneyGraph? = null,
@@ -37,7 +39,7 @@ class JourneyController(private val api: JourneyApi, private val scope: Coroutin
         scope.launch {
             when (val result = api.graph(gateway, profile)) {
                 is ApiResult.Success -> _state.update { it.copy(graph = result.value, loading = false) }
-                else -> _state.update { it.copy(loading = false, error = result.errorMessage ?: "Couldn't load the journey.") }
+                else -> _state.update { it.copy(loading = false, error = result.errorMessage ?: getString(Res.string.journey_error)) }
             }
         }
     }

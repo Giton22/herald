@@ -14,9 +14,14 @@ import androidx.compose.ui.platform.LocalContext
 import dev.hermeskotlin.ui.chat.decodeUpright
 import dev.hermeskotlin.ui.chat.jpeg
 import dev.hermeskotlin.ui.chat.readAtMost
+import dev.hermeskotlin.ui.resources.Res
+import dev.hermeskotlin.ui.resources.wallpaper_not_an_image
+import dev.hermeskotlin.ui.resources.wallpaper_read_failed
+import dev.hermeskotlin.ui.resources.wallpaper_too_large
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.jetbrains.compose.resources.getString
 
 @Composable
 actual fun rememberWallpaperPicker(onPicked: (ByteArray) -> Unit, onError: (String) -> Unit): () -> Unit {
@@ -30,13 +35,13 @@ actual fun rememberWallpaperPicker(onPicked: (ByteArray) -> Unit, onError: (Stri
             val image = withContext(Dispatchers.IO) {
                 runCatching {
                     val original = context.contentResolver.openInputStream(uri)?.use { it.readAtMost(MAX_PHOTO_BYTES) }
-                        ?: error("That photo is too large or can't be read.")
+                        ?: error(getString(Res.string.wallpaper_too_large))
                     // Kept upright and screen-sized, so showing it later is a plain decode.
-                    val bitmap = decodeUpright(original, WALLPAPER_EDGE) ?: error("That file isn't an image Kyllene can read.")
+                    val bitmap = decodeUpright(original, WALLPAPER_EDGE) ?: error(getString(Res.string.wallpaper_not_an_image))
                     bitmap.jpeg(WALLPAPER_QUALITY)
                 }
             }
-            image.onSuccess(picked).onFailure { failed(it.message ?: "Couldn't read that photo.") }
+            image.onSuccess(picked).onFailure { failed(it.message ?: getString(Res.string.wallpaper_read_failed)) }
         }
     }
     return { launcher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }

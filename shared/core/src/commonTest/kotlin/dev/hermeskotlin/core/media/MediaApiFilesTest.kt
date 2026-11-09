@@ -5,6 +5,7 @@ import dev.hermeskotlin.core.network.ApiResult
 import dev.hermeskotlin.core.network.createHttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
+import io.ktor.client.engine.mock.toByteArray
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
@@ -33,6 +34,42 @@ class MediaApiFilesTest {
 
         assertEquals("/api/fs/read-text?path=%2Fopt%2Fa+b.md&profile=rin", asked)
         assertEquals(FileText("# Hi", 900_000, truncated = true, binary = false, language = "markdown"), text)
+    }
+
+    @Test
+    fun aNewFolderIsAskedForByPath() = runTest {
+        var asked: String? = null
+        val api = MediaApi(createHttpClient(MockEngine { request ->
+            asked = "${request.method.value} ${request.url.encodedPath} ${request.body.toByteArray().decodeToString()}"
+            respond("""{"ok":true,"path":"/home/me/projects/site"}""", HttpStatusCode.OK, json)
+        }))
+
+        assertIs<ApiResult.Success<Unit>>(api.makeFolder(url, "~/projects/site"))
+        assertEquals("""POST /api/files/mkdir {"path":"~/projects/site"}""", asked)
+    }
+
+    @Test
+    fun aFolderTheGatewayRefusesSaysWhy() = runTest {
+        val api = MediaApi(createHttpClient(MockEngine {
+            respond("""{"detail":"A file already exists at that path"}""", HttpStatusCode.Conflict, json)
+        }))
+
+        assertEquals("A file already exists at that path", assertIs<ApiResult.Failed>(api.makeFolder(url, "/srv/a")).message)
+    }
+
+    @Test
+    fun aGatewayWithoutMkdirSaysItCantMakeFolders() = runTest {
+        // An older dashboard's own 404, FastAPI's, a proxy's non-JSON page, and the GET-only catch-all's 405.
+        val replies = listOf(
+            Triple("""{"detail":"No such API endpoint: /api/files/mkdir"}""", HttpStatusCode.NotFound, json),
+            Triple("""{"detail":"Not Found"}""", HttpStatusCode.NotFound, json),
+            Triple("<html>404</html>", HttpStatusCode.NotFound, headersOf(HttpHeaders.ContentType, "text/html")),
+            Triple("""{"detail":"Method Not Allowed"}""", HttpStatusCode.MethodNotAllowed, json),
+        )
+        for ((body, status, headers) in replies) {
+            val api = MediaApi(createHttpClient(MockEngine { respond(body, status, headers) }))
+            assertEquals(MediaApi.NO_MKDIR, assertIs<ApiResult.Failed>(api.makeFolder(url, "/srv/a")).message, body)
+        }
     }
 
     @Test

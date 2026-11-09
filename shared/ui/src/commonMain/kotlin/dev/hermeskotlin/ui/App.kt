@@ -20,6 +20,7 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -28,6 +29,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
+import androidx.compose.runtime.collectAsState
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.composeunstyled.theme.ColorScheme
 import com.composeunstyled.theme.Theme
@@ -37,6 +39,8 @@ import dev.hermeskotlin.core.settings.ThemeMode
 import dev.hermeskotlin.designsystem.AccentPalette
 import dev.hermeskotlin.designsystem.LocalAccentPalette
 import dev.hermeskotlin.designsystem.LocalDesktopLayout
+import dev.hermeskotlin.designsystem.LocalDesignWords
+import dev.hermeskotlin.ui.components.rememberDesignWords
 import dev.hermeskotlin.designsystem.PureBlack
 import dev.hermeskotlin.designsystem.hermesTheme
 import dev.hermeskotlin.designsystem.components.LocalCodeWrap
@@ -57,7 +61,13 @@ import dev.hermeskotlin.designsystem.components.Button
 import dev.hermeskotlin.ui.bots.StartOverDialog
 import dev.hermeskotlin.ui.bots.BotsViewModel
 import dev.hermeskotlin.ui.bots.LocalBotFaces
+import dev.hermeskotlin.core.phone.AgentScreens
+import dev.hermeskotlin.ui.chat.AgentScreenContext
 import dev.hermeskotlin.ui.chat.ChatScreen
+import dev.hermeskotlin.ui.chat.GreetingPlaces
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import dev.hermeskotlin.ui.chat.LocalAgentScreens
 import dev.hermeskotlin.ui.rooms.RoomScreen
 import dev.hermeskotlin.ui.rooms.DesktopRoomScreen
 import dev.hermeskotlin.ui.rooms.RoomsViewModel
@@ -117,6 +127,11 @@ import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
 import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import dev.hermeskotlin.ui.components.CommandPalette
+import dev.hermeskotlin.ui.components.ProvideAppWords
+import dev.hermeskotlin.ui.components.TimeWords
+import dev.hermeskotlin.ui.components.rememberTimeWords
+import dev.hermeskotlin.ui.resources.*
+import org.jetbrains.compose.resources.stringResource
 
 /** The current [AppSettings], for screens that change how they draw. */
 val LocalAppSettings = compositionLocalOf { AppSettings() }
@@ -131,6 +146,8 @@ val LocalAppVersion = staticCompositionLocalOf<String?> { null }
  * While [locked] (App lock), a cover hides everything until [onUnlock] lets the user back in.
  * [phoneQuestion] is a phone tool asking before it changes something, shown over any screen.
  * [titleBar] is the desktop's own title bar, whose row the screens share.
+ * [onSessionEnded] is told the gateway (its saved URL) whose signed-in session the desktop's main window just left,
+ * for the windows of its chats.
  */
 @Composable
 fun App(
@@ -141,10 +158,14 @@ fun App(
     onUnlock: () -> Unit = {},
     phoneQuestion: PhoneQuestion? = null,
     titleBar: TitleBar? = null,
+    onSessionEnded: (gatewayUrl: String) -> Unit = {},
 ) {
     // Nothing is drawn until the stored settings are read, so the first frame has the right theme.
     val settingsStore = koinInject<SettingsStore>()
+    // The words dates and times are built from, in the app's language, for code that runs outside composition.
+    TimeWords.current = rememberTimeWords()
     val settings = settingsStore.settings.collectAsStateWithLifecycle().value ?: return
+    if (isDesktop) EndVoiceWithSession(onSessionEnded)
     val dark = isDark(settings)
     LaunchedEffect(dark) { onDarkTheme(dark) }
     val density = LocalDensity.current
@@ -155,17 +176,33 @@ fun App(
         settingsStore.update { it.copy(zoom = zoom) }
         true
     }
-    hermesTheme(palette)(schemeFor(settings, dark)) {
+    val agentScreens = koinInject<AgentScreens>()
+    val liveScreens by agentScreens.live.collectAsStateWithLifecycle()
+    val screensGot by agentScreens.got.collectAsStateWithLifecycle()
+    val screenContext = remember(liveScreens, screensGot) {
+        AgentScreenContext(
+            liveScreens,
+            agentScreens::shown,
+            agentScreens::answer,
+            agentScreens::fail,
+            // Only a chat Kyllene knows the id of: the phone's calls are kept by it.
+            onDrawn = { chat, screen -> if (chat != null) agentScreens.drawn(screen, chat) },
+            took = { chat, screen -> AgentScreens.took(screen, chat, screensGot) },
+        )
+    }
+    ProvideAppLanguage(settings.language) { hermesTheme(palette)(schemeFor(settings, dark)) {
         CompositionLocalProvider(
             LocalAccentPalette provides palette,
             LocalAppSettings provides settings,
             LocalCodeWrap provides settings.wrapCode,
             LocalGlow provides settings.glow,
+            LocalAgentScreens provides screenContext,
             LocalAppVersion provides appVersion,
             LocalUpdateOffer provides rememberUpdateOffer(releasesRepo, appVersion, settings.checkForUpdates),
             LocalRenameOffer provides rememberRenameOffer(),
             LocalDensity provides Density(density.density, density.fontScale * settings.textSize.scale),
             LocalDesktopLayout provides isDesktop,
+            LocalDesignWords provides rememberDesignWords(),
         ) {
             // The screens leave composition rather than sit under the cover, so their sheets and dialogs
             // (windows of their own) can't show over it. View models and drafts outlive this.
@@ -202,7 +239,7 @@ fun App(
                 }
             }
         }
-    }
+    } }
 }
 
 /** The zoom levels Ctrl+= and Ctrl+- step through, in percent, as a browser's. */
@@ -258,7 +295,7 @@ fun HeraldTheme(content: @Composable () -> Unit) {
     val density = LocalDensity.current
     // Each window's own count of its open dialogs.
     val modals = remember { OpenModals() }
-    hermesTheme(palette)(schemeFor(settings, isDark(settings))) {
+    ProvideAppLanguage(settings.language) { hermesTheme(palette)(schemeFor(settings, isDark(settings))) {
         // As the app's own window has them: text size, code wrap, glow and the desktop's layout. The zoom is the
         // caller's to put under its title bar.
         CompositionLocalProvider(
@@ -270,9 +307,19 @@ fun HeraldTheme(content: @Composable () -> Unit) {
             LocalDensity provides Density(density.density, density.fontScale * settings.textSize.scale),
             LocalOpenModals provides modals,
         ) {
-            PlatformTextContextMenu(content)
+            ProvideAppWords { PlatformTextContextMenu(content) }
         }
-    }
+    } }
+}
+
+/** Why a call didn't start, in the app's language; the gateway's or the error's own words as they are. */
+@Composable
+private fun callErrorText(error: CallError): String = when (error) {
+    CallError.InvalidTarget -> stringResource(Res.string.app_call_invalid_target)
+    CallError.BotUnavailable -> stringResource(Res.string.app_call_bot_unavailable)
+    is CallError.OpenFailed -> stringResource(Res.string.app_call_open_failed, error.detail).trim()
+    CallError.BotUnreachable -> stringResource(Res.string.app_call_bot_unreachable)
+    is CallError.Failed -> error.message ?: stringResource(Res.string.app_call_open_retry)
 }
 
 @Composable
@@ -303,7 +350,10 @@ private fun Routes() {
 
         is Route.SignIn -> SignInScreen(
             gateway = r.gateway,
-            notice = r.notice,
+            notice = when (r.notice) {
+                SignInNotice.SessionExpired -> stringResource(Res.string.app_sign_in_again)
+                null -> null
+            },
             onSignedIn = { app.onSignedIn(r.gateway) },
             // With nothing else saved, the sheet would only offer "Add a gateway".
             onChangeGateway = {
@@ -321,9 +371,9 @@ private fun Routes() {
     val dismissCall = if (openingCall) app::cancelPendingCall else app::dismissCallError
     Dialog(
         visible = openingCall || callError != null, onDismissRequest = dismissCall,
-        title = if (openingCall) "Opening call…" else "Couldn't start call",
-        message = if (openingCall) null else callError,
-        actions = { Button(if (openingCall) "Cancel" else "OK", onClick = dismissCall) },
+        title = stringResource(if (openingCall) Res.string.app_call_opening else Res.string.app_call_failed),
+        message = if (openingCall) null else callError?.let { callErrorText(it) },
+        actions = { Button(stringResource(if (openingCall) Res.string.common_cancel else Res.string.app_ok), onClick = dismissCall) },
         content = {
             PlatformBackHandler(enabled = openingCall) { app.cancelPendingCall() }
             if (openingCall) Spinner()
@@ -339,7 +389,41 @@ private fun Routes() {
         onSetPrimary = app::setPrimaryGateway,
         onRename = app::renameGateway,
         onRemove = app::removeGateway,
+        onSetClientCert = app::setClientCert,
     )
+}
+
+/** Adding a gateway: the current one stays signed in, and Back returns to it. */
+private val Route.addingGateway: Boolean
+    get() = this is Route.Connect && canCancel || this is Route.SignIn && adding
+
+/**
+ * Desktop: a voice call ends with the signed-in session it was made in, on sign-out, an expired session, or
+ * another gateway or profile, even while the window is hidden and draws nothing. Adding a gateway keeps it, and
+ * so does changing the language. [onSessionEnded] is told the gateway left, as [App] says.
+ */
+@Composable
+private fun EndVoiceWithSession(onSessionEnded: (gatewayUrl: String) -> Unit) {
+    val app: AppViewModel = koinViewModel()
+    // Its own scope: a route change redraws this, not the whole app.
+    val route by app.route.collectAsState()
+    if (route !is Route.Chat && !route.addingGateway) return
+    val chat: ChatViewModel = koinViewModel()
+    val ended by rememberUpdatedState(onSessionEnded)
+    // A hidden window doesn't draw, so the route is watched here rather than waiting for a frame.
+    LaunchedEffect(app, chat) {
+        var session: Pair<String, String?>? = null
+        app.route.collect { next ->
+            if (next.addingGateway) return@collect
+            val now = (next as? Route.Chat)?.let { it.gateway.url to it.target.profile }
+            val was = session
+            session = now
+            if (was == null || was == now) return@collect
+            chat.voice.stopAll()
+            if (was.first != now?.first) ended(was.first)
+        }
+    }
+    DisposableEffect(chat) { onDispose { chat.voice.stopAll() } }
 }
 
 /** The bot editor's subject: [bot] to change, or null for a new one. */
@@ -350,10 +434,12 @@ private class BotEditing(val bot: Bot?)
 private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Unit) {
     val chat: ChatViewModel = koinViewModel()
     val chatState by chat.state.collectAsStateWithLifecycle()
+    val untitled = stringResource(Res.string.app_untitled_session)
     val sidebar = rememberSidebarState()
     val scope = rememberCoroutineScope()
     val focusManager = LocalFocusManager.current
-    var settingsOpen by rememberSaveable { mutableStateOf(false) }
+    // Open again after a language picked in Settings redraws the screens.
+    var settingsOpen by rememberSaveable { mutableStateOf(LanguagePageReturn.pending) }
     // A plugin's page open over everything, served by the gateway itself; null when none is open.
     var pluginUrl by rememberSaveable { mutableStateOf<String?>(null) }
     var pluginLabel by rememberSaveable { mutableStateOf<String?>(null) }
@@ -513,6 +599,28 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
         speakerSource.launchProfile.value = launchProfile
     }
     val others: OtherChatsViewModel = koinViewModel { parametersOf(sessions) }
+    // What an empty new chat's greeting offers to start it in instead: the list's projects, when they're this chat's
+    // gateway and profile, the profiles, and the saved gateways. Not for a chat outside the list's profile (a bot's
+    // throwaway chat): a profile picked there could be the one the list is already on.
+    val listedFor by sessions.listedFor.collectAsStateWithLifecycle()
+    // Only the projects: the list itself changes every few seconds while it's polled.
+    val listedProjects by remember(sessions) { sessions.state.map { it.projects }.distinctUntilChanged() }.collectAsStateWithLifecycle(emptyList())
+    val gatewayChoices by app.gatewayChoices.collectAsStateWithLifecycle()
+    val greetingPlaces = remember(listedFor, listedProjects, profileRoster, gatewayChoices, route.target.gateway, route.target.profile, chatsProfile) {
+        val target = route.target
+        if (target.profile != chatsProfile) return@remember null
+        GreetingPlaces(
+            projects = listedProjects.takeIf { listedFor == target.gateway.gatewayUrl to target.profile }.orEmpty(),
+            profiles = profileRoster?.profiles.orEmpty(),
+            profile = target.profile ?: profileRoster?.launch,
+            gateways = gatewayChoices.list.gateways,
+            gateway = target.gateway.url,
+            onProject = app::pickProject,
+            // The launch profile is stored as "none picked", as the sidebar's profile picker does.
+            onProfile = { picked -> app.switchProfile(picked.name.takeIf { it != profileRoster?.launch }, fresh = true) },
+            onGateway = { picked -> app.switchGateway(picked, fresh = true) },
+        )
+    }
     val settings = LocalAppSettings.current
     val sidebarWidthStore = koinInject<SettingsStore>()
     val alerts = settings.otherChatsAlerts
@@ -596,8 +704,9 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
     SidebarLayout(
         state = sidebar,
         // A desktop window keeps its sidebar docked down to the window's smallest size: a phone's drawer, with a
-        // scrim and the chat dragged aside, has no place in one.
-        dockedBreakpoint = if (isDesktop) DESKTOP_DOCKED_FROM else 840.dp,
+        // scrim and the chat dragged aside, has no place in one. A phone or tablet docks it where the chat keeps a
+        // phone's width beside it.
+        dockedBreakpoint = if (isDesktop) DESKTOP_DOCKED_FROM else null,
         // A desktop's sidebar is as wide as its edge was last dragged.
         dockedWidth = settings.sidebarWidth.dp,
         onDockedWidthChange = if (isDesktop) { width -> sidebarWidthStore.update { it.copy(sidebarWidth = width.value.roundToInt()) } } else null,
@@ -612,8 +721,9 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
                     if (session.id != openSessionId) app.openSession(session.id, session.displayTitle, readUpTo)
                     closeDrawerToChat()
                 },
-                onNewChat = { cwd ->
-                    app.newChat(cwd = cwd)
+                onNewChat = { project ->
+                    // Home, or a project made without a folder, is a pick too: a chat with no project.
+                    app.newChat(cwd = project?.path?.takeIf { !project.isNoProject }, picked = project != null)
                     closeDrawerToChat()
                 },
                 onDeleted = { if (it.id == openSessionId) app.newChat() },
@@ -623,7 +733,11 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
                 onOpenSettings = { settingsOpen = true },
                 onSwitchProfile = {
                     app.switchProfile(it)
-                    closeDrawerToChat()
+                    // The sidebar stays open on the new profile's chats, to pick one from; what was open in the
+                    // chat's place belonged to the old profile.
+                    rooms.close()
+                    openDesktopRoom = null
+                    mainPage.close()
                 },
                 onOpenBot = { bot, storedSessionId, readUpTo ->
                     if (storedSessionId != openSessionId || route.target.bot == null) app.openBotChat(bot, storedSessionId, readUpTo)
@@ -661,6 +775,9 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
                     // A newer link may be handed on already: it is left for the sidebar to take.
                     if (shownInboxLink == link) shownInboxLink = null
                     inboxLinks.consume(link)
+                },
+                onOpenReportChat = { chat ->
+                    if (app.openReportChat(chat, launch = profileRoster?.takeIf { it.launchKnown }?.launch)) closeDrawerToChat()
                 },
                 mainPage = mainPage,
             )
@@ -700,7 +817,7 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
                                 menuOpen = true
                             }
                         },
-                        onOpenChat = { id, title -> app.openSession(id, title ?: "Untitled session") },
+                        onOpenChat = { id, title -> app.openSession(id, title ?: untitled) },
                         onSwitchProfile = app::switchProfile,
                         viewModel = chat,
                         // Not while a page or the chat's menu covers it: typing there mustn't land in the composer.
@@ -720,6 +837,7 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
                             }
                             return next != null
                         },
+                        greetingPlaces = greetingPlaces,
                     )
                 }
             }
@@ -746,6 +864,7 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
         items = if (!paletteOpen) emptyList() else paletteItems(
             chats = listedChats,
             bots = roster.all,
+            modeSwitch = settings.sidebarModeSwitch,
             commands = HomeCommands(
                 newChat = {
                     app.newChat()
@@ -791,7 +910,7 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
         visible = menuOpen && openSessionId != null,
         anchor = menuAnchor.takeIf { isDesktop },
         sessionId = openSessionId,
-        title = route.target.bot?.label ?: chatState.title?.takeIf { it.isNotBlank() } ?: route.target.title ?: "Untitled session",
+        title = route.target.bot?.label ?: chatState.title?.takeIf { it.isNotBlank() } ?: route.target.title ?: untitled,
         messages = chatState.messages,
         onDismiss = { menuOpen = false },
         onRenamed = chat::showTitle,
@@ -847,7 +966,7 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
                 onSelectEffort = {},
                 onFast = {},
                 modelOnly = true,
-                note = "${bot.label} runs this in all its chats, its Bot Chat and routines included.",
+                note = stringResource(Res.string.app_bot_model_note, bot.label),
             )
             ModelConfirmDialog(
                 modelPicker.confirm,
@@ -866,9 +985,9 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
                             profileLabel = bot.label,
                             onBack = { capabilitiesOpen = false },
                             onSessionExpired = app::onSessionExpired,
-                            title = "${bot.label}'s capabilities",
+                            title = stringResource(Res.string.app_bot_capabilities, bot.label),
                             // Hermes fixes a chat's tools when it starts (#124211).
-                            note = "Changes apply to ${bot.label}'s new chats. If its Bot Chat doesn't pick one up, Start fresh gives it a new chat with everything set here.",
+                            note = stringResource(Res.string.app_bot_capabilities_note, bot.label),
                             viewModel = koinViewModel(key = "capabilities-${bot.name}"),
                         )
                     }
@@ -883,8 +1002,8 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
                             profile = bot.name,
                             onBack = { configOpen = false },
                             onSessionExpired = app::onSessionExpired,
-                            title = "${bot.label}'s config",
-                            note = "${bot.label}'s own settings, saved to its profile's config.yaml. Most apply from its next chat.",
+                            title = stringResource(Res.string.app_bot_config, bot.label),
+                            note = stringResource(Res.string.app_bot_config_note, bot.label),
                             viewModel = koinViewModel(key = "config-${bot.name}"),
                         )
                     }

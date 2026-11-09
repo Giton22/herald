@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="tray_open">打开 Kyllene</string>
+    <string name="tray_new_chat">新对话</string>
+    <string name="tray_quick_entry">快速输入</string>
+    <string name="tray_quit">退出 Kyllene</string>
+
+    <string name="quick_entry_window_title">Kyllene 快速输入</string>
+    <string name="quick_entry_new_chat">新对话</string>
+    <string name="quick_entry_this_chat">当前对话</string>
+    <string name="quick_entry_field">问 Hermes</string>
+    <string name="quick_entry_placeholder">问 Hermes 任何问题…</string>
+    <string name="quick_entry_keys">Enter 发送 · Tab 切换 · Esc 关闭</string>
+
+    <string name="notice_reply_failed">Hermes 遇到了问题</string>
+    <string name="notice_replied">Hermes 已回复</string>
+    <string name="notice_reply_in">回复已到。</string>
+    <string name="notice_approval">需要批准</string>
+    <string name="notice_question">Hermes 有个问题</string>
+    <string name="notice_needs_you">Hermes 需要你</string>
+    <string name="notice_approve_once">批准一次</string>
+    <string name="notice_deny">拒绝</string>
+
+    <string name="storage_title">Kyllene 存储</string>
+    <string name="storage_folder">设置文件夹：</string>
+    <string name="storage_retry">重试</string>
+    <string name="storage_start_fresh">重新开始</string>
+    <string name="storage_quit">退出</string>
+    <string name="storage_with_start_fresh">%1$s“重新开始”会将该文件改名保留，并以未登录状态打开 Kyllene。</string>
+    <string name="storage_unavailable">Kyllene 无法获取其存储密钥。请解锁桌面的密钥环，并确认其 Secret 门户可用，然后重试。</string>
+    <string name="storage_cancelled">存储解锁已取消。重试即可解锁；现有数据已保留。</string>
+    <string name="storage_corrupt">Kyllene 无法打开其加密设置。请恢复一份完好的备份，或使用原来的应用标识。现有数据已保留。</string>
+    <string name="storage_version">此设置格式需要其他版本的 Kyllene。现有数据已保留。</string>
+    <string name="storage_read">Kyllene 无法读取其设置，或文件超过 16 MiB。请先检查文件访问权限再重试。</string>
+    <string name="storage_write">Kyllene 无法完成保存或清理其设置。现有副本已保留；请先检查磁盘空间和文件访问权限再重试。</string>
+    <string name="storage_uncertain">Kyllene 无法确认其设置已提交。请检查文件访问权限，然后重试启动，或退出并重新启动后再做更改。</string>
+    <string name="storage_changed">设置在此窗口之外被更改。请退出并重新启动 Kyllene，在保存前重新加载它们。</string>
+    <string name="storage_legacy">发现了冲突或未完成的旧版设置。现有文件已保留。请退出并处理旧副本后再重试。</string>
+    <string name="storage_unsupported">Kyllene 无法验证其 Flatpak 应用标识。请先检查安装再重试。没有可用的明文后备方案。</string>
+
+    <string name="web_widget_no_browser">无法启动用于显示小组件的浏览器。</string>
+    <string name="web_widget_failed">无法显示此小组件。</string>
+    <string name="web_close_page">关闭页面</string>
+    <string name="web_page_failed">无法打开页面。</string>
+    <string name="web_try_again">重试</string>
+</resources>

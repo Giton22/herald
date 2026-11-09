@@ -7,6 +7,7 @@ import dev.hermeskotlin.core.bots.BotChats
 import dev.hermeskotlin.core.bots.BotSession
 import dev.hermeskotlin.core.chat.ComposeDraft
 import dev.hermeskotlin.ui.chat.ChatTarget
+import dev.hermeskotlin.ui.inbox.ReportChat
 import dev.hermeskotlin.core.cache.InMemoryOfflineDao
 import dev.hermeskotlin.core.cache.OfflineCache
 import dev.hermeskotlin.core.cache.PlainSealer
@@ -21,6 +22,8 @@ import dev.hermeskotlin.core.chat.LastChatStore
 import dev.hermeskotlin.core.connection.GatewayConnection
 import dev.hermeskotlin.core.gateway.AccessToken
 import dev.hermeskotlin.core.gateway.AccessTokens
+import dev.hermeskotlin.core.gateway.ClientCertAliases
+import dev.hermeskotlin.core.gateway.clientCertAliasFor
 import dev.hermeskotlin.core.gateway.GatewayRepository
 import dev.hermeskotlin.core.gateway.SavedGateway
 import dev.hermeskotlin.core.network.createHttpClient
@@ -34,6 +37,7 @@ import dev.hermeskotlin.core.sessions.SessionListFilter
 import dev.hermeskotlin.core.sessions.SessionSummary
 import dev.hermeskotlin.core.sessions.SessionsApi
 import dev.hermeskotlin.core.settings.SettingsStore
+import dev.hermeskotlin.core.settings.startProject
 import dev.hermeskotlin.core.settings.CallTarget
 import kotlinx.coroutines.CompletableDeferred
 import dev.hermeskotlin.core.storage.InMemoryKeyValueStore
@@ -50,6 +54,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.TestScope
@@ -65,6 +70,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -122,12 +128,12 @@ class AppViewModelTest {
     @AfterTest fun tearDown() = Dispatchers.resetMain()
 
     // The connection's retry loop runs in the test's background scope, so it stops with the test.
-    private fun TestScope.viewModel(callStore: SettingsStore? = null): AppViewModel {
+    private fun TestScope.viewModel(callStore: SettingsStore? = null, certs: ClientCertAliases = ClientCertAliases()): AppViewModel {
         val connection = GatewayConnection(auth, openSocket = { _, _ -> botTransport ?: error("no socket in tests") }, scope = backgroundScope)
         val host = ChatHost(connection, SessionsApi(client), backgroundScope)
         callSettings = callStore ?: SettingsStore(store, backgroundScope)
         val push = PushSetup(PushApi(connection), NoPushKeys, connection, gateways, SettingsStore(store, backgroundScope), backgroundScope) { "Test" }
-        return AppViewModel(gateways, auth, connection, lastChats, host, ProfileStore(store), links, BotChats(if (botTransport == null) NoBotChats else dev.hermeskotlin.core.bots.BotsApi(connection)), push, access, callSettings, SessionsApi(client), BotsApi(connection), cache, seen)
+        return AppViewModel(gateways, auth, connection, lastChats, host, ProfileStore(store), links, BotChats(if (botTransport == null) NoBotChats else dev.hermeskotlin.core.bots.BotsApi(connection)), push, access, callSettings, SessionsApi(client), BotsApi(connection), cache, seen, certs = certs)
     }
 
     private val seen = SeenStore(store) { 1_000.0 }
@@ -502,6 +508,75 @@ class AppViewModelTest {
     }
 
     @Test
+    fun aPickedClientCertificateIsSavedWithItsGateway() = runTest {
+        gateways.save(home)
+        signedIn(home)
+        val vm = viewModel()
+        vm.awaitChat(home)
+
+        vm.setClientCert(home, "homelab-cert")
+        gateways.list.first { it.gateways.singleOrNull()?.clientCertAlias == "homelab-cert" }
+
+        vm.setClientCert(home, null)
+        gateways.list.first { it.gateways.singleOrNull()?.clientCertAlias == null }
+    }
+
+    @Test
+    fun aSavedGatewaysCertificateIsNotShadowedByAPendingPick() = runTest {
+        // A pending pick wins over every saved gateway on its host, so setting a saved one must drop it,
+        // never write one: otherwise this alias would reach the host's other gateways until a restart.
+        val certs = ClientCertAliases()
+        certs.set(home.gatewayUrl.host, "stale-pick")
+        val changed = CompletableDeferred<String>()
+        certs.onChanged { changed.complete(it) }
+        gateways.save(home)
+        signedIn(home)
+        val vm = viewModel(certs = certs)
+        vm.awaitChat(home)
+
+        vm.setClientCert(home, "homelab-cert")
+
+        assertEquals(home.gatewayUrl.host, changed.await(), "the engine hears of the change")
+        assertNull(certs.get(home.gatewayUrl.host))
+        assertEquals("homelab-cert", clientCertAliasFor(home.gatewayUrl.host, certs, gateways.all().gateways))
+    }
+
+    @Test
+    fun removingAGatewayWithACertificateTellsTheEngine() = runTest {
+        val certs = ClientCertAliases()
+        val changed = CompletableDeferred<String>()
+        certs.onChanged { changed.complete(it) }
+        val withCert = home.copy(clientCertAlias = "homelab-cert")
+        gateways.save(withCert)
+        signedIn(withCert)
+        val vm = viewModel(certs = certs)
+        vm.awaitChat(withCert)
+
+        vm.removeGateway(withCert)
+
+        assertEquals(home.gatewayUrl.host, changed.await(), "no connection made with the removed certificate is reused")
+    }
+
+    @Test
+    fun cancellingAnAddForgetsItsPendingPick() = runTest {
+        // An abandoned pick would shadow the saved gateways on its host until restart.
+        val certs = ClientCertAliases()
+        gateways.save(home)
+        signedIn(home)
+        val vm = viewModel(certs = certs)
+        vm.awaitChat(home)
+        vm.addGateway()
+        certs.set(home.gatewayUrl.host, "abandoned-pick")
+        val changed = CompletableDeferred<String>()
+        certs.onChanged { changed.complete(it) }
+
+        vm.cancelAddGateway()
+
+        changed.await()
+        assertNull(certs.get(home.gatewayUrl.host))
+    }
+
+    @Test
     fun removingTheGatewayInUseSignsOutAndMovesToThePrimary() = runTest {
         gateways.save(home)
         gateways.save(work)
@@ -654,5 +729,300 @@ class AppViewModelTest {
 
         assertEquals("s9", chat.target.storedSessionId)
         assertEquals(1_300.0, chat.target.readUpTo)
+    }
+
+    @Test
+    fun aReportChatOfAnotherGatewayOpensNothing() = runTest {
+        gateways.save(home)
+        signedIn(home)
+        val app = viewModel()
+        val before = app.awaitChat(home)
+
+        // The app moved to home while work's report was being read: neither its stored chat nor a new one opens.
+        assertFalse(app.openReportChat(ReportChat(work.gatewayUrl.value, "default", "Briefing", storedSessionId = "r1"), launch = "default"))
+        assertFalse(app.openReportChat(ReportChat(work.gatewayUrl.value, "default", "Briefing", draft = ComposeDraft(text = "About this")), launch = "default"))
+
+        assertSame(before, app.route.value)
+    }
+
+    @Test
+    fun aReportChatOpenedWhileACallIsLookedUpEndsTheLookup() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        gateways.save(home)
+        signedIn(home)
+        val vm = viewModel()
+        runCurrent()
+        sessionGate = CompletableDeferred()
+        callSettings.update { it.copy(callTargets = mapOf(home.url to CallTarget(sessionId = "s1"))) }
+        links.follow(AppLink.VoiceChat)
+        runCurrent()
+        assertTrue(vm.openingCall.value)
+
+        assertTrue(vm.openReportChat(ReportChat(home.gatewayUrl.value, "default", "Briefing", storedSessionId = "r1"), launch = "default"))
+        assertFalse(vm.openingCall.value)
+        sessionGate!!.complete(Unit)
+        runCurrent()
+        // The report's chat stays: the call looked up before it doesn't take its place.
+        assertEquals("r1", assertIs<Route.Chat>(vm.route.value).target.storedSessionId)
+        assertFalse(vm.openingCall.value)
+    }
+
+    @Test
+    fun aReportChatAlreadyOpenInItsProfileStaysAsItIs() = runTest {
+        gateways.save(home)
+        signedIn(home)
+        lastChats.set(home.gatewayUrl, LastChat("r1", "Briefing"))
+        val app = viewModel()
+        val open = app.awaitChat(home)
+        assertEquals("r1", open.target.storedSessionId)
+        assertNull(open.target.profile)
+
+        assertTrue(app.openReportChat(ReportChat(home.gatewayUrl.value, "default", "Briefing", storedSessionId = "r1"), launch = "default"))
+        assertSame(open, app.route.value)
+
+        // The same session id in another profile is another chat, so it opens.
+        assertTrue(app.openReportChat(ReportChat(home.gatewayUrl.value, "work", "Briefing", storedSessionId = "r1"), launch = "default"))
+        val other = assertIs<Route.Chat>(app.route.value).target
+        assertEquals("r1", other.storedSessionId)
+        assertEquals("work", other.profile)
+    }
+
+    @Test
+    fun aReportChatOpensInTheProfileWhoseJobRan() = runTest {
+        gateways.save(home)
+        signedIn(home)
+        val app = viewModel()
+        app.awaitChat(home)
+        fun opened(chat: ReportChat, launch: String?): ChatTarget {
+            assertTrue(app.openReportChat(chat, launch))
+            return assertIs<Route.Chat>(app.route.value).target
+        }
+
+        // The run's stored chat: on the launch profile's own job it's one of its chats (no profile named).
+        val launchJob = opened(ReportChat(home.gatewayUrl.value, "default", "Briefing", storedSessionId = "r1"), launch = "default")
+        assertEquals("r1", launchJob.storedSessionId)
+        assertEquals("Briefing", launchJob.title)
+        assertNull(launchJob.profile)
+        assertEquals("work", opened(ReportChat(home.gatewayUrl.value, "work", "Sales", storedSessionId = "r2"), launch = "default").profile)
+        // The launch profile unknown: the owner is named rather than guessed.
+        assertEquals("default", opened(ReportChat(home.gatewayUrl.value, "default", "Briefing", storedSessionId = "r3"), launch = null).profile)
+
+        // No stored chat: a new one in that profile, starting with the report.
+        val draft = ComposeDraft(text = "About this report", start = DraftStart.Typing)
+        val fresh = opened(ReportChat(home.gatewayUrl.value, "work", "Sales", draft = draft), launch = "default")
+        assertNull(fresh.storedSessionId)
+        assertEquals("work", fresh.profile)
+        assertEquals(draft, fresh.draft)
+        // Another ask about a report is another new chat, not the one just opened.
+        val again = opened(ReportChat(home.gatewayUrl.value, "default", "Briefing", draft = draft), launch = "default")
+        assertNull(again.storedSessionId)
+        assertNull(again.profile)
+        assertTrue(again.nonce > fresh.nonce)
+    }
+
+    @Test
+    fun aReportChatOfTheLaunchProfileIsNamedWhileAnotherProfilesChatsAreShown() = runTest {
+        gateways.save(home)
+        signedIn(home)
+        ProfileStore(store).set(home.gatewayUrl, "work")
+        val app = viewModel()
+        assertEquals("work", app.awaitChat(home).target.profile)
+
+        assertTrue(app.openReportChat(ReportChat(home.gatewayUrl.value, "default", "Briefing", storedSessionId = "r1"), launch = "default"))
+        assertEquals("default", assertIs<Route.Chat>(app.route.value).target.profile)
+        assertTrue(app.openReportChat(ReportChat(home.gatewayUrl.value, "work", "Sales", storedSessionId = "r2"), launch = "default"))
+        assertEquals("work", assertIs<Route.Chat>(app.route.value).target.profile)
+    }
+
+    private fun AppViewModel.target() = assertIs<Route.Chat>(route.value).target
+
+    @Test
+    fun aNewChatStartsInTheProjectTheLastOneWasStartedIn() = runTest {
+        gateways.save(home)
+        signedIn(home)
+        val app = viewModel()
+        assertNull(app.awaitChat(home).target.cwd)
+
+        // Started from a project in the list: that's the one the next new chat starts in.
+        app.newChat(cwd = "/srv/site")
+        assertEquals("/srv/site", app.target().cwd)
+        app.newChat()
+        assertEquals("/srv/site", app.target().cwd)
+
+        // Home picked on the greeting: the next one has no project either.
+        app.pickProject(null)
+        assertNull(app.target().cwd)
+        app.newChat()
+        assertNull(app.target().cwd)
+
+        // Turned off, a new chat starts with no project whatever was used last.
+        app.pickProject("/srv/site")
+        callSettings.update { it.copy(useLastProject = false) }
+        app.newChat()
+        assertNull(app.target().cwd)
+    }
+
+    @Test
+    fun theLastProjectIsKeptPerProfile() = runTest {
+        gateways.save(home)
+        signedIn(home)
+        val app = viewModel()
+        app.awaitChat(home)
+        callSettings.settings.filterNotNull().first()
+        app.newChat(cwd = "/srv/site")
+
+        app.switchProfile("work", fresh = true)
+        val work = app.route.first { it is Route.Chat && it.target.profile == "work" } as Route.Chat
+        assertNull(work.target.cwd)
+        app.pickProject("/srv/work")
+
+        app.switchProfile(null, fresh = true)
+        assertEquals("/srv/site", (app.route.first { it is Route.Chat && it.target.profile == null } as Route.Chat).target.cwd)
+        app.switchProfile("work", fresh = true)
+        assertEquals("/srv/work", (app.route.first { it is Route.Chat && it.target.profile == "work" } as Route.Chat).target.cwd)
+    }
+
+    @Test
+    fun pickingAProjectMovesOnlyAnUntouchedNewChat() = runTest {
+        gateways.save(home)
+        signedIn(home)
+        val app = viewModel()
+        app.awaitChat(home)
+        app.newChat(ComposeDraft(text = "Shared text"))
+        val fresh = app.target()
+
+        app.pickProject("/srv/site")
+        val moved = app.target()
+        assertEquals("/srv/site", moved.cwd)
+        // The same new chat, its shared text already in the composer, so not given a second time.
+        assertEquals(fresh.nonce, moved.nonce)
+        assertNull(moved.draft)
+
+        app.openSession("s1", "Planning")
+        val stored = app.route.value
+        app.pickProject("/srv/other")
+        assertSame(stored, app.route.value)
+    }
+
+    @Test
+    fun aNewChatFromHomeInTheListForgetsTheLastProject() = runTest {
+        gateways.save(home)
+        signedIn(home)
+        val app = viewModel()
+        app.awaitChat(home)
+        app.newChat(cwd = "/srv/site")
+
+        // The list's new chat while Home is selected: Home is a pick too, not "whatever was used last".
+        app.newChat(cwd = null, picked = true)
+        assertNull(app.target().cwd)
+        app.newChat()
+        assertNull(app.target().cwd)
+    }
+
+    @Test
+    fun theFirstChatAtLaunchWaitsForTheLastProject() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        gateways.save(home)
+        signedIn(home)
+        store.put("settings.v1", """{"lastProjects":{"${home.gatewayUrl.value}":"/srv/site"}}""")
+        val loaded = CompletableDeferred<Unit>()
+        val delayed = object : KeyValueStore by store {
+            override suspend fun get(key: String): String? {
+                if (key == "settings.v1") loaded.await()
+                return store.get(key)
+            }
+        }
+        val app = viewModel(SettingsStore(delayed, backgroundScope))
+        runCurrent()
+        // The new chat doesn't wait for the settings…
+        val opened = app.awaitChat(home).target
+        assertNull(opened.cwd)
+        loaded.complete(Unit)
+        runCurrent()
+
+        // …and moves to the last project once they're read, still the same new chat.
+        val moved = app.target()
+        assertEquals("/srv/site", moved.cwd)
+        assertEquals(opened.nonce, moved.nonce)
+    }
+
+    /** Settings whose stored copy is only read once [loaded] completes. */
+    private fun TestScope.slowSettings(loaded: CompletableDeferred<Unit>): SettingsStore {
+        val delayed = object : KeyValueStore by store {
+            override suspend fun get(key: String): String? {
+                if (key == "settings.v1") loaded.await()
+                return store.get(key)
+            }
+        }
+        return SettingsStore(delayed, backgroundScope)
+    }
+
+    @Test
+    fun aChatSharedAtLaunchStartsInTheLastProject() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        gateways.save(home)
+        signedIn(home)
+        store.put("settings.v1", """{"lastProjects":{"${home.gatewayUrl.value}":"/srv/site"}}""")
+        val loaded = CompletableDeferred<Unit>()
+        val app = viewModel(slowSettings(loaded))
+        runCurrent()
+        app.awaitChat(home)
+
+        // Shared before the settings are read: it waits for them rather than opening outside the project…
+        app.newChat(ComposeDraft(text = "Look at this", start = DraftStart.Send))
+        runCurrent()
+        assertNull(app.target().draft)
+        loaded.complete(Unit)
+        runCurrent()
+
+        // …and opens there with its draft, never moved after it may have sent itself.
+        val shared = app.target()
+        assertEquals("/srv/site", shared.cwd)
+        assertEquals("Look at this", shared.draft?.text)
+    }
+
+    @Test
+    fun aProjectPickedBeforeTheSettingsAreReadStaysAndKeepsThem() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        gateways.save(home)
+        signedIn(home)
+        store.put("settings.v1", """{"lastProjects":{"${home.gatewayUrl.value}":"/srv/site"},"pureBlack":true}""")
+        val loaded = CompletableDeferred<Unit>()
+        val settings = slowSettings(loaded)
+        val app = viewModel(settings)
+        runCurrent()
+        app.awaitChat(home)
+
+        app.pickProject("/srv/other")
+        runCurrent()
+        loaded.complete(Unit)
+        runCurrent()
+
+        // The pick isn't undone by the remembered project arriving late…
+        assertEquals("/srv/other", app.target().cwd)
+        // …and remembering it kept the rest of the stored settings.
+        val read = settings.settings.value!!
+        assertTrue(read.pureBlack)
+        assertEquals("/srv/other", read.startProject(home.gatewayUrl, null))
+    }
+
+    @Test
+    fun aFreshSwitchOpensANewChatInsteadOfTheLastOne() = runTest {
+        gateways.save(home)
+        signedIn(home)
+        lastChats.set(home.gatewayUrl, LastChat("w1", "Weekly"), "work")
+        val app = viewModel()
+        app.awaitChat(home)
+
+        // From the account sheet: back to the profile's last chat.
+        app.switchProfile("work")
+        assertEquals("w1", (app.route.first { it is Route.Chat && it.target.profile == "work" } as Route.Chat).target.storedSessionId)
+
+        app.switchProfile(null)
+        app.route.first { it is Route.Chat && it.target.profile == null }
+        // From the greeting's place menu: a new chat there, as the New chat button would open.
+        app.switchProfile("work", fresh = true)
+        val work = (app.route.first { it is Route.Chat && it.target.profile == "work" } as Route.Chat).target
+        assertNull(work.storedSessionId)
     }
 }

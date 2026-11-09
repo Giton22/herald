@@ -109,6 +109,8 @@ import dev.hermeskotlin.designsystem.textTertiary
 import dev.hermeskotlin.designsystem.typography
 import dev.hermeskotlin.ui.PlatformBackHandler
 import dev.hermeskotlin.ui.chat.LocalReplySpeaker
+import dev.hermeskotlin.ui.resources.*
+import org.jetbrains.compose.resources.stringResource
 import kotlin.math.PI
 import kotlin.math.sin
 import kotlin.math.sqrt
@@ -164,12 +166,12 @@ internal fun VoiceScreen(
                 Modifier.widthIn(max = 640.dp).fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                RingButton(Lucide.ChevronDown, "Show the chat", onMinimize)
+                RingButton(Lucide.ChevronDown, stringResource(Res.string.voice_show_chat), onMinimize)
                 Column(Modifier.weight(1f).semantics(mergeDescendants = true) { heading() }, horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("Voice chat", style = Theme[typography][body].copy(fontSize = 14.sp, lineHeight = 18.sp), fontWeight = FontWeight.SemiBold, color = Theme[colors][textColor], maxLines = 1)
+                    Text(stringResource(Res.string.voice_chat), style = Theme[typography][body].copy(fontSize = 14.sp, lineHeight = 18.sp), fontWeight = FontWeight.SemiBold, color = Theme[colors][textColor], maxLines = 1)
                     Text(chatTitle, style = Theme[typography][caption].copy(fontSize = 12.sp, lineHeight = 16.sp), color = Theme[colors][textTertiary], maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
-                RingButton(if (captions) Lucide.Captions else Lucide.CaptionsOff, if (captions) "Hide captions" else "Show captions", onToggleCaptions)
+                RingButton(if (captions) Lucide.Captions else Lucide.CaptionsOff, stringResource(if (captions) Res.string.voice_hide_captions else Res.string.voice_show_captions), onToggleCaptions)
             }
             Transcript(
                 state,
@@ -190,22 +192,25 @@ internal fun VoiceScreen(
                     verticalArrangement = Arrangement.spacedBy(2.dp),
                 ) {
                     Text(label(state), style = Theme[typography][body].copy(fontSize = 17.sp, lineHeight = 22.sp), fontWeight = FontWeight.SemiBold, color = Theme[colors][textColor], textAlign = TextAlign.Center, maxLines = 1)
-                    Text(hint(state), style = Theme[typography][bodySmall].copy(fontSize = 13.sp), color = Theme[colors][textTertiary], textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text(hintText(state), style = Theme[typography][bodySmall].copy(fontSize = 13.sp), color = Theme[colors][textTertiary], textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     AnimatedVisibility(state.working != null, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
                         WorkingChip(state.working.orEmpty())
                     }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(18.dp), verticalAlignment = Alignment.CenterVertically) {
-                    when {
-                        state.live && state.phase != VoicePhase.Connecting ->
-                            SideButton(Lucide.Mic.takeUnless { state.muted } ?: Lucide.MicOff, "Mute", onMute, on = state.muted, toggle = true)
-                        !state.live && state.phase == VoicePhase.Speaking -> SideButton(Lucide.SkipForward, "Skip the reply", onSkip)
-                        canSendNow(state) -> SideButton(Lucide.ArrowUp, "Send now", onSendNow)
-                        // An empty slot keeps End in the middle.
-                        else -> Spacer(Modifier.size(52.dp))
+                    // Mute on the left in a call and a chained chat alike; an empty slot keeps End in the middle.
+                    if (state.phase != VoicePhase.Connecting) {
+                        SideButton(Lucide.Mic.takeUnless { state.muted } ?: Lucide.MicOff, stringResource(Res.string.voice_mute), onMute, on = state.muted, toggle = true)
+                    } else {
+                        Spacer(Modifier.size(52.dp))
                     }
                     EndButton(onEnd)
-                    SideButton(Lucide.Keyboard, "Type instead", onType)
+                    // Skip and Send now are only there for a moment, so they stand in for Type instead meanwhile.
+                    when {
+                        !state.live && state.phase == VoicePhase.Speaking -> SideButton(Lucide.SkipForward, stringResource(Res.string.voice_skip_reply), onSkip)
+                        canSendNow(state) -> SideButton(Lucide.ArrowUp, stringResource(Res.string.voice_send_now), onSendNow)
+                        else -> SideButton(Lucide.Keyboard, stringResource(Res.string.voice_type_instead), onType)
+                    }
                 }
             }
         }
@@ -225,7 +230,7 @@ private fun Transcript(state: VoiceChatState, lastReply: String?, captions: Bool
         if (lastReply != null && (said == null || mine)) {
             Line(bot, lastReply, Modifier.alpha(0.55f), big = false, you = false, lines = if (said == null) 8 else 4)
         }
-        if (said != null) Line(if (mine) "You" else bot, said, Modifier, big = mine, you = mine, lines = 8)
+        if (said != null) Line(if (mine) stringResource(Res.string.voice_you) else bot, said, Modifier, big = mine, you = mine, lines = 8)
     }
 }
 
@@ -302,13 +307,13 @@ private fun EndButton(onClick: () -> Unit) {
             .heightIn(min = 52.dp)
             .clip(CircleShape)
             .background(Theme[colors][danger])
-            .clickable(role = Role.Button, onClickLabel = "End voice chat", onClick = onClick)
+            .clickable(role = Role.Button, onClickLabel = stringResource(Res.string.voice_end_chat), onClick = onClick)
             .padding(horizontal = 22.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         UnstyledIcon(Lucide.X, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
-        Text("End", style = Theme[typography][body].copy(fontSize = 15.sp), fontWeight = FontWeight.SemiBold, color = Color.White, maxLines = 1)
+        Text(stringResource(Res.string.voice_end), style = Theme[typography][body].copy(fontSize = 15.sp), fontWeight = FontWeight.SemiBold, color = Color.White, maxLines = 1)
     }
 }
 

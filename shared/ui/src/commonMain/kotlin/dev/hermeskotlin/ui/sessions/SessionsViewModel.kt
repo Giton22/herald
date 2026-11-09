@@ -18,6 +18,7 @@ import dev.hermeskotlin.core.connection.ConnectionState
 import dev.hermeskotlin.core.connection.GatewayConnection
 import dev.hermeskotlin.core.gateway.GatewayUrl
 import dev.hermeskotlin.core.gateway.SavedGateway
+import dev.hermeskotlin.core.media.MediaApi
 import dev.hermeskotlin.core.network.ApiResult
 import dev.hermeskotlin.core.network.errorMessage
 import dev.hermeskotlin.core.profiles.ProfileRoster
@@ -40,6 +41,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -59,6 +61,8 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
 import kotlin.time.Clock
+import dev.hermeskotlin.ui.resources.*
+import org.jetbrains.compose.resources.StringResource
 
 data class SessionsUiState(
     val sessions: List<SessionSummary> = emptyList(),
@@ -78,7 +82,7 @@ data class SessionsUiState(
     val searchedFor: String? = null,
     val searching: Boolean = false,
     /** One-off feedback for a failed row action, cleared by [SessionsViewModel.dismissMessage]. */
-    val message: String? = null,
+    val message: Said? = null,
     val sessionExpired: Boolean = false,
     /** The last archive or unarchive, which "Undo" can take back for a few seconds. */
     val undo: ArchiveUndo? = null,
@@ -113,17 +117,15 @@ data class ArchiveUndo(
     val query: String = "",
     val atMillis: Long = 0,
 ) {
-    val message: String get() = if (session.archived) "Unarchived" else "Archived"
-
-    /** What a screen reader says: which chat, too. */
-    val spoken: String get() = "$message: ${session.displayTitle}"
+    /** What happened, for the toast: Archived, or Unarchived. */
+    val message: StringResource get() = if (session.archived) Res.string.sessions_unarchived else Res.string.sessions_archived
 }
 
 /** The recent list narrowed to what's running, or to chats waiting on the user or with a reply not yet read. */
-enum class AttentionFilter(val label: String) {
-    All("All"),
-    Running("Running"),
-    NeedsAttention("Needs you"),
+enum class AttentionFilter(val label: StringResource) {
+    All(Res.string.sessions_filter_all),
+    Running(Res.string.sessions_status_running),
+    NeedsAttention(Res.string.sessions_filter_needs_you),
 }
 
 /** What a row says about its chat besides the title, in words. [running]: a turn is going right now. */
@@ -166,6 +168,8 @@ class SessionsViewModel(
     private val threadsRepo: ThreadsRepository,
     /** The list as last read, shown while the gateway can't be. */
     private val cache: OfflineCache? = null,
+    /** Makes a new project's folder on the gateway's machine. */
+    private val files: MediaApi? = null,
 ) : ViewModel() {
 
     /** Stamps an archive's undo offer, so it runs out on time even if the screen goes and comes back. */
@@ -178,6 +182,9 @@ class SessionsViewModel(
 
     private val bound = MutableStateFlow<Pair<GatewayUrl, String?>?>(null)
 
+    /** The gateway and profile the list (and its projects) are of; null before the first. */
+    val listedFor: StateFlow<Pair<GatewayUrl, String?>?> = bound.asStateFlow()
+
     private val _attentionFilter = MutableStateFlow(AttentionFilter.All)
     val attentionFilter: StateFlow<AttentionFilter> = _attentionFilter.asStateFlow()
 
@@ -186,7 +193,7 @@ class SessionsViewModel(
         .flatMapLatest { scope -> scope?.let { (url, profile) -> seenStore.seen(url, profile) } ?: flowOf(null) }
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
-    /** How far [session] had been read before it is opened, when it has new messages since; read before [markSeen]. */
+    /** How far [session] had been read before it is opened, when it has new messages since. */
     fun readUpTo(session: SessionSummary): Double? = seen.value?.readUpTo(session)
 
     private val waiting = attention.waiting
@@ -195,17 +202,6 @@ class SessionsViewModel(
 
     fun setAttentionFilter(filter: AttentionFilter) {
         _attentionFilter.value = filter
-    }
-
-    /**
-     * The user has looked at [session] as it is now: its reply is read. A chat the gateway holds as unread is
-     * marked read there too, as Desktop does on opening one, so its other clients clear it as well.
-     */
-    fun markSeen(session: SessionSummary) {
-        val (url, profile) = bound.value ?: return
-        viewModelScope.launch { seenStore.markSeen(url, session, profile) }
-        // Best effort: a failed write leaves the gateway's flag, which this phone's last look already outranks.
-        if (session.unread) viewModelScope.launch { api.setUnread(url, session.id, unread = false, profile = profile) }
     }
 
     private val _user = MutableStateFlow<AuthUser?>(null)
@@ -252,7 +248,7 @@ class SessionsViewModel(
     /** The list is on screen (the sidebar open or docked), or no longer is. */
     fun setVisible(shown: Boolean) {
         visible.value = shown
-        if (shown && _state.value.filter == SessionListFilter.Recent) loadProjects()
+        if (shown && _state.value.filter == SessionListFilter.Recent) loadProjects(force = projectsStale)
     }
 
     val query = TextFieldState()
@@ -274,6 +270,25 @@ class SessionsViewModel(
     init {
         observeServerChanges()
         observeSearch()
+        markCaughtUpSeen()
+    }
+
+    /**
+     * The open chat read to its end: what its row says it holds counts as seen, by the gateway's clock, so a reply
+     * stamped on this phone or activity after its last message doesn't leave it marked new.
+     */
+    private fun markCaughtUpSeen() {
+        viewModelScope.launch {
+            val listed = _state.map { it.sessions + it.projectSessions.orEmpty() }.distinctUntilChanged()
+            combine(bound, seenStore.caughtUp, listed) { scope, caught, rows ->
+                val (url, profile) = scope ?: return@combine null
+                if (caught == null || caught.gateway != url || caught.profile != profile) return@combine null
+                rows.firstOrNull { it.id == caught.sessionId }?.let { Triple(url, profile, it) }
+            }.distinctUntilChanged().collect { found ->
+                val (url, profile, row) = found ?: return@collect
+                seenStore.markSeen(url, row, profile)
+            }
+        }
     }
 
     /** Idempotent: binds to [gateway] and [profile] and loads the first page once. */
@@ -350,7 +365,7 @@ class SessionsViewModel(
      * Makes a project named [name] over [folder] and shows its chats; [onDone] runs once it's made, or with the
      * gateway's reason it wasn't (a folder another project has, say), so a form can stay open on the error.
      */
-    fun createProject(name: String, folder: String?, onDone: (error: String?) -> Unit) {
+    fun createProject(name: String, folder: String?, onDone: (error: Said?) -> Unit) {
         val scope = bound.value
         viewModelScope.launch {
             var id: String? = null
@@ -402,6 +417,13 @@ class SessionsViewModel(
     suspend fun projectFolders(dir: String, prefix: String): FolderListing =
         projectsApi.folders(bound.value?.second, dir, prefix)
 
+    /** Makes the folder [name] in [dir] on the gateway's machine; answers why not, or null once it's there. */
+    suspend fun makeProjectFolder(dir: String, name: String): Said? {
+        val url = bound.value?.first ?: return said(Res.string.sessions_not_connected)
+        val api = files ?: return said(Res.string.sessions_cant_make_folders)
+        return api.makeFolder(url, FolderPath.picked(FolderPath.child(dir, name))).errorMessage.verbatim()
+    }
+
     /** [id]'s chip and the picked project renamed to [label]; with [unless], only while they still show that. */
     private fun SessionsUiState.withProjectLabel(id: String, label: String, unless: String? = null): SessionsUiState {
         fun Project.relabeled() = if (this.id == id && (unless == null || this.label == unless)) copy(label = label) else this
@@ -409,7 +431,7 @@ class SessionsViewModel(
     }
 
     /** Runs a project change; null when it went through, else what to tell the user. */
-    private suspend fun projectCall(block: suspend () -> Unit): String? = try {
+    private suspend fun projectCall(block: suspend () -> Unit): Said? = try {
         block()
         null
     } catch (e: CancellationException) {
@@ -419,12 +441,12 @@ class SessionsViewModel(
             // The tree answers but changes don't: stop offering them.
             projectChangesMissing = true
             _state.update { it.copy(canMakeProjects = false) }
-            "This gateway can't change projects."
+            said(Res.string.sessions_gateway_cant_change_projects)
         } else {
-            e.message?.takeIf { it.isNotBlank() } ?: "Couldn't change the project."
+            saidOr(e.message, said(Res.string.sessions_project_change_failed))
         }
     } catch (e: Exception) {
-        e.message?.takeIf { it.isNotBlank() } ?: "Couldn't change the project."
+        saidOr(e.message, said(Res.string.sessions_project_change_failed))
     }
 
     /** A project just made, to pick once the tree shows it. */
@@ -442,6 +464,12 @@ class SessionsViewModel(
     /** A change came in while the projects were being asked for; ask once more when that answer is in. */
     private var projectsAgain = false
 
+    /** A change came in while the list was closed; ask at once when it opens, however recently the last ask was. */
+    private var projectsStale = false
+
+    /** The ask put off until [PROJECTS_EVERY_MS] since the last one is over. */
+    private var projectsLater: Job? = null
+
     /**
      * The project list, again, since no event says a chat moved between projects. The gateway groups the
      * newest sessions each time, so this is asked only while the list shows, at most every
@@ -449,9 +477,22 @@ class SessionsViewModel(
      */
     private fun loadProjects(force: Boolean = false) {
         if (connection.state.value !is ConnectionState.Connected) return
-        if (!force && !visible.value && _state.value.projects.isNotEmpty()) return
+        if (!force && !visible.value && _state.value.projects.isNotEmpty()) {
+            projectsStale = true
+            return
+        }
         val now = getTimeMillis()
-        if (!force && now - projectsAskedAt < PROJECTS_EVERY_MS) return
+        val wait = projectsAskedAt + PROJECTS_EVERY_MS - now
+        if (!force && wait > 0) {
+            // Too soon to ask again, but the change still counts: ask once the wait is over.
+            if (projectsLater?.isActive != true) projectsLater = viewModelScope.launch {
+                delay(wait)
+                if (visible.value) loadProjects(force = true) else projectsStale = true
+            }
+            return
+        }
+        projectsStale = false
+        projectsLater?.cancel()
         if (projectsJob?.isActive == true) {
             projectsAgain = true
             return
@@ -509,7 +550,7 @@ class SessionsViewModel(
             } catch (e: Exception) {
                 _state.update {
                     if (bound.value == scope && it.project?.id == project.id) {
-                        it.copy(projectSessions = it.projectSessions ?: emptyList(), message = e.message)
+                        it.copy(projectSessions = it.projectSessions ?: emptyList(), message = e.message.verbatim())
                     } else {
                         it
                     }
@@ -541,7 +582,7 @@ class SessionsViewModel(
                         // A page with nothing new means the server's total counts rows the list never returns.
                         state.copy(sessions = merged, loadingMore = false, canLoadMore = fresh.isNotEmpty() && merged.size < result.value.total)
                     }
-                    else -> state.copy(loadingMore = false, message = result.errorMessage, sessionExpired = result.isExpired)
+                    else -> state.copy(loadingMore = false, message = result.errorMessage.verbatim(), sessionExpired = result.isExpired)
                 }
             }
         }
@@ -641,7 +682,7 @@ class SessionsViewModel(
     )
 
     /** Makes [session] a thread at the end of the Threads section; its chat is pinned so the gateway keeps it. */
-    fun makeThread(session: SessionSummary) = threadAction("Couldn't make a thread.") {
+    fun makeThread(session: SessionSummary) = threadAction(Res.string.sessions_thread_make_failed) {
         threadsRepo.makeThread(session)
         _state.update { state ->
             fun List<SessionSummary>.pinnedRow() = map { if (it.id == session.id) it.copy(pinned = true) else it }
@@ -650,23 +691,23 @@ class SessionsViewModel(
     }
 
     /** Takes [thread] out of the Threads section; its chat stays, as a pinned chat. */
-    fun removeThread(thread: ChatThread) = threadAction("Couldn't remove the thread.") {
+    fun removeThread(thread: ChatThread) = threadAction(Res.string.sessions_thread_remove_failed) {
         threadsRepo.change { it.withoutThread(thread.id) }
     }
 
     /** Names [thread] [name]; its chat is retitled to match. */
-    fun renameThread(thread: ChatThread, name: String) = threadAction("Couldn't rename the thread.") {
+    fun renameThread(thread: ChatThread, name: String) = threadAction(Res.string.sessions_thread_rename_failed) {
         threadsRepo.rename(thread, name.trim())
         load(refresh = false)
     }
 
     /** Moves [thread] one place up or down, past [neighbour]: the thread next to it in the section as shown. */
-    fun moveThread(thread: ChatThread, neighbour: ChatThread) = threadAction("Couldn't move the thread.") {
+    fun moveThread(thread: ChatThread, neighbour: ChatThread) = threadAction(Res.string.sessions_thread_move_failed) {
         threadsRepo.change { it.movedPast(thread.id, neighbour.id) }
     }
 
     /** Saves the threads in the order of [ids], as a drag left them. */
-    fun reorderThreads(ids: List<String>) = threadAction("Couldn't save the order.") {
+    fun reorderThreads(ids: List<String>) = threadAction(Res.string.sessions_thread_order_failed) {
         threadsRepo.change { it.ordered(ids) }
     }
 
@@ -674,21 +715,21 @@ class SessionsViewModel(
      * Starts [thread] fresh: its chat is filed away in the archive under the thread's name and the time, and a new
      * one takes its place, which [onOpened] opens.
      */
-    fun startFresh(thread: ChatThread, onOpened: (FreshChat) -> Unit) = threadAction("Couldn't start the thread fresh.") {
+    fun startFresh(thread: ChatThread, onOpened: (FreshChat) -> Unit) = threadAction(Res.string.sessions_thread_fresh_failed) {
         val fresh = threadsRepo.startFresh(thread)
         onOpened(fresh)
         load(refresh = false)
     }
 
     /** Runs a thread change; a failure is said in the list's message, [fallback] when it has no words of its own. */
-    private fun threadAction(fallback: String, block: suspend () -> Unit) {
+    private fun threadAction(fallback: StringResource, block: suspend () -> Unit) {
         viewModelScope.launch {
             try {
                 block()
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _state.update { it.copy(message = e.message?.takeIf { m -> m.isNotBlank() } ?: fallback) }
+                _state.update { it.copy(message = saidOr(e.message, said(fallback))) }
             }
         }
     }
@@ -721,7 +762,7 @@ class SessionsViewModel(
                         sessions = before.sessions,
                         searchResults = before.searchResults,
                         projectSessions = before.projectSessions.takeIf { _ -> it.project?.id == before.project?.id } ?: it.projectSessions,
-                        message = result.errorMessage,
+                        message = result.errorMessage.verbatim(),
                         sessionExpired = result.isExpired,
                     )
                 }
@@ -777,7 +818,7 @@ class SessionsViewModel(
                         refreshing = false,
                         // A failed background refresh keeps the rows; only an empty list shows the error.
                         error = result.errorMessage.takeIf { state.sessions.isEmpty() },
-                        message = result.errorMessage.takeIf { state.sessions.isNotEmpty() && refresh },
+                        message = result.errorMessage.takeIf { state.sessions.isNotEmpty() && refresh }.verbatim(),
                         sessionExpired = result.isExpired,
                         savedCopyAt = savedShownAt,
                     )
@@ -838,7 +879,7 @@ class SessionsViewModel(
                                 searchResults = emptyList(),
                                 searchedFor = q,
                                 searching = false,
-                                message = result.errorMessage,
+                                message = result.errorMessage.verbatim(),
                                 sessionExpired = result.isExpired,
                             )
                         }

@@ -1,5 +1,7 @@
 package dev.hermeskotlin.core.settings
 
+import dev.hermeskotlin.core.bots.SidebarMode
+import dev.hermeskotlin.core.gateway.GatewayUrl
 import dev.hermeskotlin.core.network.HermesJson
 import dev.hermeskotlin.core.storage.KeyValueStore
 import kotlinx.coroutines.CoroutineScope
@@ -74,6 +76,12 @@ data class AppSettings(
      */
     val glow: Boolean = true,
     val textSize: TextSize = TextSize.Default,
+    /**
+     * The language picked in Settings › Language, as a BCP 47 tag (`de`, `pt-BR`); null follows the system. Kept here
+     * on the desktop and on Android 12 and older; Android 13 and later keep the app's language themselves, so there
+     * this stays unused. A tag for a language the app no longer ships reads as null.
+     */
+    val language: String? = null,
     /** How strongly the chat background (kept by [WallpaperStore]) shows, when there is one. */
     val wallpaperStrength: WallpaperStrength = WallpaperStrength.Faint,
     val showReasoning: Boolean = true,
@@ -103,6 +111,13 @@ data class AppSettings(
      * my phone: keep replies short". Blank: nothing. Chats already going keep what they started with.
      */
     val startInstruction: String = "",
+    /** A new chat starts in the project the last one was started in, on its gateway and profile (see [lastProjects]). */
+    val useLastProject: Boolean = true,
+    /**
+     * The folder of the project the last new chat was started in or moved to, by [lastProjectKey]. No entry: the
+     * last one had no project.
+     */
+    val lastProjects: Map<String, String> = emptyMap(),
     /** Notify when a turn finishes while the app is in the background. */
     val notifyReplies: Boolean = true,
     /** Notify when the agent waits on an approval or a question while the app is in the background. */
@@ -143,6 +158,18 @@ data class AppSettings(
      */
     val watchRings: Boolean = true,
     /**
+     * Herald talks to its Pebble watchapp. Off, the watchapp is told so and nothing goes to it: no turns, no rings,
+     * no requests.
+     */
+    val pebble: Boolean = true,
+    /**
+     * Approvals and questions can be answered on a Pebble, as they come or when it rings. Off by default: a watch's
+     * answer doesn't ask for the phone's unlock. Off, the Pebble says to answer on the phone.
+     */
+    val pebbleAnswers: Boolean = false,
+    /** What the Pebble's hold-Select menu offers to ask with a press, in order (Settings → Connected devices). */
+    val pebblePrompts: List<String> = DEFAULT_PEBBLE_PROMPTS,
+    /**
      * Nothing rings from [quietFrom] to [quietUntil], minutes into the day on this phone's clock: the agent's calls
      * don't get through, and an approval or a question is the usual notification (see `quietNow`).
      */
@@ -163,6 +190,17 @@ data class AppSettings(
     val threadsCollapsed: Boolean = false,
     /** The sidebar shows its projects as one button that opens a list, not a row of chips that scrolls sideways. */
     val projectsAsDropdown: Boolean = false,
+    /** The Chats / Bots switch at the top of the sidebar. Off, the sidebar always shows [sidebarView]. */
+    val sidebarModeSwitch: Boolean = true,
+    /** What the sidebar shows while [sidebarModeSwitch] is off; with the switch, the side last picked on each gateway shows. */
+    val sidebarView: SidebarMode = SidebarMode.Chats,
+    /** The sidebar's pages (Inbox, Scheduled, Archived and the rest) as buttons above the chats. Off, none of them. */
+    val sidebarNav: Boolean = true,
+    /**
+     * The sidebar pages left out of [sidebarNav], by name (`SidebarPage.name`). What's hidden is kept, not what's shown,
+     * so a page a newer version adds shows until it's turned off. Kept while [sidebarNav] is off, for when it's back on.
+     */
+    val sidebarNavHidden: List<String> = emptyList(),
     /** Desktop: closing the window keeps Herald in the tray, still telling of replies and questions. */
     val closeToTray: Boolean = false,
     /** Desktop: Ctrl+Shift+Space from any app opens a small composer that sends to the open chat. */
@@ -172,6 +210,35 @@ data class AppSettings(
     /** Desktop: the sidebar's width in dp, as its edge was last dragged to. */
     val sidebarWidth: Int = 304,
 )
+
+/** The Pebble's prompts until they're edited. */
+val DEFAULT_PEBBLE_PROMPTS = listOf("Summarize my day", "What's running?", "What needs my attention?")
+
+/** Approvals and questions are answered on a Pebble: its switch is on, and so is answering there. */
+val AppSettings.answersOnPebble: Boolean get() = pebble && pebbleAnswers
+
+/** Where [AppSettings.lastProjects] keeps [gateway]'s project for [profile] (null: the launch profile). */
+fun lastProjectKey(gateway: GatewayUrl, profile: String?): String = gateway.value + (profile?.let { "#$it" } ?: "")
+
+/** The folder a new chat on [gateway] and [profile] starts in: the last one's project, while [AppSettings.useLastProject] is on. */
+fun AppSettings.startProject(gateway: GatewayUrl, profile: String?): String? =
+    if (useLastProject) lastProjects[lastProjectKey(gateway, profile)] else null
+
+/** [folder] (null: no project) is the project the last new chat on [gateway] and [profile] was started in. */
+fun AppSettings.withLastProject(gateway: GatewayUrl, profile: String?, folder: String?): AppSettings {
+    val key = lastProjectKey(gateway, profile)
+    return copy(lastProjects = if (folder == null) lastProjects - key else lastProjects + (key to folder))
+}
+
+/** What the sidebar shows when [picked] is the side last picked with its switch: [AppSettings.sidebarView] while the switch is off. */
+fun AppSettings.sidebarMode(picked: SidebarMode): SidebarMode = if (sidebarModeSwitch) picked else sidebarView
+
+/** Whether the sidebar has the button for its page [name] (`SidebarPage.name`): the section is on and the page isn't hidden. */
+fun AppSettings.showsSidebarPage(name: String): Boolean = sidebarNav && name !in sidebarNavHidden
+
+/** [name]'s button (`SidebarPage.name`) shown or hidden in the sidebar's pages. */
+fun AppSettings.withSidebarPage(name: String, shown: Boolean): AppSettings =
+    copy(sidebarNavHidden = if (shown) sidebarNavHidden - name else (sidebarNavHidden + name).distinct())
 
 /** The [AppSettings.startInstruction] a new chat starts with, trimmed; null when there is none or the settings aren't read yet. */
 fun SettingsStore.startInstruction(): String? = settings.value?.startInstruction?.trim()?.takeIf { it.isNotEmpty() }

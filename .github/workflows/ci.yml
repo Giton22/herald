@@ -1,4 +1,4 @@
-# Tests and a debug build for every push and pull request.
+# Tests and a debug build for every push and pull request, and the Pebble watchapp for every Pebble model.
 # The only secret is GRADLE_ENCRYPTION_KEY (`openssl rand -base64 16`), which lets the configuration
 # cache be saved between runs. Without it (forks, or before it's set) the build still works, just slower.
 name: CI
@@ -37,12 +37,42 @@ jobs:
           cache-encryption-key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
 
       # Lint fails on any issue that isn't in androidApp/lint-baseline.xml. --continue reports the tests and
-      # lint together instead of stopping at the first failure.
+      # lint together instead of stopping at the first failure. assembleDev is built like a release (R8), so
+      # a missing keep rule shows up here instead of as a crash on a phone.
       - name: Test, build and lint
         run: >
           ./gradlew --no-daemon --continue
           :shared:core:testAndroidHostTest :shared:designsystem:testAndroidHostTest :shared:ui:testAndroidHostTest :shared:wearlink:testAndroidHostTest
-          :androidApp:assembleDebug :androidApp:lintDebug :wearApp:testDebugUnitTest :wearApp:assembleDebug :wearApp:lintDebug
+          :androidApp:assembleDebug :androidApp:assembleDev :androidApp:lintDebug :wearApp:testDebugUnitTest :wearApp:assembleDebug :wearApp:lintDebug
+
+      # WebRTC's native code looks up org.jni_zero classes by name. If R8 renames them, live voice aborts in
+      # JNI_OnLoad, and only in minified builds.
+      - name: R8 kept WebRTC's JNI classes
+        run: |
+          apk=androidApp/build/outputs/apk/dev/androidApp-dev.apk
+          [ -f "$apk" ] || { echo "::error::No dev APK at $apk"; exit 1; }
+          count=$(unzip -p "$apk" 'classes*.dex' | { grep -a -o 'Lorg/jni_zero/[A-Za-z0-9_$/]*;' || true; } | sort -u | wc -l)
+          echo "$apk keeps $count org.jni_zero classes"
+          [ "$count" -gt 0 ] || { echo "::error::R8 renamed or removed org.jni_zero; check androidApp/proguard-rules.pro"; exit 1; }
+
+      - name: R8 kept TeX macro reflection entry points
+        run: |
+          apk=androidApp/build/outputs/apk/dev/androidApp-dev.apk
+          analyzer="$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer"
+          [ -f "$apk" ] || { echo "::error::No dev APK at $apk"; exit 1; }
+          [ -x "$analyzer" ] || { echo "::error::Android SDK apkanalyzer is unavailable"; exit 1; }
+          smali=$(mktemp)
+          trap 'rm -f "$smali"' EXIT
+          "$analyzer" dex code --class org.scilab.forge.jlatexmath.NewCommandMacro "$apk" > "$smali"
+          grep -Fxq '.class public Lorg/scilab/forge/jlatexmath/NewCommandMacro;' "$smali" || {
+            echo '::error::R8 changed the TeX macro class name'; exit 1;
+          }
+          grep -Fxq '.method public constructor <init>()V' "$smali" || {
+            echo '::error::R8 removed the public TeX macro constructor'; exit 1;
+          }
+          grep -Eq '^\.method public executeMacro\(L[^;]+;\[Ljava/lang/String;\)Ljava/lang/String;$' "$smali" || {
+            echo '::error::R8 changed the TeX macro method'; exit 1;
+          }
 
       - name: Lint report
         if: failure()
@@ -135,3 +165,26 @@ jobs:
           name: ios-crash-reports
           path: ~/Library/Logs/DiagnosticReports/
           if-no-files-found: ignore
+
+  # The Pebble watchapp, built with Pebble's own tools. Installing the SDK only prints its terms
+  # (https://developer.repebble.com/legal/sdk-license/), it asks nothing. The SDK is pinned like the tool: a newer
+  # "latest" (4.44) fails to install with pebble-tool 5.0.40, and 4.33.1 is the one the watchapp was tried on.
+  pebble:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Pebble SDK
+        run: |
+          pipx install pebble-tool==5.0.40
+          pebble sdk install 4.33.1
+
+      - name: Build the watchapp
+        working-directory: pebbleApp
+        run: pebble build
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: kyllene-pebble
+          path: pebbleApp/build/pebbleApp.pbw

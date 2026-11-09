@@ -118,7 +118,7 @@ class PushListener(
         // In sight and connected, the Inbox shows it already. A failed run too: it is in the Inbox, and the app open.
         if (visibility.visible.value && connection.state.value is ConnectionState.Connected) return
         // The name the user gave the job on this phone, when they did.
-        notifications.postCronRun(run.key, run.bot, run.job, groups.nameOf(run), run.text, run.failed)
+        notifications.postCronRun(url, run.key, run.bot, run.job, groups.nameOf(run), run.text, run.failed)
     }
 
     /** The message inside [event], or null for anything that isn't a valid envelope signed by [gateway]. */

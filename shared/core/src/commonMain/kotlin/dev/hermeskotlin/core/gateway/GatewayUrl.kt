@@ -7,7 +7,10 @@ import io.ktor.http.encodedPath
 import io.ktor.http.takeFrom
 import kotlin.jvm.JvmInline
 
-class InvalidGatewayUrlException(message: String) : IllegalArgumentException(message)
+/** An address that isn't one: [problem] says why, for the app to word; [detail] is the scheme or parser's message. */
+class InvalidGatewayUrlException(val problem: Problem, val detail: String = "", message: String) : IllegalArgumentException(message) {
+    enum class Problem { Required, Scheme, Invalid, NoHost }
+}
 
 /**
  * Normalized base URL of a remote Hermes dashboard ("remote gateway"), e.g. `http://100.64.0.1:9119`.
@@ -31,6 +34,9 @@ value class GatewayUrl private constructor(val value: String) {
     /** Host name only, e.g. `hermes.example.ts.net`. */
     val host: String get() = Url(value).host
 
+    /** The port to reach, explicit or the scheme's own; only a hint for pickers, never a connection. */
+    val port: Int get() = Url(value).port
+
     /**
      * Plain `http://` to a host that isn't on a private network, so the password, session cookie and
      * every message cross the internet readable. A Tailscale address is already encrypted by Tailscale.
@@ -46,20 +52,30 @@ value class GatewayUrl private constructor(val value: String) {
 
         fun parse(raw: String): GatewayUrl {
             var input = raw.trim()
-            if (input.isEmpty()) throw InvalidGatewayUrlException("Gateway URL is required.")
+            if (input.isEmpty()) throw InvalidGatewayUrlException(InvalidGatewayUrlException.Problem.Required, message = "Gateway URL is required.")
             if (!SCHEME.containsMatchIn(input)) input = "http://$input"
 
             val scheme = input.substringBefore("://").lowercase()
             if (scheme != "http" && scheme != "https") {
-                throw InvalidGatewayUrlException("Gateway URL must be http:// or https://, got $scheme://")
+                throw InvalidGatewayUrlException(
+                    InvalidGatewayUrlException.Problem.Scheme,
+                    "$scheme://",
+                    "Gateway URL must be http:// or https://, got $scheme://",
+                )
             }
 
             val builder = try {
                 URLBuilder().takeFrom(input)
             } catch (e: Exception) {
-                throw InvalidGatewayUrlException("Gateway URL is not valid: ${e.message}")
+                throw InvalidGatewayUrlException(
+                    InvalidGatewayUrlException.Problem.Invalid,
+                    e.message.orEmpty(),
+                    "Gateway URL is not valid: ${e.message}",
+                )
             }
-            if (builder.host.isBlank()) throw InvalidGatewayUrlException("Gateway URL has no host.")
+            if (builder.host.isBlank()) {
+                throw InvalidGatewayUrlException(InvalidGatewayUrlException.Problem.NoHost, message = "Gateway URL has no host.")
+            }
 
             builder.parameters.clear()
             builder.fragment = ""

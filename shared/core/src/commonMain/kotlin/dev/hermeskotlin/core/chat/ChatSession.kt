@@ -18,7 +18,9 @@ import dev.hermeskotlin.core.slash.SlashResult
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
@@ -71,8 +73,8 @@ class ChatSession(
     private val risks: ToolRiskStore? = null,
     /** Dates what this device sends and sees finish; live events carry no time of their own. */
     private val clock: Clock = Clock.System,
-    /** For a new chat: the working folder it starts in (a project's), or null for the profile's default. */
-    private val cwd: String? = null,
+    /** For a new chat: the working folder it starts in (a project's), or null for the profile's default. See [startIn]. */
+    private var cwd: String? = null,
     /** The device's copy of the transcript, shown while the gateway can't be read. */
     private val cache: OfflineCache? = null,
     /** `/btw` and `/bg` cards from when this chat was last open ([ChatHost] keeps them across a switch). */
@@ -93,6 +95,18 @@ class ChatSession(
      */
     private var rowExists = initialStoredId != null
     private val attachMutex = Mutex()
+
+    /** Held by a [submit] from its uploads until its prompt is settled; see there. */
+    private val sendMutex = Mutex()
+
+    /**
+     * The socket [ChatState.runtimeSessionId] was attached on. Runtime ids belong to the
+     * socket: after a reconnect or a relogin the cached id must not go out on the new
+     * socket (the gateway has no subscription for it there and refuses the send as a
+     * stranger's). Written wherever the id is (re-)attached, read by [ensureAttached].
+     */
+    @kotlin.concurrent.Volatile
+    private var attachedClient: JsonRpcClient? = null
 
     /**
      * Prompts this client submitted whose turn hasn't started yet. A `message.start` beyond them is a
@@ -201,11 +215,21 @@ class ChatSession(
         display: String? = null,
         queue: Boolean = false,
         voiceLive: VoiceLiveTurn? = null,
+    ): SendOutcome = submitPrompt(text, attachments, display, queue, voiceLive, resent = emptyList())
+
+    /** [submit], with [resent]: the `@file:` references, and their cards, of a prompt sent again ([resend]). */
+    private suspend fun submitPrompt(
+        text: String,
+        attachments: List<OutgoingAttachment>,
+        display: String?,
+        queue: Boolean,
+        voiceLive: VoiceLiveTurn?,
+        resent: List<Pair<String, ShownAttachment>>,
     ): SendOutcome {
         val trimmed = text.trim()
-        if (trimmed.isEmpty() && attachments.isEmpty()) return SendOutcome.NotSent
+        if (trimmed.isEmpty() && attachments.isEmpty() && resent.isEmpty()) return SendOutcome.NotSent
         // Desktop's fallback, so an image-only prompt still asks something.
-        val visible = trimmed.ifEmpty { if (attachments.any { it.kind != AttachmentKind.File }) IMAGE_ONLY_PROMPT else "" }
+        val visible = trimmed.ifEmpty { if (attachments.any { it.kind == AttachmentKind.Image }) IMAGE_ONLY_PROMPT else "" }
         val key = "local-${_state.value.keySeq}"
         _state.update {
             it.copy(
@@ -213,7 +237,7 @@ class ChatSession(
                     key,
                     display ?: visible,
                     pending = true,
-                    attachments = attachments.map { a -> a.toShown() },
+                    attachments = resent.map { (_, shown) -> shown } + attachments.map { a -> a.toShown() },
                     timestamp = nowSeconds(),
                 ),
                 keySeq = it.keySeq + 1,
@@ -221,26 +245,41 @@ class ChatSession(
                 refused = null,
             )
         }
+        // One prompt's uploads and submit at a time: images queued on the session ride with the next
+        // prompt.submit, so another send in between (while a large file goes up) would take them. Held
+        // until this one is settled, so the next one sees whether a turn is running.
+        val waited = !sendMutex.tryLock()
+        if (waited) sendMutex.lock()
+        // Sent while nothing ran, then held behind a prompt that started a turn: it runs after that turn,
+        // as it would have alone, rather than going in as a correction to a turn it wasn't meant for.
+        val queued = queue || (waited && _state.value.running)
         // Counted before submitting: the turn's message.start can arrive before the prompt.submit reply.
         ownTurnsPending++
-        // Images and PDF pages queued on the session: if the prompt never goes out they would ride along
+        // Images queued on the session: if the prompt never goes out they would ride along
         // with the next one, so a failed send takes them back.
         val queuedImages = mutableListOf<String>()
         var uploadClient: JsonRpcClient? = null
         var uploadRuntimeId: String? = null
         // Only a prompt that starts a turn is written to the transcript at once; a correction or a
         // queued one isn't, so for those the transcript can't say whether it arrived.
-        val startsTurn = !queue && !_state.value.running
+        val startsTurn = !queued && !_state.value.running
         // The prompts shown, which the transcript has too; not countable when the transcript failed to load.
         val promptsBefore = _state.value.takeIf { it.historyRead }
             ?.messages?.count { it is ChatMessage.User && !it.pending && it.check == null }
         var submitted = false
+        // The files' references in the workspace, each with its card, kept for a resend.
+        val files = resent.toMutableList()
         return try {
+            // The composer holds files to this size; checked before any goes, so none is uploaded for nothing.
+            attachments.firstOrNull { it.size > OutgoingAttachment.MAX_BYTES }?.let {
+                throw RpcException(JsonRpcClient.MESSAGE_TOO_LARGE, "${it.name} is larger than ${OutgoingAttachment.MAX_SIZE}, too large to send.")
+            }
             val client = connectedClient() ?: throw RpcException(0, "Not connected to the gateway. Your message will need resending.")
             val runtimeId = ensureAttached(client)
             uploadClient = client
             uploadRuntimeId = runtimeId
-            val refs = attachments.mapNotNull { upload(client, runtimeId, it, queuedImages) }
+            attachments.forEach { a -> upload(client, runtimeId, a, queuedImages, key)?.let { files += it to a.toShown() } }
+            val refs = files.map { (ref, _) -> ref }
             submitted = true
             val result = client.request(
                 "prompt.submit",
@@ -248,7 +287,7 @@ class ChatSession(
                     put("session_id", runtimeId)
                     // Like Desktop: the file references first, then what was typed.
                     put("text", (refs + visible).filter { it.isNotEmpty() }.joinToString("\n\n"))
-                    if (queue) put("queued", true)
+                    if (queued) put("queued", true)
                     if (voiceLive != null) {
                         put("surface", "voice-live")
                         if (voiceLive.context.isNotBlank()) put("voice_context", voiceLive.context)
@@ -261,7 +300,7 @@ class ChatSession(
             if (status !in TURN_STARTING_STATUSES) ownTurnsPending = (ownTurnsPending - 1).coerceAtLeast(0)
             // The row written for it, so it can be regenerated or edited before the transcript is read again.
             val rowId = result.long("user_row_id")
-            val sentText = visible.takeIf { attachments.isEmpty() && display == null && it.isNotEmpty() }
+            val sentText = visible.takeIf { attachments.isEmpty() && resent.isEmpty() && display == null && it.isNotEmpty() }
             _state.update { state ->
                 val sent = state.copy(
                     running = true,
@@ -280,7 +319,7 @@ class ChatSession(
             // An error reply is the gateway turning it down; anything else after it went out is no verdict.
             if (submitted && e !is RpcException) {
                 val arrived = if (startsTurn) findInTranscript(visible, key, promptsBefore) else null
-                return settleUnanswered(key, arrived, UnsettledPrompt(text, display, startsTurn)) {
+                return settleUnanswered(key, arrived, UnsettledPrompt(text, display, startsTurn, files.toList())) {
                     detach(uploadClient, uploadRuntimeId, queuedImages)
                 }
             }
@@ -295,6 +334,8 @@ class ChatSession(
                 )
             }
             SendOutcome.NotSent
+        } finally {
+            sendMutex.unlock()
         }
     }
 
@@ -403,7 +444,8 @@ class ChatSession(
     suspend fun resend(key: String): String? {
         val prompt = unsettled[key]
         val shown = takeBack(key) ?: return null
-        val outcome = submit(prompt?.text ?: shown, display = prompt?.display)
+        // Its files are in the workspace already: their references go again, with their cards. Pictures don't.
+        val outcome = submitPrompt(prompt?.text ?: shown, emptyList(), prompt?.display, queue = false, voiceLive = null, resent = prompt?.files.orEmpty())
         return shown.takeIf { outcome == SendOutcome.NotSent }
     }
 
@@ -526,7 +568,8 @@ class ChatSession(
                     read = true
                     val prompts = historyToMessages(stored).filterIsInstance<ChatMessage.User>()
                     // Any prompt past the ones shown before it: later prompts may follow it by a later check.
-                    if (prompts.drop(before).any { it.text.contains(visible) }) return true
+                    // A file sent with no words: every text contains "", so only a prompt with attachments of its own counts.
+                    if (prompts.drop(before).any { it.text.contains(visible) && (visible.isNotEmpty() || it.attachments.isNotEmpty()) }) return true
                 }
                 // A new chat's stored row only appears with its first prompt.
                 is ApiResult.Failed -> if (result.status == 404 && !rowExists) read = true
@@ -537,14 +580,16 @@ class ChatSession(
     }
 
     /**
-     * Uploads one attachment to [runtimeId]. Images and PDF pages are queued for the next turn; a file
-     * comes back as the `@file:` reference to put in the prompt, which this returns.
+     * Uploads one attachment to [runtimeId]. Images are queued for the next turn; a PDF or other file
+     * comes back as the `@file:` reference to put in the prompt, which this returns. Bubble [key] shows
+     * how far a large one has gone up.
      */
     private suspend fun upload(
         client: JsonRpcClient,
         runtimeId: String,
         attachment: OutgoingAttachment,
         queuedImages: MutableList<String>,
+        key: String,
     ): String? {
         val failure = "Couldn't attach ${attachment.name}"
         suspend fun asFile(): String {
@@ -559,6 +604,7 @@ class ChatSession(
             ) as? JsonObject
             return result.string("ref_text")?.takeIf { result.boolean("attached") == true } ?: throw RpcException(0, failure)
         }
+        if (!attachment.inline) return uploadStaged(client, runtimeId, attachment, key)
         return when (attachment.kind) {
             AttachmentKind.Image -> {
                 val result = client.request(
@@ -574,23 +620,62 @@ class ChatSession(
                 result.string("path")?.let(queuedImages::add)
                 null
             }
-            AttachmentKind.Pdf -> try {
-                val result = client.request(
-                    "pdf.attach",
-                    buildJsonObject {
-                        put("session_id", runtimeId)
-                        put("content_base64", attachment.base64())
-                        put("filename", attachment.name)
-                    },
-                    timeoutMs = UPLOAD_TIMEOUT_MS,
-                ) as? JsonObject
-                result?.get("pages").asObjectList().mapNotNullTo(queuedImages) { it.string("path") }
-                null
-            } catch (e: RpcException) {
-                // 5028: the gateway can't render PDFs (no poppler); the agent can still read the file.
-                if (e.code == PDF_RENDER_UNAVAILABLE) asFile() else throw e
+            AttachmentKind.Pdf, AttachmentKind.File -> asFile()
+        }
+    }
+
+    /**
+     * An attachment too large for one WebSocket message: it goes up over HTTP ([AttachmentUploads]) and is
+     * attached by its path there as an `@file:` reference, a PDF whole like any other file. `file.attach`
+     * copies a file from outside the session's workspace into it, so the upload is removed after; one
+     * inside the workspace stays. Bubble [key] shows how far it has gone up, by whole percents, while it goes.
+     */
+    private suspend fun uploadStaged(
+        client: JsonRpcClient,
+        runtimeId: String,
+        attachment: OutgoingAttachment,
+        key: String,
+    ): String? {
+        fun show(progress: UploadProgress?) =
+            _state.update { it.copy(messages = it.messages.updateUser(key) { u -> u.copy(upload = progress) }) }
+        var shown = UploadProgress(attachment.name, 0, attachment.size)
+        show(shown)
+        val staged = try {
+            sessions.uploads.stage(gateway, attachment) { sent ->
+                val next = shown.copy(sent = sent)
+                if (next.percent != shown.percent) {
+                    shown = next
+                    show(next)
+                }
             }
-            AttachmentKind.File -> asFile()
+        } finally {
+            show(null)
+        }
+        var usedInPlace = false
+        try {
+            val result = client.request(
+                "file.attach",
+                buildJsonObject {
+                    put("session_id", runtimeId)
+                    put("path", staged.path)
+                    put("name", attachment.name)
+                },
+                timeoutMs = UPLOAD_TIMEOUT_MS,
+            ) as? JsonObject
+            // `uploaded: false` is a file referenced where it is (in the chat's workspace), which has to stay.
+            usedInPlace = result.boolean("uploaded")?.not() ?: (result.string("path") == staged.path)
+            return result.string("ref_text")?.takeIf { result.boolean("attached") == true }
+                ?: throw RpcException(0, "Couldn't attach ${attachment.name}")
+        } finally {
+            if (!usedInPlace) {
+                withContext(NonCancellable) {
+                    try {
+                        sessions.uploads.discard(gateway, staged)
+                    } catch (_: Exception) {
+                        // Best effort: a leftover upload is only a file in the gateway's uploads folder.
+                    }
+                }
+            }
         }
     }
 
@@ -724,7 +809,7 @@ class ChatSession(
      */
     suspend fun accountLimits(): List<String> {
         val client = connectedClient() ?: return emptyList()
-        val runtimeId = _state.value.runtimeSessionId ?: return emptyList()
+        val runtimeId = liveRuntimeId(client) ?: return emptyList()
         return try {
             val result = client.request("session.usage", buildJsonObject { put("session_id", runtimeId) }) as? JsonObject
             listOf("account_lines", "credits_lines").flatMap { key ->
@@ -740,7 +825,7 @@ class ChatSession(
     /** What fills the context window now (`session.context_breakdown`); null before the first prompt or offline. */
     suspend fun contextBreakdown(): ContextBreakdown? {
         val client = connectedClient() ?: return null
-        val runtimeId = _state.value.runtimeSessionId ?: return null
+        val runtimeId = liveRuntimeId(client) ?: return null
         return try {
             ContextBreakdown.parse(
                 client.request("session.context_breakdown", buildJsonObject { put("session_id", runtimeId) }) as? JsonObject,
@@ -755,7 +840,7 @@ class ChatSession(
     /** The background processes this chat's agent started (`process.list`); null when offline or before the first prompt. */
     suspend fun processes(): List<BackgroundProcess>? {
         val client = connectedClient() ?: return null
-        val runtimeId = _state.value.runtimeSessionId ?: return null
+        val runtimeId = liveRuntimeId(client) ?: return null
         return try {
             BackgroundProcess.parseList(client.request("process.list", buildJsonObject { put("session_id", runtimeId) }) as? JsonObject)
         } catch (e: CancellationException) {
@@ -768,7 +853,7 @@ class ChatSession(
     /** Stops one background process (`process.kill`), and says how that went. */
     suspend fun killProcess(processId: String): String {
         val client = connectedClient() ?: return NOT_CONNECTED
-        val runtimeId = _state.value.runtimeSessionId ?: return NOT_CONNECTED
+        val runtimeId = liveRuntimeId(client) ?: return NOT_CONNECTED
         return try {
             killOutcome(
                 client.request(
@@ -846,7 +931,7 @@ class ChatSession(
 
     /** The runtime id the `rollback.*` calls take: attaching a stored chat, but never creating one for an empty chat. */
     private suspend fun liveIdForCheckpoints(client: JsonRpcClient): String? =
-        _state.value.runtimeSessionId ?: if (rowExists) ensureAttached(client) else null
+        liveRuntimeId(client) ?: if (rowExists) ensureAttached(client) else null
 
     /**
      * The link on which `session.control.read` came back "no such method": that gateway predates it, so
@@ -862,7 +947,7 @@ class ChatSession(
     suspend fun refreshControl() {
         val client = connectedClient() ?: return
         if (client === controlUnsupportedOn) return
-        val runtimeId = _state.value.runtimeSessionId ?: return
+        val runtimeId = liveRuntimeId(client) ?: return
         // An update that lands while the read is out is newer than the read's answer, so the answer yields to it.
         val before = _state.value.control
         val result = try {
@@ -878,6 +963,62 @@ class ChatSession(
         if (result != null && "control" in result) {
             _state.update { if (it.control !== before) it else it.withControl(SessionControl.parse(result["control"] as? JsonObject)) }
         }
+    }
+
+    /**
+     * Reads the session's reasoning effort once (`config.get reasoning`), since `session.create` and a
+     * lazy `session.resume` leave `reasoning_effort` out of `info`; later changes arrive as `session.info`
+     * events. Best effort: an older gateway or any failure leaves the state as it is.
+     * Before a cold resume's agent is built, the gateway answers with the profile's level even when the
+     * chat kept its own; the build's `session.info` corrects that a few seconds later.
+     */
+    suspend fun refreshReasoning() {
+        val client = connectedClient() ?: return
+        val runtimeId = liveRuntimeId(client) ?: return
+        // A pick or session.info that lands while the read is out is newer than the read's answer.
+        val before = _state.value.reasoningRevision
+        val result = try {
+            client.request(
+                "config.get",
+                buildJsonObject {
+                    put("key", "reasoning")
+                    put("session_id", runtimeId)
+                },
+            ) as? JsonObject
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            return
+        }
+        val value = result.string("value")
+        if (ReasoningEffort.fromWire(value) != null) {
+            // A re-attach while the read was out made a new runtime session; its own read answers for it.
+            _state.update {
+                if (it.reasoningRevision != before || it.runtimeSessionId != runtimeId) it else it.copy(reasoningEffort = value)
+            }
+        }
+    }
+
+    /**
+     * Reads the profile's default level for a chat with no session yet (`config.get reasoning` without a
+     * `session_id`), so its pill shows that rather than Medium. Best effort, like [refreshReasoning].
+     */
+    private suspend fun refreshProfileReasoning(client: JsonRpcClient) {
+        val result = try {
+            client.request(
+                "config.get",
+                buildJsonObject {
+                    put("key", "reasoning")
+                    profile?.let { put("profile", it) }
+                },
+            ) as? JsonObject
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            return
+        }
+        val value = result.string("value")
+        if (ReasoningEffort.fromWire(value) != null) _state.update { it.copy(profileReasoningEffort = value) }
     }
 
     /**
@@ -1087,7 +1228,9 @@ class ChatSession(
             ) as? JsonObject
             val applied = result.string("value") ?: value
             settled = applied
-            if (ReasoningEffort.fromWire(applied) != null) _state.update { it.copy(reasoningEffort = applied) }
+            if (ReasoningEffort.fromWire(applied) != null) {
+                _state.update { it.copy(reasoningEffort = applied, reasoningRevision = it.reasoningRevision + 1) }
+            }
             when (applied) {
                 "show" -> "Thinking is shown."
                 "hide" -> "Thinking is hidden."
@@ -1161,7 +1304,10 @@ class ChatSession(
         val index = messages.indexOfFirst { it.key == key }
         if (index < 0) return null
         // Up to the row the next message starts at; the last message keeps every row.
-        val next = messages.drop(index + 1).firstNotNullOfOrNull { message -> storedRowId(message.key) }
+        val next = messages.drop(index + 1).firstNotNullOfOrNull { message ->
+            // A folded group is keyed by its newest row; it starts at its first.
+            storedRowId(((message as? ChatMessage.Event)?.event as? TranscriptEvent.SystemMessages)?.firstKey ?: message.key)
+        }
         val end = next?.let { id -> rows.indexOfFirst { it.id == id } }?.takeIf { it >= 0 } ?: rows.size
         return branchKeeping(rows.take(end).count { it.countsInBranch })
     }
@@ -1317,8 +1463,8 @@ class ChatSession(
         val trimmed = text.trim()
         if (trimmed.isEmpty()) return SendOutcome.NotSent
         val client = connectedClient()
-        val runtimeId = _state.value.runtimeSessionId
-        // Offline, submit says so and hands the text back.
+        val runtimeId = client?.let(::liveRuntimeId)
+        // Offline or mid-reconnect, submit says so or attaches again, and queues the text.
         if (!_state.value.running || client == null || runtimeId == null) return submit(trimmed, queue = true)
         val key = "local-${_state.value.keySeq}"
         _state.update {
@@ -1384,8 +1530,11 @@ class ChatSession(
     /** [interrupt], null when the turn couldn't be stopped (the reason is in [ChatState.error]). */
     private suspend fun interruptTurn(): List<String>? {
         val client = connectedClient() ?: return null
-        val runtimeId = _state.value.runtimeSessionId ?: return null
+        // Tapped mid-reconnect, an id from the old socket would be turned down: a stored chat's stop waits for the
+        // re-attach instead. A new chat has nothing to stop until it's created.
+        if (liveRuntimeId(client) == null && !rowExists) return null
         try {
+            val runtimeId = ensureAttached(client)
             client.request("session.interrupt", buildJsonObject { put("session_id", runtimeId) })
         } catch (e: CancellationException) {
             throw e
@@ -1408,7 +1557,7 @@ class ChatSession(
     /** Stops one running subagent (`subagent.interrupt`); its `subagent.complete` follows. */
     suspend fun stopSubagent(subagentId: String) {
         val client = connectedClient() ?: return
-        val runtimeId = _state.value.runtimeSessionId ?: return
+        val runtimeId = liveRuntimeId(client) ?: return
         try {
             val result = client.request(
                 "subagent.interrupt",
@@ -1476,9 +1625,10 @@ class ChatSession(
     }
 
     /** Sets the reasoning effort ([effort] `none` turns thinking off) for this chat only. */
-    suspend fun setReasoningEffort(effort: String) = setLive({ it.copy(reasoningEffort = effort) }) {
-        configSet("reasoning", JsonPrimitive(effort))
-    }
+    suspend fun setReasoningEffort(effort: String) =
+        setLive({ it.copy(reasoningEffort = effort, reasoningRevision = it.reasoningRevision + 1) }) {
+            configSet("reasoning", JsonPrimitive(effort))
+        }
 
     /** Turns the priority tier on or off for this chat only. */
     suspend fun setFast(fast: Boolean) = setLive({ it.copy(fast = fast) }) {
@@ -1530,6 +1680,20 @@ class ChatSession(
     fun showTitle(title: String?) = _state.update { it.copy(title = title) }
 
     /**
+     * Moves a chat the gateway hasn't made yet to [folder] (a project's; null: the profile's default), so its first
+     * send starts there, with the model and text picked for it kept. False, leaving it, once it's being made or is.
+     */
+    fun startIn(folder: String?): Boolean {
+        if (!unstarted) return false
+        cwd = folder
+        return true
+    }
+
+    /** Not made on the gateway yet, nor being made: [startIn] can still move it. */
+    val unstarted: Boolean
+        get() = _state.value.let { !rowExists && it.storedSessionId == null && it.attachment == Attachment.Detached }
+
+    /**
      * Shows a model set elsewhere (a Bot Chat's bot's own, which the chat follows) without asking the
      * gateway to pin it here; [error] says it couldn't be set.
      */
@@ -1564,13 +1728,17 @@ class ChatSession(
                 _state.update { it.copy(attachment = Attachment.Detached) }
                 return@collectLatest
             }
-            if (!rowExists) return@collectLatest // a new chat attaches on first send
+            if (!rowExists) { // a new chat attaches on first send
+                refreshProfileReasoning(connectionState.client)
+                return@collectLatest
+            }
             // Load what couldn't be read before the link came up; after a drop, attaching catches up.
             // A load still running (showing the saved copy meanwhile) isn't one that failed: it brings the rows itself.
             if (!attachedBefore && !_state.value.historyRead && !historyMutex.isLocked) loadHistory()
             // A chat created on this link was live too, though it never resumed: it catches up the same way.
             val reconnected = attachedBefore || streamMutex.withLock { seqRuntime != null }
-            if (runCatchingAttach(connectionState.client, reconnected = reconnected)) attachedBefore = true
+            // A send on this link may have attached first; that runtime is kept, not resumed a second time.
+            if (runCatchingAttach(connectionState.client, reconnected = reconnected, reuse = true)) attachedBefore = true
         }
     }
 
@@ -1579,6 +1747,28 @@ class ChatSession(
             val runtimeId = _state.value.runtimeSessionId ?: return@collect
             if (event.sessionId != runtimeId) return@collect
             streamMutex.withLock { deliver(event) }
+        }
+    }
+
+    /**
+     * Catches the open chat up with the gateway after the app was away. A backgrounded phone misses live
+     * events, and a socket that never reported a drop leaves the connection on Connected: no attach fires
+     * on the way back, so the transcript stays short until an unrelated event arrives. A chat nothing has
+     * been read for yet has nothing to catch up on; the first send attaches it as usual.
+     */
+    fun resync() {
+        val state = _state.value
+        val runtimeId = state.runtimeSessionId ?: return
+        // Nothing read yet: the first send attaches the chat and loads the transcript as it always does.
+        if (!state.historyRead) return
+        scope.launch {
+            val client = connectedClient() ?: return@launch
+            val start = streamMutex.withLock {
+                // Only the runtime attached on this socket, and not while another catch-up runs. Live events are held
+                // from here, so none lands both live and again in the replay.
+                (liveRuntimeId(client) == runtimeId && held == null).also { if (it) held = mutableListOf() }
+            }
+            if (start) catchUp(client, runtimeId, foreground = true)
         }
     }
 
@@ -1611,7 +1801,7 @@ class ChatSession(
      * events through. When the ring can't fill it (an older gateway, too long away, a restarted gateway) the chat
      * reloads the transcript and takes the running reply as the gateway has it, as it did before replay existed.
      */
-    private suspend fun catchUp(client: JsonRpcClient, runtimeId: String) {
+    private suspend fun catchUp(client: JsonRpcClient, runtimeId: String, foreground: Boolean = false) {
         val from = streamMutex.withLock { lastSeq }
         val missed = if (from == null) null else try {
             val reply = client.request(
@@ -1627,8 +1817,11 @@ class ChatSession(
         } catch (e: Exception) {
             null // method missing on an older gateway, or the link went again
         }
+        // Back in sight mid-turn with no replay: the running reply and the gateway's copy of it are from before the
+        // app went away, so neither is laid over a fresh transcript. The turn goes on from what shows, as before.
+        val keep = missed == null && foreground && _state.value.running
         // Read while live events stay held; the stream lock is only taken to apply.
-        if (missed == null && rowExists && _state.value.runtimeSessionId == runtimeId) loadHistory()
+        if (missed == null && !keep && rowExists && _state.value.runtimeSessionId == runtimeId) loadHistory()
         streamMutex.withLock {
             // The link went, or another runtime took over: the next attach starts its own catch-up.
             if (_state.value.runtimeSessionId != runtimeId) {
@@ -1637,7 +1830,7 @@ class ChatSession(
             }
             if (missed != null) {
                 missed.forEach(::apply)
-            } else {
+            } else if (!keep) {
                 lastSeq = null
                 val streamed = inflightText
                 if (streamed != null && _state.value.running) {
@@ -1914,8 +2107,8 @@ class ChatSession(
         )
     }
 
-    private suspend fun runCatchingAttach(client: JsonRpcClient, reconnected: Boolean = false): Boolean = try {
-        val runtimeId = attach(client, reconnected)
+    private suspend fun runCatchingAttach(client: JsonRpcClient, reconnected: Boolean = false, reuse: Boolean = false): Boolean = try {
+        val runtimeId = attach(client, reconnected, reuse)
         scope.launch { refreshSubagents(client, runtimeId) }
         true
     } catch (e: CancellationException) {
@@ -1933,16 +2126,37 @@ class ChatSession(
     }
 
     private suspend fun ensureAttached(client: JsonRpcClient): String {
-        _state.value.runtimeSessionId?.let { return it }
-        return if (rowExists) attach(client) else create(client)
+        // The cached id belongs to the socket it was attached on; a new socket re-attaches
+        // (under the attach mutex, so a send racing a reconnect waits for the re-attach)
+        // instead of firing the stale id where the gateway has no subscription for it.
+        liveRuntimeId(client)?.let { return it }
+        // Attached before, on another socket or before a failed attach on this one, events may have been missed since.
+        val stored = rowExists
+        return try {
+            if (stored) attach(client, reconnected = attachedClient != null, reuse = true) else create(client)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // Not left "Attaching": a stored chat shows the failure with its retry; a new one is made again on the next send.
+            _state.update {
+                if (it.attachment !is Attachment.Attaching) it
+                else it.copy(attachment = if (stored) Attachment.Failed(e.message ?: "Couldn't open the session.") else Attachment.Detached)
+            }
+            throw e
+        }
     }
+
+    /** The runtime id, when it was attached on [client]; one from an earlier socket is null, since it's no good on this one. */
+    private fun liveRuntimeId(client: JsonRpcClient): String? = _state.value.runtimeSessionId?.takeIf { attachedClient === client }
 
     /**
      * `session.resume` the stored id; the reply's `session_id` is the runtime id events carry. After a drop
      * ([reconnected]) the same runtime picks up from the last event applied (see [catchUp]); a new one, or one
-     * with nothing to pick up from, reloads the transcript instead.
+     * with nothing to pick up from, reloads the transcript instead. With [reuse], a runtime already attached on
+     * [client] by the time the lock is free (a send and the reconnect racing) is kept rather than resumed again.
      */
-    private suspend fun attach(client: JsonRpcClient, reconnected: Boolean = false): String = attachMutex.withLock {
+    private suspend fun attach(client: JsonRpcClient, reconnected: Boolean = false, reuse: Boolean = false): String = attachMutex.withLock {
+        if (reuse) liveRuntimeId(client)?.let { return@withLock it }
         val stored = _state.value.storedSessionId ?: error("No stored session to resume")
         _state.update { it.copy(attachment = Attachment.Attaching) }
         val result = client.request(
@@ -1989,6 +2203,8 @@ class ChatSession(
         }
         if (reconnected && (!resumable || (!_state.value.historyRead && !historyMutex.isLocked))) loadHistory()
         var replyKey: String? = null
+        // Named with the id it goes with, so no reader ever pairs this socket with the old id or the old socket with this one.
+        attachedClient = client
         _state.update { state ->
             state.copy(
                 attachment = Attachment.Attached(runtimeId),
@@ -2020,11 +2236,14 @@ class ChatSession(
                 }
             }
         }
-        // session.resume doesn't carry the goal/loop/heartbeat; read them once, events take it from there.
+        // session.resume doesn't carry the goal/loop/heartbeat, nor the reasoning effort before the agent is built;
+        // read them once, events take it from there.
         // After the catch-up: a missed update it replays is older than the read, so it mustn't land after it.
+        val readReasoning = (result["info"] as? JsonObject)?.containsKey("reasoning_effort") != true
         scope.launch {
             if (catchingUp) catchUp(client, runtimeId)
             refreshControl()
+            if (readReasoning) refreshReasoning()
         }
         runtimeId
     }
@@ -2042,6 +2261,8 @@ class ChatSession(
      * with an instruction (a seeded chat's row is stored on create), so it's resumed from then on, not made again.
      */
     private suspend fun create(client: JsonRpcClient): String = attachMutex.withLock {
+        // Two sends racing on a new chat: the one that waited takes the session the first made.
+        liveRuntimeId(client)?.let { return@withLock it }
         _state.update { it.copy(attachment = Attachment.Attaching) }
         val picks = _state.value
         val instruction = startInstruction()
@@ -2072,6 +2293,7 @@ class ChatSession(
         // The gateway takes a folder that's gone without an error and runs the chat in its own folder instead.
         val ranIn = (result["info"] as? JsonObject).string("cwd")
         val movedFrom = cwd?.takeIf { ranIn != null && ranIn.trimEnd('/', '\\') != it.trimEnd('/', '\\') }
+        attachedClient = client
         _state.update {
             it.copy(
                 attachment = Attachment.Attached(runtimeId),
@@ -2080,6 +2302,10 @@ class ChatSession(
                 inputRequests = it.inputRequests.plusNew(claimUnclaimed(runtimeId)),
                 error = if (movedFrom != null) "The project's folder $movedFrom wasn't found, so this chat runs in $ranIn." else it.error,
             ).withInfo(result["info"] as? JsonObject)
+        }
+        // A level picked before the first send went with the create; otherwise the profile's applies, so read it.
+        if (picks.reasoningEffort == null && (result["info"] as? JsonObject)?.containsKey("reasoning_effort") != true) {
+            scope.launch { refreshReasoning() }
         }
         runtimeId
     }
@@ -2122,8 +2348,6 @@ class ChatSession(
 
         /** Uploads of several MB over a phone link take a while. */
         const val UPLOAD_TIMEOUT_MS = 120_000L
-
-        const val PDF_RENDER_UNAVAILABLE = 5028
 
         /** The gateway's "busy": a turn is running, so nothing was cut. */
         const val BUSY = 4009

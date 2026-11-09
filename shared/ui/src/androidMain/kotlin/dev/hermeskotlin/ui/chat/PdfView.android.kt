@@ -10,6 +10,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
@@ -19,7 +20,8 @@ import java.io.File
 @Composable
 internal actual fun rememberPdfOpener(): suspend (ByteArray) -> PdfOpen {
     val cache = LocalContext.current.applicationContext.cacheDir
-    return remember(cache) { { bytes -> openPdf(cache, bytes) } }
+    // PdfRenderer cannot cancel its constructor; deliver its owner even after a Back tap so the viewer closes it.
+    return remember(cache) { { bytes -> withContext(NonCancellable) { openPdf(cache, bytes) } } }
 }
 
 /**

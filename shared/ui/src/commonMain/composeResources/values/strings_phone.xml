@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Settings → Phone tools: the tools, the calls and quiet hours, the phones the gateway knows, watched places. -->
+    <string name="phone_intro">Let the agent use this phone: read how it is, or do something on it. Every tool is off until you turn it on, and anything that changes the phone asks you first: in Kyllene while it’s open, else in a notification. A tool you turn off is taken away from the agent at once.</string>
+    <string name="phone_install_what">It offers the agent the tools you turn on here, and passes their calls to this phone.</string>
+    <string name="phone_let_agent">Let the agent use this phone</string>
+    <string name="phone_set_up">Set up on the gateway</string>
+    <string name="phone_allow">Allow on this phone</string>
+    <string name="phone_section_tools">Tools</string>
+    <string name="phone_section_calls">Calls</string>
+    <string name="phone_section_phones">Phones</string>
+    <string name="phone_section_used">Used lately</string>
+
+    <string name="phone_status_off">Off. The agent can’t use this phone.</string>
+    <string name="phone_status_none">On. Turn on below each tool the agent may use.</string>
+    <plurals name="phone_status_count">
+        <item quantity="one">On. New chats can use %1$d tool.</item>
+        <item quantity="other">On. New chats can use %1$d tools.</item>
+    </plurals>
+    <string name="phone_status_offline">Waiting to connect to the gateway.</string>
+    <string name="phone_status_working">Setting up with the gateway…</string>
+    <string name="phone_status_not_installed">Needs the herald-push plugin on the gateway.</string>
+    <string name="phone_status_outdated">The gateway’s herald-push plugin is %1$s; phone tools need %2$s. Update it below.</string>
+    <string name="phone_status_too_old">The gateway’s herald-push plugin is too old.</string>
+    <string name="phone_status_refused">The gateway refused.</string>
+
+    <string name="phone_rings_title">Ring me for an answer</string>
+    <string name="phone_rings_detail">Every approval or question from a chat you’re not looking at rings like a call. Decline it for the usual notification. It only ever rings you: the agent never calls anyone from this phone.</string>
+    <string name="phone_rings_talk_title">Talk when I answer</string>
+    <string name="phone_rings_talk_detail">Answering puts Hermes on the line: it asks in its own words, you answer by voice, and you can talk on. Off, Answer opens the chat instead.</string>
+    <string name="phone_watch_rings_title">Ring my watch too</string>
+    <string name="phone_watch_rings_detail">Kyllene on your watch rings as well. On a Wear OS watch, Answer starts a call from the watch, when your gateway talks live. On a Pebble, Answer shows the question there when Answer on the Pebble is on; else answer on your phone.</string>
+    <string name="phone_quiet_title">Quiet hours</string>
+    <string name="phone_quiet_empty">They start and end at %1$s, so nothing is quiet yet: pick another time.</string>
+    <string name="phone_quiet_window">Nothing rings from %1$s to %2$s.</string>
+    <string name="phone_quiet_off">Nothing rings between the times you pick.</string>
+    <string name="phone_quiet_detail">%1$s The agent is told to reach you another way; approvals and questions come as notifications. Do Not Disturb silences them too, unless you let Kyllene interrupt it. A second call from one chat within 15 minutes gets through, like a repeat caller.</string>
+    <string name="phone_quiet_starts">Starts</string>
+    <string name="phone_quiet_ends">Ends</string>
+    <string name="phone_quiet_start_title">Quiet hours start</string>
+    <string name="phone_quiet_end_title">Quiet hours end</string>
+    <string name="phone_quiet_set">Set</string>
+    <string name="phone_later_hour">Later hour</string>
+    <string name="phone_earlier_hour">Earlier hour</string>
+    <string name="phone_later_minutes">Later minutes</string>
+    <string name="phone_earlier_minutes">Earlier minutes</string>
+
+    <string name="phone_phones_note">A chat you send from a phone uses that phone. Scheduled jobs and chats from Hermes Desktop or the dashboard use the first phone in this list with the tool on. A phone you remove comes back if Kyllene on it is still signed in with phone tools on.</string>
+    <string name="phone_this_phone">%1$s · This phone</string>
+    <string name="phone_move_up">Move %1$s up</string>
+    <string name="phone_move_down">Move %1$s down</string>
+    <string name="phone_remove">Remove %1$s</string>
+    <string name="phone_no_tools">No tools on</string>
+    <plurals name="phone_tools_on">
+        <item quantity="one">%1$d tool on</item>
+        <item quantity="other">%1$d tools on</item>
+    </plurals>
+    <string name="phone_used_ago">%1$s · used %2$s ago</string>
+    <string name="phone_used_just_now">%1$s · used just now</string>
+    <string name="phone_seen_ago">%1$s · seen %2$s ago</string>
+    <string name="phone_seen_just_now">%1$s · seen just now</string>
+    <string name="phone_remove_title">Remove %1$s?</string>
+    <string name="phone_remove_message">The agent stops using its phone tools, and calls waiting for it are refused. If Kyllene on that phone is still signed in with phone tools on, it comes back the next time it connects.</string>
+
+    <string name="phone_places_note_on">Android checks every few minutes, so a message can come a little late. It’s sent as you, marked as coming from the place.</string>
+    <string name="phone_places_note_off">Watched places is off, so none of these fire.</string>
+    <string name="phone_place_arriving">Arriving at %1$s · %2$d m</string>
+    <string name="phone_place_leaving">Leaving %1$s · %2$d m</string>
+    <string name="phone_place_sends">Sends: %1$s</string>
+    <string name="phone_place_sends_to">Sends to %1$s: %2$s</string>
+    <string name="phone_place_stop">Stop watching %1$s</string>
+    <string name="phone_just_now">Just now</string>
+    <string name="phone_ago">%1$s ago</string>
+
+    <!-- What a tool still needs from Android, under its switch, and the optional grants offered as a row. -->
+    <string name="phone_need_notifications">Turn on Kyllene’s notifications: changes are asked there.</string>
+    <string name="phone_need_dnd">Allow Kyllene to change Do Not Disturb.</string>
+    <string name="phone_need_usage">Give Kyllene Usage access, to see which apps you use.</string>
+    <string name="phone_need_location">Allow Kyllene to use this phone’s location.</string>
+    <string name="phone_need_precise">Allow precise location: Android only watches places with it.</string>
+    <string name="phone_need_always">Allow location all the time: places are watched while Kyllene is closed. Choose “Allow all the time”.</string>
+    <string name="phone_need_calendar">Allow Kyllene to use your calendar.</string>
+    <string name="phone_need_contacts">Allow Kyllene to read your contacts.</string>
+    <string name="phone_need_health_update">Update Health Connect, where the data comes from.</string>
+    <string name="phone_need_health_install">Install Health Connect, where the data comes from.</string>
+    <string name="phone_need_health_none">This phone has no Health Connect.</string>
+    <string name="phone_need_health_read">Allow Kyllene to read steps, sleep or heart rate in Health Connect.</string>
+    <string name="phone_need_call_notifications">Turn on Kyllene’s notifications: the call rings there.</string>
+    <string name="phone_need_full_screen">Allow full-screen notifications, so the call shows over the lock screen.</string>
+    <string name="phone_need_android">Phone tools work from Kyllene on an Android phone.</string>
+    <string name="phone_optional_closed">Also while Kyllene is closed (optional)</string>
+    <string name="phone_optional_health">Also steps, sleep or heart rate (optional)</string>
+
+    <string name="phone_tool_battery">Battery</string>
+    <string name="phone_tool_battery_detail">The level, whether it’s charging, and the time until full.</string>
+    <string name="phone_tool_network">Network</string>
+    <string name="phone_tool_network_detail">Wi-Fi, mobile data or offline, whether it’s metered, and a VPN.</string>
+    <string name="phone_tool_sound">Sound</string>
+    <string name="phone_tool_sound_detail">Do Not Disturb, the ringer and volumes. A change asks you first.</string>
+    <string name="phone_tool_alarms">Alarms and timers</string>
+    <string name="phone_tool_alarms_detail">Sets one in your clock app after you allow it.</string>
+    <string name="phone_tool_screen_time">Screen time</string>
+    <string name="phone_tool_screen_time_detail">Which apps you used and for how long, screen-on time and unlocks, up to a week back.</string>
+    <string name="phone_tool_open">Open links, maps and apps</string>
+    <string name="phone_tool_open_detail">Opens a link, a place, an app or the share sheet after you allow it.</string>
+    <string name="phone_tool_clipboard">Copy to the clipboard</string>
+    <string name="phone_tool_clipboard_detail">Puts text on your clipboard after you allow it. Never reads what’s there.</string>
+    <string name="phone_tool_location">Location</string>
+    <string name="phone_tool_location_detail">Where the phone is and the nearest address, as precisely as you allow. While Kyllene is open, unless you also allow it while closed.</string>
+    <string name="phone_tool_geofences">Watched places</string>
+    <string name="phone_tool_geofences_detail">Arriving at or leaving a place sends its message to the chat it was added from. Adding or removing one asks you first; needs precise location all the time.</string>
+    <string name="phone_tool_calendar">Calendar</string>
+    <string name="phone_tool_calendar_detail">Your events in a time range. Adding or moving one asks you first.</string>
+    <string name="phone_tool_contacts">Contacts</string>
+    <string name="phone_tool_contacts_detail">Looks people up by name, number or email: only their names, numbers and emails, a few at a time.</string>
+    <string name="phone_tool_health">Health</string>
+    <string name="phone_tool_health_detail">Steps, sleep and heart rate from Health Connect, as much of it as you allow there. While Kyllene is open, unless you also allow it while closed.</string>
+    <string name="phone_tool_show_ui">Screens in the chat (experiment)</string>
+    <string name="phone_tool_show_ui_detail">The agent draws a small screen under its reply, with buttons, choices or a form, and waits up to 5 minutes for your tap. Android only.</string>
+    <string name="phone_tool_call_me">Hermes can call me</string>
+    <string name="phone_tool_call_me_detail">The agent rings you when something can’t wait, or when you ask it to call you, from a scheduled job too. Answer, and Hermes tells you why on the line. It only ever calls you.</string>
+</resources>

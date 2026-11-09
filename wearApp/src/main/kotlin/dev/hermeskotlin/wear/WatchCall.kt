@@ -39,6 +39,9 @@ import kotlin.math.sqrt
  */
 class WatchCall(context: Context) {
     private val appContext = context.applicationContext
+
+    /** Why a call couldn't go on, in the watch's language: it shows under the orb. */
+    private fun say(id: Int): String = appContext.getString(id)
     private val audioManager = appContext.getSystemService(AudioManager::class.java)
     private val connectivity = appContext.getSystemService(ConnectivityManager::class.java)
     private val incoming = Channel<String>(Channel.UNLIMITED)
@@ -72,22 +75,22 @@ class WatchCall(context: Context) {
         fastNetwork()
         val gathered = CompletableDeferred<Unit>()
         val peer = setUp(gathered)
-        val offer = peer.createSdp { observer -> whileOpen(observer::onCreateFailure) { peer.createOffer(observer, MediaConstraints()) } }
-        peer.applySdp { observer -> whileOpen(observer::onSetFailure) { peer.setLocalDescription(observer, offer) } }
+        val offer = peer.createSdp(say(R.string.wear_call_offer_failed)) { observer -> whileOpen(observer::onCreateFailure) { peer.createOffer(observer, MediaConstraints()) } }
+        peer.applySdp(say(R.string.wear_call_refused)) { observer -> whileOpen(observer::onSetFailure) { peer.setLocalDescription(observer, offer) } }
         // The model answers with whatever candidates are in the offer, so a slow gathering only waits so long.
         withTimeoutOrNull(ICE_GATHER_MS) { gathered.await() }
-        return synchronized(lock) { peer.takeUnless { closed }?.localDescription?.description } ?: error("Couldn't make the call offer.")
+        return synchronized(lock) { peer.takeUnless { closed }?.localDescription?.description } ?: error(say(R.string.wear_call_offer_failed))
     }
 
     /** Runs [block] on the call's objects unless it's been closed (they're freed then), else [ended]. */
     private inline fun whileOpen(ended: (String) -> Unit, block: () -> Unit) {
         val open = synchronized(lock) { if (!closed) block(); !closed }
-        if (!open) ended(ENDED)
+        if (!open) ended(say(R.string.wear_call_ended_detail))
     }
 
     // Under the lock, all of it: a hang-up meanwhile would free what's being set up.
     private fun setUp(gathered: CompletableDeferred<Unit>): PeerConnection = synchronized(lock) {
-        if (closed) error(ENDED)
+        if (closed) error(say(R.string.wear_call_ended_detail))
         routeAudio()
         // WebRTC's own echo canceller: a watch's speaker sits right by its microphone.
         val adm = JavaAudioDeviceModule.builder(appContext)
@@ -122,7 +125,7 @@ class WatchCall(context: Context) {
                 override fun onRenegotiationNeeded() = Unit
                 override fun onAddTrack(receiver: RtpReceiver, streams: Array<out MediaStream>) = Unit
             },
-        ) ?: error("Couldn't set up the call.")
+        ) ?: error(say(R.string.wear_call_setup_failed))
         this.peer = peer
 
         val source = factory.createAudioSource(
@@ -138,7 +141,7 @@ class WatchCall(context: Context) {
         peer.addTrack(track, listOf("mic"))
 
         // Before the offer, so the offer carries the channel.
-        val channel = peer.createDataChannel("oai-events", DataChannel.Init()) ?: error("Couldn't open the call's event channel.")
+        val channel = peer.createDataChannel("oai-events", DataChannel.Init()) ?: error(say(R.string.wear_call_events_failed))
         this.channel = channel
         channel.registerObserver(object : DataChannel.Observer {
             override fun onMessage(buffer: DataChannel.Buffer) {
@@ -163,7 +166,7 @@ class WatchCall(context: Context) {
     /** The model's answer, from the phone; the call then connects. The phone may send it again: only the first counts. */
     suspend fun answer(sdp: String) {
         val peer = synchronized(lock) { peer?.takeIf { !closed && !answered }?.also { answered = true } } ?: return
-        peer.applySdp { observer ->
+        peer.applySdp(say(R.string.wear_call_refused)) { observer ->
             whileOpen(observer::onSetFailure) { peer.setRemoteDescription(observer, SessionDescription(SessionDescription.Type.ANSWER, sdp)) }
         }
     }
@@ -312,7 +315,6 @@ class WatchCall(context: Context) {
         const val FAST_NETWORK_MS = 4_000L
         const val SPEAKING_LEVEL = 0.02
         const val SPEAKING_HANGOVER_MS = 400L
-        const val ENDED = "The call ended."
 
         @Volatile private var initialized = false
 
@@ -340,21 +342,21 @@ class WatchCall(context: Context) {
     }
 }
 
-/** Creates an SDP and waits for it. */
-private suspend fun PeerConnection.createSdp(start: (SdpObserver) -> Unit): SessionDescription = suspendCoroutine { continuation ->
+/** Creates an SDP and waits for it; [failed] is said when WebRTC gives no reason. */
+private suspend fun PeerConnection.createSdp(failed: String, start: (SdpObserver) -> Unit): SessionDescription = suspendCoroutine { continuation ->
     start(object : SdpObserver {
         override fun onCreateSuccess(description: SessionDescription) = continuation.resume(description)
-        override fun onCreateFailure(error: String?) = continuation.resumeWithException(IllegalStateException(error ?: "Couldn't make the call offer."))
+        override fun onCreateFailure(error: String?) = continuation.resumeWithException(IllegalStateException(error ?: failed))
         override fun onSetSuccess() = Unit
         override fun onSetFailure(error: String?) = Unit
     })
 }
 
-/** Applies an SDP and waits for it. */
-private suspend fun PeerConnection.applySdp(start: (SdpObserver) -> Unit): Unit = suspendCoroutine { continuation ->
+/** Applies an SDP and waits for it; [refused] is said when WebRTC gives no reason. */
+private suspend fun PeerConnection.applySdp(refused: String, start: (SdpObserver) -> Unit): Unit = suspendCoroutine { continuation ->
     start(object : SdpObserver {
         override fun onSetSuccess() = continuation.resume(Unit)
-        override fun onSetFailure(error: String?) = continuation.resumeWithException(IllegalStateException(error ?: "The call was refused."))
+        override fun onSetFailure(error: String?) = continuation.resumeWithException(IllegalStateException(error ?: refused))
         override fun onCreateSuccess(description: SessionDescription) = Unit
         override fun onCreateFailure(error: String?) = Unit
     })

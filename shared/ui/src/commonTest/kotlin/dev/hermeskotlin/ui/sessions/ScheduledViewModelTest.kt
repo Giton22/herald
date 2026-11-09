@@ -30,7 +30,9 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import kotlin.test.assertIs
 import kotlin.test.assertTrue
+import dev.hermeskotlin.ui.resources.*
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ScheduledViewModelTest {
@@ -133,7 +135,7 @@ class ScheduledViewModelTest {
 
         vm.saveJob()
 
-        assertEquals("Give the routine a name.", vm.state.value.editor?.error)
+        assertEquals(said(Res.string.sessions_job_needs_name), vm.state.value.editor?.error)
         assertTrue(created.isEmpty())
     }
 
@@ -166,7 +168,7 @@ class ScheduledViewModelTest {
         vm.saveJob()
 
         assertTrue(created.isEmpty())
-        assertTrue("deleted" in vm.state.value.editor?.error.orEmpty())
+        assertEquals(said(Res.string.sessions_job_gone), vm.state.value.editor?.error)
     }
 
     @Test
@@ -186,7 +188,7 @@ class ScheduledViewModelTest {
         val state = vm.state.first { it.message != null }
         assertEquals("a1", state.openJobId)
         assertNull(state.editor)
-        assertEquals("Job scheduled", state.message)
+        assertEquals(said(Res.string.sessions_job_scheduled), state.message)
         assertTrue(state.jobs.any { it.id == "n1" })
     }
 
@@ -203,8 +205,8 @@ class ScheduledViewModelTest {
         vm.closeEditor()
         gate.complete(Unit)
 
-        val message = vm.state.first { it.message != null }.message!!
-        assertTrue(message.startsWith("Couldn't save the job"), message)
-        assertTrue("Gateway is busy" in message, message)
+        val message = assertIs<Said.Line>(vm.state.first { it.message != null }.message)
+        assertEquals(Res.string.sessions_job_save_failed, message.res)
+        assertTrue("Gateway is busy" in message.detail.orEmpty(), message.toString())
     }
 }

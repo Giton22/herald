@@ -20,11 +20,25 @@ import kotlinx.coroutines.launch
 /** The ways in the gateway offers. Until its status answers, the password form shows, as before browser sign-in. */
 data class SignInMethods(val password: Boolean = true, val browser: Boolean = false)
 
+/** Why a sign-in didn't work; the screen words it. */
+sealed interface SignInError {
+    data object MissingFields : SignInError
+    data object WrongCredentials : SignInError
+    data object Rejected : SignInError
+    data object RateLimited : SignInError
+
+    /** [message] is what the network said, shown as it is. */
+    data class Unreachable(val message: String) : SignInError
+
+    /** The gateway's own message, shown as it is. */
+    data class Gateway(val message: String) : SignInError
+}
+
 data class SignInUiState(
     val signingIn: Boolean = false,
     /** The browser is open on the gateway's sign-in page and the app waits for it to come back. */
     val waitingForBrowser: Boolean = false,
-    val error: String? = null,
+    val error: SignInError? = null,
     /** The gateway just signed in to. The view model outlives one sign-in screen, so the screen checks it's its own. */
     val signedInUrl: String? = null,
     val methods: SignInMethods = SignInMethods(),
@@ -73,7 +87,7 @@ class SignInViewModel(
         val user = username.text.toString().trim()
         val pass = password.text.toString()
         if (user.isEmpty() || pass.isEmpty()) {
-            _state.update { it.copy(error = "Enter your username and password.") }
+            _state.update { it.copy(error = SignInError.MissingFields) }
             return
         }
         if (_state.value.signingIn) return
@@ -82,7 +96,7 @@ class SignInViewModel(
         viewModelScope.launch {
             val result = auth.signIn(gateway.gatewayUrl, gateway.provider, user, pass)
             if (result is ApiResult.Success) password.clearText()
-            finish(gateway, result, wrongCredentials = "Wrong username or password.")
+            finish(gateway, result, wrongCredentials = SignInError.WrongCredentials)
         }
     }
 
@@ -92,7 +106,7 @@ class SignInViewModel(
         _state.update { it.copy(signingIn = true, waitingForBrowser = true, error = null) }
         browserJob = viewModelScope.launch {
             // The gateway picks the provider, or asks in the page when it has several.
-            finish(gateway, browserSignIn.signIn(gateway.gatewayUrl, provider = null, openBrowser), wrongCredentials = "Sign-in was rejected.")
+            finish(gateway, browserSignIn.signIn(gateway.gatewayUrl, provider = null, openBrowser), wrongCredentials = SignInError.Rejected)
         }
     }
 
@@ -104,17 +118,17 @@ class SignInViewModel(
     }
 
     /** A sign-in that ends after its gateway's screen went away changes nothing on screen. */
-    private fun finish(gateway: SavedGateway, result: ApiResult<Unit>, wrongCredentials: String) {
+    private fun finish(gateway: SavedGateway, result: ApiResult<Unit>, wrongCredentials: SignInError) {
         if (loadedUrl != gateway.url) return
         _state.update {
             val done = it.copy(signingIn = false, waitingForBrowser = false)
             when (result) {
                 is ApiResult.Success -> done.copy(signedInUrl = gateway.url)
                 ApiResult.InvalidCredentials -> done.copy(error = wrongCredentials)
-                ApiResult.RateLimited -> done.copy(error = "Too many attempts. Wait a moment and try again.")
-                is ApiResult.Unavailable -> done.copy(error = "Couldn't reach the gateway: ${result.message}")
-                is ApiResult.Failed -> done.copy(error = result.message)
-                ApiResult.SessionExpired -> done.copy(error = "Sign-in was rejected.")
+                ApiResult.RateLimited -> done.copy(error = SignInError.RateLimited)
+                is ApiResult.Unavailable -> done.copy(error = SignInError.Unreachable(result.message))
+                is ApiResult.Failed -> done.copy(error = SignInError.Gateway(result.message))
+                ApiResult.SessionExpired -> done.copy(error = SignInError.Rejected)
             }
         }
     }

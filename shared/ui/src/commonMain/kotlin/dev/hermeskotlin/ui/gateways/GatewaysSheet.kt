@@ -40,6 +40,8 @@ import dev.hermeskotlin.ui.isDesktop
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -56,12 +58,14 @@ import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Pencil
 import com.composables.icons.lucide.Plus
 import com.composables.icons.lucide.Server
+import com.composables.icons.lucide.ShieldCheck
 import com.composables.icons.lucide.Star
 import com.composables.icons.lucide.Trash2
 import com.composeunstyled.Text
 import com.composeunstyled.UnstyledIcon
 import com.composeunstyled.theme.Theme
 import dev.hermeskotlin.core.gateway.SavedGateway
+import dev.hermeskotlin.core.gateway.GatewayUrl
 import dev.hermeskotlin.designsystem.accent
 import dev.hermeskotlin.designsystem.accentText
 import dev.hermeskotlin.designsystem.body
@@ -86,6 +90,10 @@ import dev.hermeskotlin.designsystem.textSecondary
 import dev.hermeskotlin.designsystem.textTertiary
 import dev.hermeskotlin.designsystem.typography
 import dev.hermeskotlin.ui.GatewayChoices
+import dev.hermeskotlin.ui.components.rememberClientCertPicker
+import dev.hermeskotlin.ui.components.clientCertificatesAvailable
+import dev.hermeskotlin.ui.resources.*
+import org.jetbrains.compose.resources.stringResource
 
 /**
  * The saved gateways, primary first, the one in use checked. Tapping one switches to it (its sign-in when it
@@ -103,13 +111,15 @@ fun GatewaysSheet(
     onSetPrimary: (SavedGateway) -> Unit,
     onRename: (SavedGateway, String) -> Unit,
     onRemove: (SavedGateway) -> Unit,
+    onSetClientCert: (SavedGateway, String?) -> Unit,
 ) {
     var renameTarget by remember { mutableStateOf<SavedGateway?>(null) }
     var removeTarget by remember { mutableStateOf<SavedGateway?>(null) }
+    var certTarget by remember { mutableStateOf<SavedGateway?>(null) }
     val list = choices.list
 
     BottomSheet(visible = visible, onDismiss = onDismiss) {
-        SheetHeader("Gateways", "Each gateway is its own Hermes, with its own profiles and chats.")
+        SheetHeader(stringResource(Res.string.gateways_title), stringResource(Res.string.gateways_detail))
         // A card each; the sheet scrolls only when there are more than fit.
         Column(
             Modifier
@@ -131,15 +141,17 @@ fun GatewaysSheet(
                     onSetPrimary = { onSetPrimary(gateway) },
                     onRename = { renameTarget = gateway },
                     onRemove = { removeTarget = gateway },
+                    onClientCert = { certTarget = gateway },
                 )
             }
         }
         Spacer(Modifier.height(6.dp))
-        SheetAction("Add a gateway", Lucide.Plus, onClick = { onDismiss(); onAdd() })
+        SheetAction(stringResource(Res.string.connect_add_gateway), Lucide.Plus, onClick = { onDismiss(); onAdd() })
     }
 
     RenameGatewayDialog(renameTarget, onDismiss = { renameTarget = null }, onRename = onRename)
     RemoveGatewayDialog(removeTarget, onDismiss = { removeTarget = null }, onRemove = { onDismiss(); onRemove(it) })
+    ClientCertDialog(certTarget, onDismiss = { certTarget = null }, onSet = { gateway, alias -> certTarget = null; onSetClientCert(gateway, alias) })
 }
 
 @Composable
@@ -153,15 +165,19 @@ private fun GatewayRow(
     onSetPrimary: () -> Unit,
     onRename: () -> Unit,
     onRemove: () -> Unit,
+    onClientCert: () -> Unit,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     // The same choices as the ⋮ menu, at the pointer from a right-click on the desktop.
     var contextOpen by remember { mutableStateOf(false) }
+    val makePrimary = stringResource(Res.string.gateways_make_primary)
+    val rename = stringResource(Res.string.gateways_rename)
+    val remove = stringResource(Res.string.common_remove)
     RowContextMenu(contextOpen, onDismiss = { contextOpen = false }) {
         listOfNotNull(
-            RowMenuItem("Make primary", Lucide.Star, run = onSetPrimary).takeIf { !primary },
-            RowMenuItem("Rename", Lucide.Pencil, run = onRename),
-            RowMenuItem("Remove", Lucide.Trash2, destructive = true, run = onRemove),
+            RowMenuItem(makePrimary, Lucide.Star, run = onSetPrimary).takeIf { !primary },
+            RowMenuItem(rename, Lucide.Pencil, run = onRename),
+            RowMenuItem(remove, Lucide.Trash2, destructive = true, run = onRemove),
         )
     }
     val shape = RoundedCornerShape(Theme[radii][radiusLarge])
@@ -208,7 +224,7 @@ private fun GatewayRow(
                 )
                 if (primary && showPrimary) {
                     Text(
-                        "Primary",
+                        stringResource(Res.string.gateways_primary),
                         style = Theme[typography][caption].copy(fontSize = 10.5.sp, fontWeight = FontWeight.SemiBold),
                         color = Theme[colors][textSecondary],
                         maxLines = 1,
@@ -231,7 +247,7 @@ private fun GatewayRow(
                     }
                     if (!signedIn) {
                         Text(
-                            if (address != null) "· Signed out" else "Signed out",
+                            stringResource(if (address != null) Res.string.gateways_signed_out_after else Res.string.gateways_signed_out),
                             style = Theme[typography][bodySmall].copy(fontSize = 12.sp),
                             color = Theme[colors][warning],
                             maxLines = 1,
@@ -248,12 +264,13 @@ private fun GatewayRow(
             // A phone's sheet sits at the bottom of the screen, with no room below the row; a desktop's is centred.
             above = !isDesktop,
             items = {
-                if (!primary) MenuAction("Make primary", Lucide.Star, onClick = { menuOpen = false; onSetPrimary() })
-                MenuAction("Rename", Lucide.Pencil, onClick = { menuOpen = false; onRename() })
-                MenuAction("Remove", Lucide.Trash2, onClick = { menuOpen = false; onRemove() })
+                if (!primary) MenuAction(makePrimary, Lucide.Star, onClick = { menuOpen = false; onSetPrimary() })
+                MenuAction(rename, Lucide.Pencil, onClick = { menuOpen = false; onRename() })
+                if (clientCertificatesAvailable() && (!isDesktop || gateway.url.startsWith("https://"))) MenuAction(stringResource(Res.string.gateways_client_cert), Lucide.ShieldCheck, onClick = { menuOpen = false; onClientCert() })
+                MenuAction(remove, Lucide.Trash2, onClick = { menuOpen = false; onRemove() })
             },
         ) {
-            IconButton(Lucide.EllipsisVertical, contentDescription = "More for ${gateway.label}", onClick = { menuOpen = true })
+            IconButton(Lucide.EllipsisVertical, contentDescription = stringResource(Res.string.gateways_more_for, gateway.label), onClick = { menuOpen = true })
         }
     }
 }
@@ -274,11 +291,11 @@ private fun RenameGatewayDialog(gateway: SavedGateway?, onDismiss: () -> Unit, o
     Dialog(
         visible = gateway != null,
         onDismissRequest = onDismiss,
-        title = "Rename gateway",
-        message = "Leave empty to show its address.",
+        title = stringResource(Res.string.gateways_rename_title),
+        message = stringResource(Res.string.gateways_rename_detail),
         actions = {
-            Button("Cancel", onClick = onDismiss, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
-            Button("Save", onClick = submit, size = ButtonSize.Small)
+            Button(stringResource(Res.string.common_cancel), onClick = onDismiss, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
+            Button(stringResource(Res.string.app_save), onClick = submit, size = ButtonSize.Small)
         },
     ) {
         TextField(
@@ -299,11 +316,58 @@ private fun RemoveGatewayDialog(gateway: SavedGateway?, onDismiss: () -> Unit, o
     Dialog(
         visible = gateway != null,
         onDismissRequest = onDismiss,
-        title = "Remove gateway?",
-        message = "Kyllene signs out of “${g.label}” and forgets it. Its chats stay on the gateway.",
+        title = stringResource(Res.string.gateways_remove_title),
+        message = stringResource(Res.string.gateways_remove_detail, g.label),
         actions = {
-            Button("Cancel", onClick = onDismiss, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
-            Button("Remove", onClick = { onDismiss(); onRemove(g) }, variant = ButtonVariant.Danger, size = ButtonSize.Small)
+            Button(stringResource(Res.string.common_cancel), onClick = onDismiss, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
+            Button(stringResource(Res.string.common_remove), onClick = { onDismiss(); onRemove(g) }, variant = ButtonVariant.Danger, size = ButtonSize.Small)
         },
     )
+}
+
+/**
+ * The client certificate to present to [gateway], for proxies that ask for one (`ssl_verify_client`).
+ * Android picks a system identity; secure Linux builds import it for this gateway's TLS hostname.
+ */
+@Composable
+private fun ClientCertDialog(gateway: SavedGateway?, onDismiss: () -> Unit, onSet: (SavedGateway, String?) -> Unit) {
+    var shown by remember { mutableStateOf(gateway) }
+    if (gateway != null) shown = gateway
+    val g = shown ?: return
+    val parsed = GatewayUrl.parseOrNull(g.url)
+    val current by rememberUpdatedState(gateway)
+    val picker = key(g.url, gateway != null) {
+        val host = parsed?.takeIf { !isDesktop || it.value.startsWith("https://") }?.host
+        rememberClientCertPicker(host, parsed?.port ?: -1, onPicked = { alias ->
+            if (alias != null && current?.url == g.url) {
+                onDismiss()
+                onSet(g, alias)
+            }
+        })
+    }
+    Dialog(
+        visible = gateway != null,
+        onDismissRequest = onDismiss,
+        title = stringResource(Res.string.gateways_client_cert),
+        message = stringResource(if (isDesktop) Res.string.gateways_client_cert_detail_desktop else Res.string.gateways_client_cert_detail, g.label),
+        actions = {
+            Button(stringResource(Res.string.common_cancel), onClick = onDismiss, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
+            Button(stringResource(if (g.clientCertAlias == null) Res.string.gateways_pick else Res.string.gateways_change), onClick = picker::pick, size = ButtonSize.Small)
+        },
+    ) {
+        val alias = g.clientCertAlias
+        if (alias != null) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    alias,
+                    style = Theme[typography][code].copy(fontSize = 11.5.sp),
+                    color = Theme[colors][textSecondary],
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                Button(stringResource(if (isDesktop) Res.string.client_cert_clear_selection else Res.string.gateways_clear), onClick = { onDismiss(); onSet(g, null) }, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
+            }
+        }
+    }
 }

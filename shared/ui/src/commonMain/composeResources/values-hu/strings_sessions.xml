@@ -1,0 +1,479 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The sessions list and sidebar and the pages it opens, in Hungarian. Keys and placeholders as in values/. -->
+<resources>
+    <!-- Sidebar: header, switch, pages -->
+    <string name="sessions_mode_chats">Csevegések</string>
+    <string name="sessions_mode_bots">Botok</string>
+    <string name="sessions_new_chat">Új csevegés</string>
+    <string name="sessions_search_chats">Keresés a csevegésekben</string>
+    <string name="sessions_close_search">Keresés bezárása</string>
+    <string name="sessions_account">Fiók</string>
+    <string name="sessions_account_and_gateways">Fiók és gatewayek</string>
+    <string name="sessions_nav_inbox">Beérkezett</string>
+    <string name="sessions_nav_scheduled">Ütemezett</string>
+    <string name="sessions_nav_insights">Statisztika</string>
+    <string name="sessions_nav_capabilities">Eszköztár</string>
+    <string name="sessions_nav_plugins">Bővítmények</string>
+    <string name="sessions_nav_config">Konfiguráció</string>
+    <string name="sessions_nav_archived">Archivált</string>
+    <plurals name="sessions_unread_count">
+        <item quantity="one">%1$d olvasatlan</item>
+        <item quantity="other">%1$d olvasatlan</item>
+    </plurals>
+
+    <!-- Connection -->
+    <string name="sessions_connection_connected">Csatlakozva</string>
+    <string name="sessions_connection_not_connected">Nincs kapcsolat</string>
+    <string name="sessions_connection_signed_out">Kijelentkezve</string>
+    <string name="sessions_connection_reconnecting">Újracsatlakozás</string>
+    <string name="sessions_connection_connecting">Csatlakozás</string>
+
+    <!-- The list -->
+    <string name="sessions_no_matches">Nincs találat</string>
+    <string name="sessions_no_matches_detail">A keresés a címekben, a munkamenet-azonosítókban és az üzenetek szövegében keres.</string>
+    <string name="sessions_saved_copy">Mentett másolat · %1$s</string>
+    <string name="sessions_saved_copy_unreachable">%1$s. A Hermes most nem érhető el.</string>
+    <string name="sessions_try_again">Újra</string>
+    <string name="sessions_load_failed">Nem sikerült betölteni a munkameneteket</string>
+    <string name="sessions_load_failed_detail">Nem sikerült betölteni a munkameneteket. %1$s</string>
+    <string name="sessions_empty_project">Nincs csevegés ebben a projektben.</string>
+    <string name="sessions_empty">A beszélgetéseid itt jelennek meg.</string>
+    <string name="sessions_none_running">Most semmi sem fut.</string>
+    <string name="sessions_none_waiting">Most semmi sem vár rád.</string>
+    <string name="sessions_nothing_archived">Nincs archivált elem</string>
+    <string name="sessions_nothing_archived_detail">Az archivált munkamenetek nem látszanak a legutóbbiak között, de folytathatók.</string>
+    <string name="sessions_filter_all">Mind</string>
+    <string name="sessions_filter_needs_you">Rád vár</string>
+    <string name="sessions_section_threads">Szálak</string>
+    <string name="sessions_section_pinned">Kitűzött</string>
+    <string name="sessions_show_threads">Szálak mutatása</string>
+    <string name="sessions_hide_threads">Szálak elrejtése</string>
+    <string name="sessions_show_pinned">Kitűzött csevegések mutatása</string>
+    <string name="sessions_hide_pinned">Kitűzött csevegések elrejtése</string>
+    <string name="sessions_collapsed">Összecsukva</string>
+    <string name="sessions_expanded">Kinyitva</string>
+    <string name="sessions_threads_drag_to_reorder">Szálak · húzd az átrendezéshez</string>
+    <string name="sessions_done">Kész</string>
+    <string name="sessions_drag_thread">%1$s húzása</string>
+    <string name="sessions_session_actions">Munkamenet-műveletek</string>
+    <string name="sessions_thread">Szál</string>
+    <string name="sessions_in_project">A(z) %1$s projektben</string>
+    <string name="sessions_dismiss">Bezárás</string>
+
+    <!-- A row's status line -->
+    <string name="sessions_status_running">Fut</string>
+    <string name="sessions_status_new_reply">Új válasz</string>
+    <string name="sessions_status_draft">Piszkozat</string>
+    <string name="sessions_waiting_approval">Jóváhagyásra vár</string>
+    <string name="sessions_waiting_question">Kérdése van</string>
+    <string name="sessions_waiting_input">Bevitelre vár</string>
+    <string name="sessions_waiting_unknown">Rád vár</string>
+
+    <!-- Ages -->
+    <string name="sessions_age_now">most</string>
+    <string name="sessions_age_minutes">%1$d p</string>
+    <string name="sessions_age_hours">%1$d ó</string>
+    <string name="sessions_age_days">%1$d n</string>
+    <string name="sessions_age_weeks">%1$d hét</string>
+    <string name="sessions_age_months">%1$d hó</string>
+    <string name="sessions_age_years">%1$d év</string>
+    <string name="sessions_just_now">az imént</string>
+    <plurals name="sessions_minutes_ago">
+        <item quantity="one">%1$d perce</item>
+        <item quantity="other">%1$d perce</item>
+    </plurals>
+    <plurals name="sessions_hours_ago">
+        <item quantity="one">%1$d órája</item>
+        <item quantity="other">%1$d órája</item>
+    </plurals>
+    <plurals name="sessions_days_ago">
+        <item quantity="one">%1$d napja</item>
+        <item quantity="other">%1$d napja</item>
+    </plurals>
+    <plurals name="sessions_weeks_ago">
+        <item quantity="one">%1$d hete</item>
+        <item quantity="other">%1$d hete</item>
+    </plurals>
+    <plurals name="sessions_months_ago">
+        <item quantity="one">%1$d hónapja</item>
+        <item quantity="other">%1$d hónapja</item>
+    </plurals>
+    <plurals name="sessions_years_ago">
+        <item quantity="one">%1$d éve</item>
+        <item quantity="other">%1$d éve</item>
+    </plurals>
+    <string name="sessions_active_ago">Aktív: %1$s</string>
+
+    <!-- A chat's actions -->
+    <string name="sessions_pin">Kitűzés</string>
+    <string name="sessions_unpin">Kitűzés megszüntetése</string>
+    <string name="sessions_archive">Archiválás</string>
+    <string name="sessions_unarchive">Visszaállítás</string>
+    <string name="sessions_archived">Archiválva</string>
+    <string name="sessions_unarchived">Visszaállítva</string>
+    <string name="sessions_undo_toast">%1$s: „%2$s”</string>
+    <string name="sessions_undo">Visszavonás</string>
+    <string name="sessions_delete">Törlés</string>
+    <string name="sessions_rename">Átnevezés</string>
+    <string name="sessions_save">Mentés</string>
+    <string name="sessions_create">Létrehozás</string>
+    <string name="sessions_open_in_new_window">Megnyitás új ablakban</string>
+    <string name="sessions_make_a_thread">Szál készítése</string>
+    <string name="sessions_make_thread">Szál készítése</string>
+    <string name="sessions_start_fresh">Újrakezdés</string>
+    <string name="sessions_usage_and_cost">Használat és költség</string>
+    <string name="sessions_background_processes">Háttérfolyamatok</string>
+    <string name="sessions_checkpoints">Mentési pontok</string>
+    <string name="sessions_goal_and_loops">Cél és ciklusok</string>
+    <string name="sessions_export_markdown">Exportálás Markdownként</string>
+    <string name="sessions_copy_session_id">Munkamenet-azonosító másolása</string>
+    <string name="sessions_rename_chat">Csevegés átnevezése</string>
+    <string name="sessions_rename_chat_detail">Hagyd üresen a cím törléséhez.</string>
+    <string name="sessions_delete_chat_title">Törlöd a csevegést?</string>
+    <string name="sessions_delete_chat_detail">A(z) „%1$s” és üzenetei törlődnek a gatewayről. Ez nem vonható vissza.</string>
+
+    <!-- Threads -->
+    <string name="sessions_rename_thread">Szál átnevezése</string>
+    <string name="sessions_rename_thread_detail">A csevegése is átnevezésre kerül, és minden új csevegés ezt a nevet kapja.</string>
+    <string name="sessions_move_up">Feljebb</string>
+    <string name="sessions_move_down">Lejjebb</string>
+    <string name="sessions_reorder">Átrendezés</string>
+    <string name="sessions_remove_thread">Szál eltávolítása</string>
+    <string name="sessions_start_thread_fresh_title">Újrakezded: %1$s?</string>
+    <string name="sessions_start_thread_fresh_detail">A csevegése „%1$s · dátum és idő” néven archiválódik, és egy új, üres lép a helyére. Az archivált csevegések 30 napig megmaradnak.</string>
+    <string name="sessions_thread_make_failed">Nem sikerült szálat készíteni.</string>
+    <string name="sessions_thread_remove_failed">Nem sikerült eltávolítani a szálat.</string>
+    <string name="sessions_thread_rename_failed">Nem sikerült átnevezni a szálat.</string>
+    <string name="sessions_thread_move_failed">Nem sikerült áthelyezni a szálat.</string>
+    <string name="sessions_thread_order_failed">Nem sikerült menteni a sorrendet.</string>
+    <string name="sessions_thread_fresh_failed">Nem sikerült újrakezdeni a szálat.</string>
+
+    <!-- Projects -->
+    <string name="sessions_all_projects">Minden projekt</string>
+    <string name="sessions_new_project">Új projekt</string>
+    <string name="sessions_project_options">%1$s beállításai</string>
+    <string name="sessions_choose_project">Projekt választása</string>
+    <string name="sessions_delete_project">Projekt törlése</string>
+    <string name="sessions_save_as_project">Mentés projektként</string>
+    <string name="sessions_choose_folder">Mappa választása</string>
+    <string name="sessions_new_project_detail">A mappa csevegései a projekt alá kerülnek, és a benne indított új csevegés ott fut.</string>
+    <string name="sessions_use_this_folder">Ez a mappa</string>
+    <string name="sessions_project_name">Név</string>
+    <string name="sessions_project_folder">Mappa a gatewayen</string>
+    <string name="sessions_project_folder_hint">Nem kötelező. Egy mappa azon a gépen, ahol a Hermes fut.</string>
+    <string name="sessions_browse_folders">Mappák tallózása</string>
+    <string name="sessions_folder_list_failed">Nem sikerült listázni ezt a mappát.</string>
+    <string name="sessions_folder_up">Egy mappával feljebb</string>
+    <string name="sessions_folder_home">Saját mappa</string>
+    <string name="sessions_folder_new">Új mappa</string>
+    <string name="sessions_folder_filter">Szűrés</string>
+    <string name="sessions_folder_new_name">Az új mappa neve</string>
+    <string name="sessions_folder_empty">Itt nincsenek mappák.</string>
+    <string name="sessions_folder_more">Lehet, hogy néhány mappa nem látszik itt. Írd be egy név elejét a kereséshez.</string>
+    <string name="sessions_rename_project">Projekt átnevezése</string>
+    <string name="sessions_delete_project_title">Törlöd a projektet?</string>
+    <string name="sessions_delete_project_detail">A(z) „%1$s” törlődik a gatewayről. A csevegései megmaradnak, és újra mappa szerint csoportosulnak.</string>
+    <string name="sessions_not_connected">Nincs kapcsolat.</string>
+    <string name="sessions_cant_make_folders">Ez a változat nem tud mappát létrehozni.</string>
+    <string name="sessions_gateway_cant_change_projects">Ez a gateway nem tudja módosítani a projekteket.</string>
+    <string name="sessions_project_change_failed">Nem sikerült módosítani a projektet.</string>
+
+    <!-- Account and profiles -->
+    <string name="sessions_signed_in">Bejelentkezve</string>
+    <string name="sessions_profile_named">Profil: %1$s</string>
+    <string name="sessions_refresh_chats">Csevegések frissítése</string>
+    <string name="sessions_refreshing_chats">Csevegések frissítése…</string>
+    <string name="sessions_retry_connection">Újracsatlakozás most</string>
+    <string name="sessions_sign_out">Kijelentkezés</string>
+    <string name="sessions_switch_gateway">Gateway váltása vagy hozzáadása</string>
+    <string name="sessions_profiles">Profilok</string>
+    <string name="sessions_switch_profile">Profil váltása</string>
+    <string name="sessions_profiles_detail">Minden profil külön ügynök, saját csevegésekkel, memóriával és modellel.</string>
+    <string name="sessions_profiles_add_hint">Profilt a gateway gépén a „hermes profile create” paranccsal adhatsz hozzá.</string>
+    <string name="sessions_profile_default">Alapértelmezett</string>
+    <string name="sessions_profile_active">Aktív</string>
+
+    <!-- Other chats -->
+    <string name="sessions_badge">Munkamenetek</string>
+    <plurals name="sessions_badge_need_you">
+        <item quantity="one">Munkamenetek, %1$d rád vár</item>
+        <item quantity="other">Munkamenetek, %1$d rád vár</item>
+    </plurals>
+    <string name="sessions_other_reply">Válasz itt: %1$s</string>
+    <string name="sessions_other_approval">%1$s jóváhagyásodra vár</string>
+    <string name="sessions_other_question">%1$s válaszra vár</string>
+    <string name="sessions_other_input">%1$s bevitelre vár</string>
+    <plurals name="sessions_other_and_more">
+        <item quantity="one">%1$s, és még %2$d</item>
+        <item quantity="other">%1$s, és még %2$d</item>
+    </plurals>
+
+    <string name="sessions_with_detail">%1$s: %2$s</string>
+
+    <!-- Shared words -->
+    <string name="sessions_couldnt_load">Nem sikerült betölteni</string>
+    <string name="sessions_loading">Betöltés…</string>
+    <string name="sessions_open">Megnyitás</string>
+    <string name="sessions_edit">Szerkesztés</string>
+    <string name="sessions_discard">Elvetés</string>
+    <string name="sessions_keep_editing">Szerkesztés folytatása</string>
+    <string name="sessions_replace">Csere</string>
+    <string name="sessions_optional">Nem kötelező</string>
+    <string name="sessions_turn_off">Kikapcsolás</string>
+    <string name="sessions_change_ellipsis">Módosítás…</string>
+    <string name="sessions_more_for">Továbbiak: %1$s</string>
+    <string name="sessions_in_time">%1$s múlva</string>
+    <string name="sessions_just_now_alone">Az imént</string>
+
+    <!-- Scheduled jobs and routines -->
+    <string name="sessions_bot_routines">%1$s rutinjai</string>
+    <plurals name="sessions_jobs_count">
+        <item quantity="one">%1$d feladat · minden futás csevegésként nyílik meg</item>
+        <item quantity="other">%1$d feladat · minden futás csevegésként nyílik meg</item>
+    </plurals>
+    <plurals name="sessions_routines_count">
+        <item quantity="one">%1$d rutin · %2$s nevében fut</item>
+        <item quantity="other">%1$d rutin · mind %2$s nevében fut</item>
+    </plurals>
+    <string name="sessions_new_job">Új feladat</string>
+    <string name="sessions_new_routine">Új rutin</string>
+    <string name="sessions_edit_job">Feladat szerkesztése</string>
+    <string name="sessions_edit_routine">Rutin szerkesztése</string>
+    <string name="sessions_delete_job">Feladat törlése</string>
+    <string name="sessions_delete_routine">Rutin törlése</string>
+    <string name="sessions_delete_job_title">Törlöd a feladatot?</string>
+    <string name="sessions_delete_routine_title">Törlöd a rutint?</string>
+    <string name="sessions_delete_job_detail">A(z) „%1$s” többé nem fut. A korábbi futások csevegései megmaradnak.</string>
+    <string name="sessions_discard_changes_title">Elveted a módosításokat?</string>
+    <string name="sessions_discard_job_detail">A feladaton végzett módosításaid még nincsenek mentve.</string>
+    <string name="sessions_discard_routine_detail">A rutinon végzett módosításaid még nincsenek mentve.</string>
+    <string name="sessions_pick_job">Válassz egy feladatot</string>
+    <string name="sessions_pick_routine">Válassz egy rutint</string>
+    <string name="sessions_pick_job_detail">Itt látszik a promptja, hová jelent, és a futásai.</string>
+    <string name="sessions_jobs_load_failed">Nem sikerült betölteni az ütemezett feladatokat</string>
+    <string name="sessions_routines_load_failed">Nem sikerült betölteni a rutinokat</string>
+    <string name="sessions_no_jobs">Nincsenek ütemezett feladatok</string>
+    <string name="sessions_no_jobs_detail">Végeztess az ügynökkel valamit ütemezve, például reggeli összefoglalót. Minden futás itt nyílik meg csevegésként.</string>
+    <string name="sessions_no_routines">Még nincsenek rutinok</string>
+    <string name="sessions_no_routines_detail">Végeztess %1$s bottal valamit ütemezve, például reggeli összefoglalót. %1$s nevében fut, saját memóriával és képességekkel, és a csevegésébe jelenthet.</string>
+    <string name="sessions_run_now">Futtatás most</string>
+    <string name="sessions_pause">Szüneteltetés</string>
+    <string name="sessions_resume">Folytatás</string>
+    <string name="sessions_runs">Futások</string>
+    <string name="sessions_runs_load_failed">Nem sikerült betölteni a futásokat. %1$s</string>
+    <string name="sessions_no_runs">Még nincs futás. Mindegyik itt nyílik meg csevegésként.</string>
+    <plurals name="sessions_run_messages">
+        <item quantity="one">%1$d üz.</item>
+        <item quantity="other">%1$d üz.</item>
+    </plurals>
+    <string name="sessions_delivers_to">Kézbesítés: %1$s</string>
+    <string name="sessions_delivery_local">Helyi (csak mentés)</string>
+    <string name="sessions_delivery_bot_chat">%1$s csevegése</string>
+    <string name="sessions_delivery_the_bot_chat">a bot csevegése</string>
+    <string name="sessions_job_paused">szüneteltetve</string>
+    <string name="sessions_job_done">kész</string>
+    <string name="sessions_job_finished">befejezve</string>
+    <string name="sessions_job_missed">kimaradt</string>
+    <string name="sessions_job_failed">sikertelen</string>
+    <string name="sessions_job_last_run">utolsó futás</string>
+    <string name="sessions_job_last_run_failed">utolsó sikertelen</string>
+    <string name="sessions_job_next_run">következő futás</string>
+    <string name="sessions_job_next">következő: %1$s</string>
+    <string name="sessions_job_due_now">most esedékes</string>
+    <string name="sessions_schedule_daily">Naponta %1$s-kor</string>
+    <string name="sessions_schedule_weekdays">Hétköznap %1$s-kor</string>
+    <string name="sessions_schedule_sundays">Vasárnaponként %1$s-kor</string>
+    <string name="sessions_schedule_mondays">Hétfőnként %1$s-kor</string>
+    <string name="sessions_schedule_tuesdays">Keddenként %1$s-kor</string>
+    <string name="sessions_schedule_wednesdays">Szerdánként %1$s-kor</string>
+    <string name="sessions_schedule_thursdays">Csütörtökönként %1$s-kor</string>
+    <string name="sessions_schedule_fridays">Péntekenként %1$s-kor</string>
+    <string name="sessions_schedule_saturdays">Szombatonként %1$s-kor</string>
+    <string name="sessions_job_prompt">Prompt</string>
+    <string name="sessions_job_prompt_example">Foglald össze az olvasatlan e-mailjeimet, és jelöld meg, ami sürgős</string>
+    <string name="sessions_job_prompt_hint">Amit az ügynök minden futáskor megtesz, új csevegésként.</string>
+    <string name="sessions_routine_prompt_hint">Amit %1$s minden futáskor megtesz, saját nevében, saját memóriával és képességekkel.</string>
+    <string name="sessions_job_schedule">Ütemezés</string>
+    <string name="sessions_job_schedule_hint_new">Például „every 2h”, „0 9 * * *”, „every monday 9am”, vagy egyszeri futáshoz „in 30m”.</string>
+    <string name="sessions_job_schedule_hint_edit">Hagyd így a jelenlegi ütemezés megtartásához. Az egyszeri feladatok üresen indulnak.</string>
+    <string name="sessions_preset_every_30_min">30 percenként</string>
+    <string name="sessions_preset_hourly">Óránként</string>
+    <string name="sessions_preset_daily">Naponta 9:00</string>
+    <string name="sessions_preset_weekdays">Hétköznap 9:00</string>
+    <string name="sessions_preset_mondays">Hétfőnként 9:00</string>
+    <string name="sessions_preset_once">Egyszer, 1 óra múlva</string>
+    <string name="sessions_routine_name_example">Reggeli összefoglaló</string>
+    <string name="sessions_deliver_to">Kézbesítés ide</string>
+    <string name="sessions_deliver_no_home">%1$s nem rendelkezik alapcsatornával a gatewayen, így a futások eredménye nem jutna sehová.</string>
+    <string name="sessions_deliver_bot_chat_detail">Minden futás eredménye üzenetként érkezik ide: %1$s; a bot elolvassa és válaszol rá, így egy futás egy körrel többe kerül neki.</string>
+    <string name="sessions_schedule_job">Feladat ütemezése</string>
+    <string name="sessions_schedule_routine">Rutin ütemezése</string>
+    <string name="sessions_job_gone">Ezt a feladatot törölték a gatewayen, így nincs mit menteni.</string>
+    <string name="sessions_job_needs_name">Adj nevet a rutinnak.</string>
+    <string name="sessions_job_needs_prompt">Írd le, mit tegyen az ügynök minden futáskor.</string>
+    <string name="sessions_job_needs_schedule">Add meg, mikor fusson.</string>
+    <string name="sessions_job_scheduled">Feladat ütemezve</string>
+    <string name="sessions_job_saved">Feladat mentve</string>
+    <string name="sessions_job_deleted">Feladat törölve</string>
+    <string name="sessions_routine_scheduled">Rutin ütemezve</string>
+    <string name="sessions_routine_saved">Rutin mentve</string>
+    <string name="sessions_routine_deleted">Rutin törölve</string>
+    <string name="sessions_job_run_started">Futás elindítva</string>
+    <string name="sessions_job_run_failed">Nem sikerült elindítani a futást</string>
+    <string name="sessions_job_pause_failed">Nem sikerült szüneteltetni a feladatot</string>
+    <string name="sessions_job_resume_failed">Nem sikerült folytatni a feladatot</string>
+    <string name="sessions_job_save_failed">Nem sikerült menteni a feladatot</string>
+    <string name="sessions_job_delete_failed">Nem sikerült törölni a feladatot</string>
+
+    <!-- Insights -->
+    <plurals name="sessions_insights_days">
+        <item quantity="one">%1$d nap</item>
+        <item quantity="other">%1$d nap</item>
+    </plurals>
+    <string name="sessions_insights_load_failed">Nem sikerült betölteni a statisztikát</string>
+    <string name="sessions_insights_empty">Még nincs használat</string>
+    <string name="sessions_insights_empty_detail">Az időszak csevegései és azok költsége itt jelennek meg.</string>
+    <string name="sessions_insights_billed">számlázva</string>
+    <string name="sessions_insights_estimated">becsült költség</string>
+    <plurals name="sessions_insights_chats">
+        <item quantity="one">csevegés</item>
+        <item quantity="other">csevegés</item>
+    </plurals>
+    <string name="sessions_insights_tokens_in_out">token be és ki</string>
+    <string name="sessions_insights_from_cache">a promptból gyorsítótárból</string>
+    <string name="sessions_insights_models">Modellek</string>
+    <string name="sessions_insights_tokens">%1$s token</string>
+    <string name="sessions_insights_tool_calls">Eszközhívások</string>
+    <string name="sessions_insights_tool_calls_spoken">%1$s, %2$s hívás</string>
+    <string name="sessions_insights_skill_uses">Képességhasználat</string>
+    <string name="sessions_insights_skill_uses_spoken">%1$s, %2$s használat</string>
+    <string name="sessions_insights_tokens_by_day">Token naponta</string>
+    <string name="sessions_insights_peak">Csúcs %1$s · %2$s</string>
+    <plurals name="sessions_insights_day_chats">
+        <item quantity="one">%1$d csevegés</item>
+        <item quantity="other">%1$d csevegés</item>
+    </plurals>
+    <string name="sessions_insights_hint_touch">Koppints egy napra a számaiért.</string>
+    <string name="sessions_insights_hint_pointer">Mutass egy napra a számaiért.</string>
+    <string name="sessions_insights_show_numbers">Számok mutatása</string>
+    <string name="sessions_insights_day_spoken">%1$s: %2$s token</string>
+    <string name="sessions_short_date">%1$s %2$s.</string>
+    <string name="sessions_month_1">jan.</string>
+    <string name="sessions_month_2">febr.</string>
+    <string name="sessions_month_3">márc.</string>
+    <string name="sessions_month_4">ápr.</string>
+    <string name="sessions_month_5">máj.</string>
+    <string name="sessions_month_6">jún.</string>
+    <string name="sessions_month_7">júl.</string>
+    <string name="sessions_month_8">aug.</string>
+    <string name="sessions_month_9">szept.</string>
+    <string name="sessions_month_10">okt.</string>
+    <string name="sessions_month_11">nov.</string>
+    <string name="sessions_month_12">dec.</string>
+
+    <!-- Capabilities -->
+    <string name="sessions_capabilities_detail">Amit az ügynök az új csevegésekben használhat</string>
+    <string name="sessions_tab_skills">Képességek</string>
+    <string name="sessions_tab_toolsets">Eszközök</string>
+    <string name="sessions_tab_mcp">MCP</string>
+    <string name="sessions_no_toolsets">Nincs beállított eszközkészlet.</string>
+    <string name="sessions_toolsets_hint">Az eszközkészletek, amelyeket az ügynök az új csevegésekben kap.</string>
+    <string name="sessions_no_mcp_servers">Nincs MCP-szerver. Adj hozzá egyet a gatewayen a `hermes mcp add` paranccsal, vagy a Hermes Desktopból.</string>
+    <string name="sessions_changes_next_chat">A módosítások a következő csevegéstől érvényesek.</string>
+    <string name="sessions_no_skills">Még nincsenek képességek. Az ügynök tanulás közben megírja őket, vagy telepítsd őket a `hermes skills` paranccsal.</string>
+    <plurals name="sessions_search_skills">
+        <item quantity="one">Keresés %1$d képességben</item>
+        <item quantity="other">Keresés %1$d képességben</item>
+    </plurals>
+    <string name="sessions_browse_hub">Tallózás a hubban</string>
+    <string name="sessions_no_skills_match">Egy képesség sem illik erre: „%1$s”.</string>
+    <string name="sessions_skills_other">egyéb</string>
+    <string name="sessions_skill_tag_hub">hub</string>
+    <string name="sessions_skill_tag_learned">tanult</string>
+    <string name="sessions_skill_tag_external">külső</string>
+    <string name="sessions_toolset_needs_setup">beállítást igényel</string>
+    <plurals name="sessions_tools_count">
+        <item quantity="one">%1$d eszköz</item>
+        <item quantity="other">%1$d eszköz</item>
+    </plurals>
+    <string name="sessions_mcp_from_plugin">forrás: %1$s</string>
+    <string name="sessions_mcp_set_by_plugin">beállította: %1$s</string>
+    <string name="sessions_locked_note">itt nem módosítható</string>
+    <string name="sessions_switch_on_locked">Be, %1$s</string>
+    <string name="sessions_switch_off_locked">Ki, %1$s</string>
+    <string name="sessions_mcp_test">Teszt</string>
+    <plurals name="sessions_mcp_connected_tools">
+        <item quantity="one">Csatlakozva · %1$d eszköz</item>
+        <item quantity="other">Csatlakozva · %1$d eszköz</item>
+    </plurals>
+    <string name="sessions_mcp_connect_failed">Nem sikerült csatlakozni.</string>
+    <string name="sessions_turn_on_failed">Nem sikerült bekapcsolni: %1$s</string>
+    <string name="sessions_turn_off_failed">Nem sikerült kikapcsolni: %1$s</string>
+    <string name="sessions_uninstall">Eltávolítás</string>
+    <string name="sessions_uninstall_skill_detail">Eltávolítod a(z) %1$s képességet innen: %2$s? Kikapcsolva telepítve marad.</string>
+    <string name="sessions_uninstall_skill_main_detail">Eltávolítod a(z) %1$s képességet a fő profilból? Kikapcsolva telepítve marad.</string>
+
+    <!-- Skills hub -->
+    <string name="sessions_hub_title">Képességhub</string>
+    <string name="sessions_hub_installs_into">Telepítés ide: %1$s</string>
+    <string name="sessions_hub_installs_into_main">Telepítés a fő profilba</string>
+    <string name="sessions_hub_update_all">Összes frissítése</string>
+    <string name="sessions_hub_unsupported">Ennek a gatewaynek még nincs képességhubja.</string>
+    <string name="sessions_hub_search">Keresés a hubban</string>
+    <string name="sessions_hub_timed_out">Néhány forrás nem válaszolt: %1$s</string>
+    <string name="sessions_hub_no_match">Egy képesség sem illik a keresésedre.</string>
+    <string name="sessions_hub_featured">Kiemelt</string>
+    <string name="sessions_hub_official">Hivatalos</string>
+    <string name="sessions_hub_official_empty">A hivatalos katalógus üres.</string>
+    <string name="sessions_hub_installed_tag">Telepítve</string>
+    <string name="sessions_hub_blocked_by_scan">A biztonsági vizsgálat letiltotta</string>
+    <string name="sessions_hub_view_scan">Vizsgálat megtekintése</string>
+    <string name="sessions_hub_scan_title">Vizsgálat: %1$s</string>
+    <string name="sessions_hub_install_anyway">Telepítés mégis</string>
+    <string name="sessions_hub_scan_failed">Nem sikerült a vizsgálat</string>
+    <string name="sessions_hub_check_failed">Nem sikerült ellenőrizni: %1$s</string>
+    <string name="sessions_hub_blocked">A biztonsági vizsgálat letiltotta: %1$s.</string>
+    <string name="sessions_hub_installed">%1$s telepítve. A következő csevegéstől érvényes.</string>
+    <string name="sessions_hub_removed">%1$s eltávolítva. A következő csevegéstől érvényes.</string>
+    <string name="sessions_hub_updated">Képességek frissítve. A következő csevegéstől érvényes.</string>
+    <string name="sessions_hub_install_failed">Nem sikerült telepíteni: %1$s</string>
+    <string name="sessions_hub_remove_failed">Nem sikerült eltávolítani: %1$s</string>
+    <string name="sessions_hub_update_failed">Nem sikerült frissíteni a képességeket</string>
+
+    <!-- Config -->
+    <string name="sessions_config_detail">A Hermes saját beállításai, a config.yaml fájljába mentve. A legtöbb a következő csevegéstől érvényes.</string>
+    <string name="sessions_config_edit_yaml">config.yaml szerkesztése</string>
+    <string name="sessions_config_yaml_row_detail">A teljes fájl, mindenhez, ami nincs a listában</string>
+    <string name="sessions_config_yaml_detail">A profil teljes konfigurációs fájlja.</string>
+    <string name="sessions_config_all">Minden beállítás</string>
+    <string name="sessions_config_all_detail">Minden beállítás, amit a gateway ismer, a saját csoportosítása szerint.</string>
+    <string name="sessions_config_all_row_detail">Minden mező, a gateway csoportosítása szerint</string>
+    <plurals name="sessions_config_search">
+        <item quantity="one">Keresés %1$d beállításban</item>
+        <item quantity="other">Keresés %1$d beállításban</item>
+    </plurals>
+    <plurals name="sessions_config_settings">
+        <item quantity="one">%1$d beállítás</item>
+        <item quantity="other">%1$d beállítás</item>
+    </plurals>
+    <string name="sessions_config_first_of">Az első %1$d a(z) %2$d beállításból</string>
+    <string name="sessions_config_no_match">Egy beállítás sem illik erre: „%1$s”.</string>
+    <string name="sessions_config_type_more">Írj többet a szűkítéshez.</string>
+    <string name="sessions_config_none_here">Ennek a gatewaynek nincs egyik ilyen beállítása sem.</string>
+    <string name="sessions_config_voice_note">Csak a kiválasztott szolgáltatók saját beállításai látszanak.</string>
+    <string name="sessions_config_model_note">Az új csevegések alapértéke; egy csevegés modellválasztója a sajátját még módosíthatja.</string>
+    <string name="sessions_config_search_options">Keresés %1$d elemben</string>
+    <string name="sessions_config_other">Egyéb…</string>
+    <string name="sessions_config_one_per_line">Soronként egy.</string>
+    <string name="sessions_copy_key">Kulcs másolása</string>
+    <string name="sessions_copy_value">Érték másolása</string>
+    <string name="sessions_discard_title">Elveted a módosításaidat?</string>
+    <string name="sessions_config_discard_detail">A config.yaml marad, ahogy mentve volt.</string>
+    <string name="sessions_config_all_off_title">Minden eszközkészletet kikapcsolsz?</string>
+    <string name="sessions_config_all_off_detail">Az ügynök elveszítené a memóriát, a terminált, a webes keresést, az alügynököket és a legtöbb eszközét, amíg néhányat vissza nem kapcsolsz.</string>
+    <string name="sessions_config_replace_title">Lecseréled a config.yaml-t?</string>
+    <string name="sessions_config_replace_detail">A fájl pontosan ez a szöveg lesz. A Hermes az új csevegésekhez újraolvassa; néhány beállításhoz a gateway újraindítása kell.</string>
+    <string name="sessions_config_refresh_failed">Nem sikerült frissíteni</string>
+    <string name="sessions_config_save_failed">Nem sikerült menteni: %1$s</string>
+    <string name="sessions_config_yaml_saved">config.yaml mentve</string>
+</resources>

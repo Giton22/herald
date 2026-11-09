@@ -6,12 +6,19 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import dev.hermeskotlin.ui.rememberDesktopWeb
+import dev.hermeskotlin.ui.resources.*
 import kotlin.io.encoding.Base64
+import org.jetbrains.compose.resources.getString
 
-/** No PDF pages drawn in the desktop app yet: the viewer says so, and Save opens it elsewhere. */
+/**
+ * PDF parsing and drawing live in a bounded child of the bundled Java runtime. Without the runtime's launcher there's
+ * no child to start, so the viewer says PDFs don't open here rather than blaming the document.
+ */
 @Composable
-internal actual fun rememberPdfOpener(): suspend (ByteArray) -> PdfOpen =
-    { PdfOpen.Failed("PDFs don't open in the desktop app yet. Save gets the file.") }
+internal actual fun rememberPdfOpener(): suspend (ByteArray) -> PdfOpen = { bytes ->
+    if (pdfWorkerLauncher().canExecute()) openDesktopPdf(bytes)
+    else PdfOpen.Failed(getString(Res.string.desktop_pdf_unsupported))
+}
 
 /** A widget in the app's own browser, where the runtime has one; elsewhere it says it can't show. */
 @Composable
@@ -19,7 +26,7 @@ internal actual fun WidgetWebView(html: String, theme: WidgetTheme, name: String
     val web = rememberDesktopWeb()
     if (web == null) {
         val failure = rememberUpdatedState(onFailure)
-        LaunchedEffect(Unit) { failure.value("Widgets don't show in this build of the desktop app.") }
+        LaunchedEffect(Unit) { failure.value(getString(Res.string.desktop_widgets_unsupported)) }
         return
     }
     val document = remember(html, theme) { widgetDocument(html, theme, widgetFont) }

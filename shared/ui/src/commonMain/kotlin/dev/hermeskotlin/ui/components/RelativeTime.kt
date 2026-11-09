@@ -2,7 +2,10 @@ package dev.hermeskotlin.ui.components
 
 import kotlin.time.Clock
 
-/** Compact age label for list rows: "now", "5m", "3h", "2d", "4w", "6mo", "1y". */
+/**
+ * Compact age label for list rows: "now", "5m", "3h", "2d", "4w", "6mo", "1y". These stay as they are in every
+ * language for now: screens compare the label with "now" to say "just now" instead.
+ */
 fun relativeTime(epochSeconds: Double?, nowMillis: Long = Clock.System.now().toEpochMilliseconds()): String {
     if (epochSeconds == null || epochSeconds <= 0) return ""
     return span(((nowMillis / 1000.0 - epochSeconds) / 60).toLong())
@@ -11,8 +14,8 @@ fun relativeTime(epochSeconds: Double?, nowMillis: Long = Clock.System.now().toE
 /** What a list or chat shown from the device's copy says about it: "Saved copy · 5m ago". [savedAtMillis] in epoch ms. */
 fun savedCopyLabel(savedAtMillis: Long, nowMillis: Long = Clock.System.now().toEpochMilliseconds()): String =
     when (val age = relativeTime(savedAtMillis / 1000.0, nowMillis)) {
-        "now", "" -> "Saved copy · just now"
-        else -> "Saved copy · $age ago"
+        "now", "" -> TimeWords.current.savedJustNow
+        else -> fill(TimeWords.current.savedAgo, age)
     }
 
 /** Compact countdown to a future moment: "in 5m", "in 3h"; "now" once it is due. */

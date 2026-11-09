@@ -427,4 +427,169 @@ class InboxTest {
         store.add(GW, pushed)
         assertEquals(1, store.state.value.unread)
     }
+
+    @Test
+    fun aCronRunPushCarriesTheRunsChatWhenItIsAStoredSessionId() {
+        fun push(session: String?) = PushMessage(id = "x", ts = 1, type = PushMessage.CRON_RUN, job = "j", run = "2026-10-12_08-02-07", session = session)
+        assertEquals("20261012_080200_ab12cd", InboxRun.from(push("20261012_080200_ab12cd"))!!.session)
+        // An older plugin sends none; anything that isn't a session id is dropped, the run kept.
+        assertNull(InboxRun.from(push(null))!!.session)
+        assertNull(InboxRun.from(push("../etc/passwd"))!!.session)
+        assertNull(InboxRun.from(push("a b"))!!.session)
+        assertNull(InboxRun.from(push("x".repeat(129)))!!.session)
+        assertNull(InboxRun.from(push(""))!!.session)
+    }
+
+    @Test
+    fun aListedOrReadRunWithoutItsChatKeepsTheOneAPushBrought() = runTest {
+        val store = InboxStore(InMemoryKeyValueStore())
+        store.bind(GW, now = 0)
+        store.add(GW, run(at = 5).copy(session = "s1"))
+        // An older plugin's list, or a read, knows no chat: the one the push said stays.
+        store.replace(GW, listOf(run(at = 5)), complete = true)
+        assertEquals("s1", store.state.value.runs.single().session)
+        store.add(GW, run(at = 5, text = "Morning, in full"))
+        assertEquals("s1", store.state.value.runs.single().session)
+        // A newer word on it wins.
+        store.add(GW, run(at = 5).copy(session = "s2"))
+        assertEquals("s2", store.state.value.runs.single().session)
+    }
+
+    @Test
+    fun aRunWhosePluginSaysItHasNoChatNowLosesTheOneKept() = runTest {
+        val store = InboxStore(InMemoryKeyValueStore())
+        store.bind(GW, now = 0)
+        store.add(GW, run(at = 5).copy(session = "s1"))
+        // Plugin 0.7.2 names every listed run's chat: none, once the gateway deleted the old session.
+        store.replace(GW, listOf(run(at = 5).copy(sessionSaid = true)), complete = true)
+        assertNull(store.state.value.runs.single().session)
+        store.add(GW, run(at = 5).copy(session = "s1"))
+        // A read that says so too.
+        store.add(GW, run(at = 5, text = "Morning, in full").copy(sessionSaid = true))
+        assertNull(store.state.value.runs.single().session)
+        // What a copy said stays with that copy: the kept run is as any other.
+        assertFalse(store.state.value.runs.single().sessionSaid)
+    }
+
+    @Test
+    fun keepingDropsTheOldChatOnlyWhenTheNewCopySaysItHasNone() {
+        val old = run(at = 5).copy(session = "s1")
+        assertEquals("s1", run(at = 5).keeping(old).session)
+        assertNull(run(at = 5).copy(sessionSaid = true).keeping(old).session)
+        assertEquals("s2", run(at = 5).copy(session = "s2", sessionSaid = true).keeping(old).session)
+        assertNull(run(at = 5).keeping(null).session)
+    }
+
+    @Test
+    fun whatACopySaidOfItsChatAndCutIsntSaved() {
+        val said = run(at = 5).copy(session = "s1", sessionSaid = true, truncated = true)
+        val encoded = HermesJson.encodeToString(InboxRun.serializer(), said)
+        assertFalse(encoded.contains("sessionSaid"))
+        assertFalse(encoded.contains("truncated"))
+        assertEquals(said.asKept(), HermesJson.decodeFromString(InboxRun.serializer(), encoded))
+    }
+
+    @Test
+    fun aRunsChatIsKeptOnDisk() = runTest {
+        val disk = InMemoryKeyValueStore()
+        InboxStore(disk).apply { bind(GW, now = 0); add(GW, run(at = 5).copy(session = "s1")) }
+        val again = InboxStore(disk)
+        again.bind(GW, now = 0)
+        assertEquals("s1", again.state.value.runs.single().session)
+    }
+
+    @Test
+    fun aRunKeyNamesItsJob() {
+        assertEquals("default/j/2026-10-12_08-02-07", run(job = "j").copy(run = "2026-10-12_08-02-07").key)
+        assertEquals("work/j", InboxRun.jobOf("work/j/2026-10-12_08-02-07"))
+        assertNull(InboxRun.jobOf("work/j"))
+        assertNull(InboxRun.jobOf("work/a b/2026-10-12_08-02-07"))
+        assertNull(InboxRun.jobOf("work/j/yesterday"))
+        assertNull(InboxRun.jobOf("a/b/c/2026-10-12_08-02-07"))
+    }
+
+    @Test
+    fun aNotificationsMarkReadMarksTheRunItCarriesInItsGatewaysInbox() = runTest {
+        val disk = InMemoryKeyValueStore()
+        val store = InboxStore(disk)
+        val older = run(at = 5_000)
+        val newer = run(at = 6_000)
+        store.bind(GW, now = 0)
+        store.add(GW, older)
+        store.add(GW, newer)
+        assertTrue(store.markNoticeRead(GW, newer.key))
+        // The run the notification showed, not its job's others.
+        assertTrue(newer.key in store.state.value.read)
+        assertFalse(older.key in store.state.value.read)
+        // A key that doesn't name a run, or no gateway, changes nothing.
+        assertFalse(store.markNoticeRead(GW, "default/j"))
+        assertFalse(store.markNoticeRead(null, older.key))
+        assertFalse(older.key in store.state.value.read)
+    }
+
+    @Test
+    fun aNotificationsMarkReadForAGatewayNotShownGoesToItsSavedInbox() = runTest {
+        val disk = InMemoryKeyValueStore()
+        val pushed = run(at = 5_000)
+        // A push for the other gateway, while the app is on this one.
+        InboxStore(disk).apply { bind(GW, now = 0); receive("https://other", pushed) }
+        val store = InboxStore(disk)
+        store.bind(GW, now = 0)
+        assertTrue(store.markNoticeRead("https://other", pushed.key))
+        assertEquals(emptySet(), store.state.value.read)
+        store.bind("https://other", now = 0)
+        assertEquals(0, store.state.value.unread)
+        // One with no Inbox on the phone (forgotten since) starts none.
+        assertTrue(store.markNoticeRead("https://gone", pushed.key))
+        assertNull(disk.get(InboxStore.keyFor("https://gone")))
+    }
+
+    @Test
+    fun theProcessGoneAMarkReadBeforeAnythingBindsIsStillKept() = runTest {
+        val disk = InMemoryKeyValueStore()
+        val pushed = run(at = 5_000)
+        InboxStore(disk).apply { bind(GW, now = 0); add(GW, pushed) }
+        // A fresh process: the receiver runs before the app binds the store to any gateway.
+        InboxStore(disk).markNoticeRead(GW, pushed.key)
+        val again = InboxStore(disk)
+        again.bind(GW, now = 0)
+        assertEquals(0, again.state.value.unread)
+    }
+
+    @Test
+    fun aRunMarkedUnreadIsUnreadAgainUnlessItIsFromBeforeTheInboxStarted() = runTest {
+        val store = InboxStore(InMemoryKeyValueStore())
+        store.bind(GW, now = 4_000)
+        val before = run(at = 3_000)
+        val after = run(at = 5_000)
+        store.add(GW, before)
+        store.add(GW, after)
+        store.markRead(GW, listOf(before, after))
+        store.markUnread(GW, after)
+        store.markUnread(GW, before)
+        assertTrue(store.state.value.isUnread(after))
+        assertFalse(store.state.value.isUnread(before))
+        assertFalse(store.state.value.canMarkUnread(before))
+    }
+
+    @Test
+    fun aMarkReadTakesDownOnlyTheNotificationsShowingThoseRuns() {
+        val shown = listOf(
+            InboxNotice(InboxNotices.tag("default", "brief"), GW, "default/brief/2026-10-12_08-00-00"),
+            // The job's notice shows a newer run than the one read.
+            InboxNotice(InboxNotices.tag("default", "news"), GW, "default/news/2026-10-12_09-00-00"),
+            // The same run's key on another gateway is another run.
+            InboxNotice(InboxNotices.tag("work", "brief"), "https://other", "work/brief/2026-10-12_08-00-00"),
+            // Posted before notices named their gateway.
+            InboxNotice(InboxNotices.tag("work", "old"), null, "work/old/2026-10-12_07-00-00"),
+        )
+        val read = listOf(
+            "default/brief/2026-10-12_08-00-00",
+            "default/news/2026-10-12_08-00-00",
+            "work/brief/2026-10-12_08-00-00",
+            "work/old/2026-10-12_07-00-00",
+        )
+        assertEquals(listOf("cron:default/brief", "cron:work/old"), InboxNotices.toCancel(shown, GW, read))
+        assertEquals(emptyList(), InboxNotices.toCancel(shown, GW, emptyList()))
+    }
 }

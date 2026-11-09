@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="phone_intro">让代理使用这台手机：读取它的状态，或在上面做些事。每个工具在你开启前都是关闭的，任何会改变手机的操作都会先询问你：Kyllene 打开时在应用内询问，否则通过通知询问。你关闭的工具会立即从代理那里移除。</string>
+    <string name="phone_install_what">把你在此开启的工具提供给代理，并将它们的调用转到这台手机。</string>
+    <string name="phone_let_agent">让代理使用这台手机</string>
+    <string name="phone_set_up">在网关上设置</string>
+    <string name="phone_allow">在这台手机上允许</string>
+    <string name="phone_section_tools">工具</string>
+    <string name="phone_section_calls">通话</string>
+    <string name="phone_section_phones">手机</string>
+    <string name="phone_section_used">最近使用</string>
+
+    <string name="phone_status_off">已关闭。代理无法使用这台手机。</string>
+    <string name="phone_status_none">已开启。请在下方开启代理可以使用的每个工具。</string>
+    <plurals name="phone_status_count">
+        <item quantity="other">已开启。新对话可以使用 %1$d 个工具。</item>
+    </plurals>
+    <string name="phone_status_offline">正在等待连接网关。</string>
+    <string name="phone_status_working">正在与网关一起设置…</string>
+    <string name="phone_status_not_installed">需要网关上的 herald-push 插件。</string>
+    <string name="phone_status_outdated">网关的 herald-push 插件是 %1$s；手机工具需要 %2$s。请在下方更新。</string>
+    <string name="phone_status_too_old">网关的 herald-push 插件太旧了。</string>
+    <string name="phone_status_refused">网关拒绝了。</string>
+
+    <string name="phone_rings_title">需要回答时给我打电话</string>
+    <string name="phone_rings_detail">你没在看的对话中的每个批准或问题都会像来电一样响铃。拒接即可收到普通通知。只会打给你：代理从不用这台手机打给别人。</string>
+    <string name="phone_rings_talk_title">接听后语音交流</string>
+    <string name="phone_rings_talk_detail">接听后 Hermes 会上线：用自己的话提问，你用语音回答，还可以继续聊。关闭时，接听会打开对话。</string>
+    <string name="phone_watch_rings_title">手表也响铃</string>
+    <string name="phone_watch_rings_detail">手表上的 Kyllene 也会响铃。在 Wear OS 手表上，接听会从手表发起通话（需你的网关支持实时语音）。在 Pebble 上，如果开启了“在 Pebble 上回复”，接听会在手表上显示问题；否则请在手机上回复。</string>
+    <string name="phone_quiet_title">免打扰时段</string>
+    <string name="phone_quiet_empty">开始和结束都在 %1$s，所以还没有静音时间：请换一个时间。</string>
+    <string name="phone_quiet_window">%1$s 到 %2$s 之间不响铃。</string>
+    <string name="phone_quiet_off">在你选择的时间之间不响铃。</string>
+    <string name="phone_quiet_detail">%1$s 代理会被要求用其他方式联系你；批准和问题以通知形式送达。系统勿扰模式也会让它们静音，除非你允许 Kyllene 突破勿扰。同一对话 15 分钟内的第二次来电会响铃，就像重复来电一样。</string>
+    <string name="phone_quiet_starts">开始</string>
+    <string name="phone_quiet_ends">结束</string>
+    <string name="phone_quiet_start_title">免打扰开始时间</string>
+    <string name="phone_quiet_end_title">免打扰结束时间</string>
+    <string name="phone_quiet_set">设置</string>
+    <string name="phone_later_hour">下一小时</string>
+    <string name="phone_earlier_hour">上一小时</string>
+    <string name="phone_later_minutes">往后几分钟</string>
+    <string name="phone_earlier_minutes">往前几分钟</string>
+
+    <string name="phone_phones_note">从某台手机发出的对话会使用那台手机。定时任务以及来自 Hermes Desktop 或控制台的对话，会使用此列表中第一台开启了该工具的手机。如果 Kyllene 仍在某台手机上登录且开启了手机工具，你移除的这台手机会重新出现。</string>
+    <string name="phone_this_phone">%1$s · 这台手机</string>
+    <string name="phone_move_up">上移 %1$s</string>
+    <string name="phone_move_down">下移 %1$s</string>
+    <string name="phone_remove">移除 %1$s</string>
+    <string name="phone_no_tools">没有开启工具</string>
+    <plurals name="phone_tools_on">
+        <item quantity="other">已开启 %1$d 个工具</item>
+    </plurals>
+    <string name="phone_used_ago">%1$s · %2$s前使用</string>
+    <string name="phone_used_just_now">%1$s · 刚刚使用</string>
+    <string name="phone_seen_ago">%1$s · %2$s前在线</string>
+    <string name="phone_seen_just_now">%1$s · 刚刚在线</string>
+    <string name="phone_remove_title">移除 %1$s？</string>
+    <string name="phone_remove_message">代理会停止使用它的手机工具，待处理的调用会被拒绝。如果 Kyllene 仍在那台手机上登录且开启了工具，下次连接时它会重新出现。</string>
+
+    <string name="phone_places_note_on">Android 每隔几分钟检查一次，所以消息可能会晚一点到。它以你的名义发送，并标记为从该地点发送。</string>
+    <string name="phone_places_note_off">“监视的地点”已关闭，所以不会触发任何地点。</string>
+    <string name="phone_place_arriving">到达 %1$s 时 · %2$d 米</string>
+    <string name="phone_place_leaving">离开 %1$s 时 · %2$d 米</string>
+    <string name="phone_place_sends">发送：%1$s</string>
+    <string name="phone_place_sends_to">发送到 %1$s：%2$s</string>
+    <string name="phone_place_stop">停止监视 %1$s</string>
+    <string name="phone_just_now">刚刚</string>
+    <string name="phone_ago">%1$s前</string>
+
+    <string name="phone_need_notifications">请开启 Kyllene 的通知：更改会在那里询问。</string>
+    <string name="phone_need_dnd">请允许 Kyllene 更改勿扰模式。</string>
+    <string name="phone_need_usage">请授予 Kyllene 使用情况访问权限，以查看你使用了哪些应用。</string>
+    <string name="phone_need_location">请允许 Kyllene 使用这台手机的位置。</string>
+    <string name="phone_need_precise">请允许精确位置：Android 只有在精确位置下才能监视地点。</string>
+    <string name="phone_need_always">请始终允许位置访问：Kyllene 关闭时也会监视地点。选择“始终允许”。</string>
+    <string name="phone_need_calendar">请允许 Kyllene 使用你的日历。</string>
+    <string name="phone_need_contacts">请允许 Kyllene 读取你的联系人。</string>
+    <string name="phone_need_health_update">请更新 Health Connect，数据来自那里。</string>
+    <string name="phone_need_health_install">请安装 Health Connect，数据来自那里。</string>
+    <string name="phone_need_health_none">这台手机没有 Health Connect。</string>
+    <string name="phone_need_health_read">请允许 Kyllene 在 Health Connect 中读取步数、睡眠或心率。</string>
+    <string name="phone_need_call_notifications">请开启 Kyllene 的通知：来电会在那里响铃。</string>
+    <string name="phone_need_full_screen">请允许全屏通知，这样来电会显示在锁屏上方。</string>
+    <string name="phone_need_android">手机工具需要在 Android 手机上的 Kyllene 中使用。</string>
+    <string name="phone_optional_closed">Kyllene 关闭时也可用（可选）</string>
+    <string name="phone_optional_health">也包括步数、睡眠或心率（可选）</string>
+
+    <string name="phone_tool_battery">电池</string>
+    <string name="phone_tool_battery_detail">电量、是否在充电以及充满所需时间。</string>
+    <string name="phone_tool_network">网络</string>
+    <string name="phone_tool_network_detail">Wi-Fi、移动数据或离线，是否按流量计费，以及 VPN。</string>
+    <string name="phone_tool_sound">声音</string>
+    <string name="phone_tool_sound_detail">勿扰模式、铃声模式和音量。更改前会先询问。</string>
+    <string name="phone_tool_alarms">闹钟和计时器</string>
+    <string name="phone_tool_alarms_detail">经你允许后，在时钟应用中设置一个。</string>
+    <string name="phone_tool_screen_time">屏幕使用时间</string>
+    <string name="phone_tool_screen_time_detail">你用了哪些应用、用了多久、亮屏时间和解锁次数，最多回溯一周。</string>
+    <string name="phone_tool_open">打开链接、地图和应用</string>
+    <string name="phone_tool_open_detail">经你允许后，打开链接、地点、应用或分享菜单。</string>
+    <string name="phone_tool_clipboard">复制到剪贴板</string>
+    <string name="phone_tool_clipboard_detail">经你允许后，把文本放到剪贴板。从不读取其中的内容。</string>
+    <string name="phone_tool_location">位置</string>
+    <string name="phone_tool_location_detail">手机所在位置和最近的地址，精度取决于你的授权。仅在 Kyllene 打开时，除非你也允许在关闭时使用。</string>
+    <string name="phone_tool_geofences">监视的地点</string>
+    <string name="phone_tool_geofences_detail">到达或离开某个地点时，会把它的消息发到添加它的对话中。添加或移除前会先询问；需要始终允许精确位置。</string>
+    <string name="phone_tool_calendar">日历</string>
+    <string name="phone_tool_calendar_detail">某个时间范围内的日程。添加或移动日程前会先询问。</string>
+    <string name="phone_tool_contacts">联系人</string>
+    <string name="phone_tool_contacts_detail">按姓名、号码或邮箱查找联系人：只读取姓名、号码和邮箱，每次少量。</string>
+    <string name="phone_tool_health">健康</string>
+    <string name="phone_tool_health_detail">来自 Health Connect 的步数、睡眠和心率，范围取决于你在那里的授权。仅在 Kyllene 打开时，除非你也允许在关闭时使用。</string>
+    <string name="phone_tool_show_ui">对话中的界面（实验）</string>
+    <string name="phone_tool_show_ui_detail">代理在回复下方绘制一个小界面，包含按钮、选项或表单，并最多等待你点按 5 分钟。仅限 Android。</string>
+    <string name="phone_tool_call_me">Hermes 可以给我打电话</string>
+    <string name="phone_tool_call_me_detail">当事情等不了，或你让它打给你时（包括来自定时任务），代理会给你打电话。接听后 Hermes 会在通话中告诉你原因。只会打给你。</string>
+</resources>

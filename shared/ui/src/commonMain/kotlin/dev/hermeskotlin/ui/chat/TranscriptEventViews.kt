@@ -17,6 +17,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -33,8 +34,10 @@ import com.composables.icons.lucide.Bot
 import com.composables.icons.lucide.CheckCheck
 import com.composables.icons.lucide.ChevronDown
 import com.composables.icons.lucide.ChevronRight
+import com.composables.icons.lucide.Settings
 import com.composables.icons.lucide.CircleAlert
 import com.composables.icons.lucide.CornerDownRight
+import com.composables.icons.lucide.History
 import com.composables.icons.lucide.Hourglass
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.MessageCircle
@@ -78,6 +81,8 @@ import dev.hermeskotlin.ui.CopyableOnDesktop
 import dev.hermeskotlin.ui.isDesktop
 import dev.hermeskotlin.ui.bots.BotAvatar
 import dev.hermeskotlin.ui.bots.LocalBotFaces
+import dev.hermeskotlin.ui.resources.*
+import org.jetbrains.compose.resources.stringResource
 
 /**
  * A row the machinery wrote into the chat: a single quiet line saying what happened, which opens to show
@@ -87,6 +92,12 @@ import dev.hermeskotlin.ui.bots.LocalBotFaces
 @Composable
 internal fun TranscriptEventRow(event: TranscriptEvent) {
     when (event) {
+        is TranscriptEvent.SystemMessages -> SystemMessages(event.entries)
+        is TranscriptEvent.Compaction -> FoldedLine(
+            icon = Lucide.History,
+            title = stringResource(Res.string.chat_event_compaction),
+            body = event.body.takeIf { it.isNotBlank() }?.let { { MarkdownText(it) } },
+        )
         is TranscriptEvent.FromBot -> FromBotNote(event)
         is TranscriptEvent.Delivery -> DeliveryLine(event)
         is TranscriptEvent.Process -> FoldedLine(
@@ -97,18 +108,33 @@ internal fun TranscriptEventRow(event: TranscriptEvent) {
         )
         is TranscriptEvent.Routine -> FoldedLine(
             icon = Lucide.AlarmClock,
-            title = "Routine “${event.name}” ran",
+            title = stringResource(Res.string.chat_event_routine, event.name),
             body = event.body.takeIf { it.isNotBlank() }?.let { { MarkdownText(it) } },
         )
         is TranscriptEvent.FailedTurn -> FoldedLine(
             icon = Lucide.CircleAlert,
-            title = event.text.ifBlank { "This turn did not complete." },
+            title = event.text.ifBlank { stringResource(Res.string.chat_event_failed_turn) },
             tint = Theme[colors][danger],
             body = null,
         )
         is TranscriptEvent.Label -> Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
             Text(event.text, style = Theme[typography][caption], color = Theme[colors][textTertiary])
         }
+    }
+}
+
+/** The same disclosure as Reasoning; open, each entry is its own line, its words a tap further. */
+@Composable
+private fun SystemMessages(entries: List<TranscriptEvent>) {
+    var expanded by remember { mutableStateOf(false) }
+    Disclosure(
+        icon = { UnstyledIcon(Lucide.Settings, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(16.dp)) },
+        label = stringResource(Res.string.chat_event_system_messages, entries.size),
+        expanded = expanded,
+        onToggle = { expanded = !expanded },
+    ) {
+        // Counted from the newest, as the group is keyed: one opened stays open when an earlier page adds entries above.
+        Column { entries.forEachIndexed { i, entry -> key(entries.size - i) { TranscriptEventRow(entry) } } }
     }
 }
 
@@ -125,30 +151,30 @@ private fun FromBotNote(event: TranscriptEvent.FromBot) {
 private fun DeliveryLine(event: TranscriptEvent.Delivery) {
     val faces = LocalBotFaces.current
     val bot = remember(faces, event.target) { faces.find(event.target) }
-    val who = bot?.label ?: event.target?.let { "@$it" } ?: "the other bot"
+    val who = bot?.label ?: event.target?.let { "@$it" } ?: stringResource(Res.string.chat_event_other_bot)
     when (val outcome = event.outcome) {
         // A receipt, not a reply. Its text is what the other bot wrote in its own turn after reading the
         // message, usually a note for its human (often quoting us); a real answer comes as its own message.
         is DeliveryOutcome.Replied -> FoldedLine(
             Lucide.CheckCheck,
-            "Delivered to $who",
+            stringResource(Res.string.chat_event_delivered, who),
             body = {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("What $who noted after reading it", style = Theme[typography][caption], color = Theme[colors][textTertiary])
+                    Text(stringResource(Res.string.chat_event_noted, who), style = Theme[typography][caption], color = Theme[colors][textTertiary])
                     MarkdownText(outcome.text)
                 }
             },
         )
-        DeliveryOutcome.NoReply -> FoldedLine(Lucide.MessageCircleOff, "$who read it and chose not to reply", body = null)
+        DeliveryOutcome.NoReply -> FoldedLine(Lucide.MessageCircleOff, stringResource(Res.string.chat_event_no_reply, who), body = null)
         is DeliveryOutcome.Waiting -> FoldedLine(
             Lucide.Hourglass,
-            "Still waiting on $who · don't send it again",
+            stringResource(Res.string.chat_event_still_waiting, who),
             tint = Theme[colors][warning],
             body = outcome.detail?.let { { Monospace(it) } },
         )
         is DeliveryOutcome.Failed -> FoldedLine(
             Lucide.CircleAlert,
-            "Couldn't reach $who · ${outcome.label}",
+            stringResource(Res.string.chat_event_unreachable, who, outcome.label),
             tint = Theme[colors][danger],
             body = outcome.detail?.let { { Monospace(it) } },
         )
@@ -163,7 +189,7 @@ private fun DeliveryLine(event: TranscriptEvent.Delivery) {
 internal fun RepliedToFold(to: String, preview: String, content: @Composable () -> Unit) {
     val faces = LocalBotFaces.current
     val bot = remember(faces, to) { faces.find(to) }
-    ToBot(bot, fallbackName = to, note = "reply", words = preview, sending = false, failed = false, full = content)
+    ToBot(bot, fallbackName = to, note = stringResource(Res.string.chat_to_bot_reply), words = preview, sending = false, failed = false, full = content)
 }
 
 /** This bot's `message_agent` call, as a note addressed to the other bot: "To X" and the message. */
@@ -175,12 +201,14 @@ internal fun MessagedLine(tool: ToolActivity) {
     val bot = remember(faces, target) { faces.find(target) }
     ToBot(
         bot,
-        fallbackName = target?.let { "@$it" } ?: "another bot",
-        note = when {
-            tool.running -> "sending…"
-            tool.failed -> "not sent"
-            else -> "message"
-        },
+        fallbackName = target?.let { "@$it" } ?: stringResource(Res.string.chat_to_bot_another),
+        note = stringResource(
+            when {
+                tool.running -> Res.string.chat_to_bot_sending
+                tool.failed -> Res.string.chat_to_bot_not_sent
+                else -> Res.string.chat_to_bot_message
+            },
+        ),
         words = if (tool.failed) tool.output.orEmpty() else message.orEmpty(),
         sending = tool.running,
         failed = tool.failed,
@@ -213,6 +241,8 @@ private fun BotSays(bot: Bot?, fallbackName: String, note: String?, words: Strin
     val tint = bot?.let { remember(it.name, it.uiMeta) { Color(0xFF000000 or botLook(it).color.toLong()) } } ?: Theme[colors][textSecondary]
     var open by remember { mutableStateOf(false) }
     val shape = RoundedCornerShape(topStart = 4.dp, topEnd = 16.dp, bottomEnd = 16.dp, bottomStart = 16.dp)
+    val toggleLabel = stringResource(if (open) Res.string.chat_show_less else Res.string.chat_show_all)
+    val lessLabel = stringResource(Res.string.chat_show_less)
     Row(Modifier.fillMaxWidth().padding(end = 32.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         if (bot != null) {
             BotAvatar(bot, faces.picture(bot), size = 28.dp)
@@ -228,12 +258,12 @@ private fun BotSays(bot: Bot?, fallbackName: String, note: String?, words: Strin
                 .background(tint.copy(alpha = 0.12f), shape)
                 .border(1.dp, tint.copy(alpha = 0.28f), shape)
                 // Opened on the desktop, the text is for selecting: only its name line folds it again.
-                .then(if (isDesktop && open) Modifier else Modifier.handCursor(words.isNotBlank()).clickable(enabled = words.isNotBlank(), onClickLabel = if (open) "Show less" else "Show all") { open = !open })
+                .then(if (isDesktop && open) Modifier else Modifier.handCursor(words.isNotBlank()).clickable(enabled = words.isNotBlank(), onClickLabel = toggleLabel) { open = !open })
                 .padding(horizontal = 12.dp, vertical = 9.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             Row(
-                if (isDesktop && open) Modifier.handCursor().clickable(onClickLabel = "Show less") { open = false } else Modifier,
+                if (isDesktop && open) Modifier.handCursor().clickable(onClickLabel = lessLabel) { open = false } else Modifier,
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -274,6 +304,8 @@ private fun ToBot(
     var open by remember { mutableStateOf(false) }
     val shape = RoundedCornerShape(topStart = 16.dp, topEnd = 4.dp, bottomEnd = 16.dp, bottomStart = 16.dp)
     val edge = if (failed) Theme[colors][danger] else Theme[colors][stroke]
+    val toggleLabel = stringResource(if (open) Res.string.chat_show_less else Res.string.chat_show_all)
+    val lessLabel = stringResource(Res.string.chat_show_less)
     Column(Modifier.fillMaxWidth().padding(start = 40.dp), verticalArrangement = Arrangement.spacedBy(8.dp), horizontalAlignment = Alignment.End) {
         Column(
             Modifier
@@ -283,18 +315,18 @@ private fun ToBot(
                 // As a bot's own message: opened on the desktop, only the "To" line folds it again.
                 .then(
                     if (isDesktop && open) Modifier
-                    else Modifier.handCursor(words.isNotBlank() || full != null).clickable(enabled = words.isNotBlank() || full != null, onClickLabel = if (open) "Show less" else "Show all") { open = !open },
+                    else Modifier.handCursor(words.isNotBlank() || full != null).clickable(enabled = words.isNotBlank() || full != null, onClickLabel = toggleLabel) { open = !open },
                 )
                 .padding(horizontal = 12.dp, vertical = 9.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             Row(
-                if (isDesktop && open) Modifier.handCursor().clickable(onClickLabel = "Show less") { open = false } else Modifier,
+                if (isDesktop && open) Modifier.handCursor().clickable(onClickLabel = lessLabel) { open = false } else Modifier,
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 UnstyledIcon(Lucide.Send, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(12.dp))
-                Text("To", style = Theme[typography][caption], color = Theme[colors][textTertiary])
+                Text(stringResource(Res.string.chat_to_bot_to), style = Theme[typography][caption], color = Theme[colors][textTertiary])
                 if (bot != null) BotAvatar(bot, faces.picture(bot), size = 16.dp)
                 Text(
                     bot?.label ?: fallbackName,
@@ -327,12 +359,13 @@ private fun messageText(input: String): String? = runCatching {
 @Composable
 private fun FoldedLine(icon: ImageVector, title: String, tint: Color = Theme[colors][textTertiary], body: (@Composable () -> Unit)?) {
     var open by remember { mutableStateOf(false) }
+    val detailsAction = stringResource(if (open) Res.string.chat_hide_details else Res.string.chat_show_details)
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(
             Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(Theme[radii][radiusMedium]))
-                .then(if (body != null) Modifier.handCursor().clickable(onClickLabel = if (open) "Hide details" else "Show details") { open = !open } else Modifier)
+                .then(if (body != null) Modifier.handCursor().clickable(onClickLabel = detailsAction) { open = !open } else Modifier)
                 .heightIn(min = 36.dp)
                 .padding(horizontal = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),

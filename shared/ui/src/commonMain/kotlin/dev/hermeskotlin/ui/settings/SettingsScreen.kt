@@ -61,6 +61,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.platform.LocalFocusManager
+import kotlinx.coroutines.flow.drop
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -118,12 +121,17 @@ import com.composables.icons.lucide.Globe
 import com.composables.icons.lucide.Image
 import com.composables.icons.lucide.Download
 import com.composables.icons.lucide.LayoutGrid
+import com.composables.icons.lucide.Languages
+import androidx.compose.runtime.saveable.rememberSaveable
+import dev.hermeskotlin.ui.LanguagePageReturn
+import dev.hermeskotlin.ui.rememberLanguageChoice
 import com.composables.icons.lucide.Lightbulb
 import com.composables.icons.lucide.Lock
 import com.composables.icons.lucide.LogOut
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.MessageCircle
 import com.composables.icons.lucide.MessageSquarePlus
+import com.composables.icons.lucide.Folder
 import com.composables.icons.lucide.MessagesSquare
 import com.composables.icons.lucide.Moon
 import com.composables.icons.lucide.Phone
@@ -132,6 +140,7 @@ import com.composables.icons.lucide.Send
 import com.composables.icons.lucide.ShieldAlert
 import com.composables.icons.lucide.Smartphone
 import com.composables.icons.lucide.Sun
+import com.composables.icons.lucide.Watch
 import com.composables.icons.lucide.WrapText
 import com.composables.icons.lucide.Wrench
 import com.composeunstyled.Text
@@ -198,7 +207,6 @@ import dev.hermeskotlin.ui.windowControlsHeight
 import dev.hermeskotlin.ui.CopyableOnDesktop
 import dev.hermeskotlin.ui.isDesktop
 import dev.hermeskotlin.ui.PageRowHeight
-import dev.hermeskotlin.ui.tapVerb
 import dev.hermeskotlin.ui.keysLabel
 import dev.hermeskotlin.ui.QuickEntryHotkey
 import dev.hermeskotlin.ui.Shortcut
@@ -212,6 +220,11 @@ import dev.hermeskotlin.core.gateway.CheckStage
 import dev.hermeskotlin.core.gateway.StageResult
 import dev.hermeskotlin.ui.connect.ConnectionChecklist
 import dev.hermeskotlin.ui.sessions.SubpageHeader
+import dev.hermeskotlin.ui.sessions.navIcon
+import dev.hermeskotlin.ui.sessions.navLabel
+import dev.hermeskotlin.ui.SidebarPage
+import dev.hermeskotlin.core.bots.SidebarMode
+import com.composables.icons.lucide.LayoutList
 import dev.hermeskotlin.ui.update.UpdateBanner
 import org.koin.compose.viewmodel.koinViewModel
 import kotlin.math.roundToInt
@@ -224,6 +237,9 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.input.ImeAction
 import com.composables.icons.lucide.Search
 import dev.hermeskotlin.designsystem.components.TextField
+import dev.hermeskotlin.ui.resources.*
+import org.jetbrains.compose.resources.pluralStringResource
+import org.jetbrains.compose.resources.stringResource
 
 /** App preferences, the signed-in account and version info, as one page over the home screen. */
 @Composable
@@ -256,11 +272,20 @@ fun SettingsScreen(
     var callTargetOpen by remember { mutableStateOf(false) }
     var appIconOpen by remember { mutableStateOf(false) }
     var startInstructionOpen by remember { mutableStateOf(false) }
+    var sidebarPagesOpen by remember { mutableStateOf(false) }
+    // Saveable, and open again after a pick redraws the screens, so a new language shows on the page it was picked on.
+    var languageOpen by rememberSaveable { mutableStateOf(LanguagePageReturn.take()) }
+    var connectedDevicesOpen by remember { mutableStateOf(false) }
     // Read again when the App icon page closes, so its row names the icon just applied.
     val appIcons = key(appIconOpen) { rememberAppIcons() }
+    val language = rememberLanguageChoice()
     val suggestions by viewModel.suggestions.collectAsStateWithLifecycle()
     LaunchedEffect(gateway, profile) { viewModel.bind(gateway, profile) }
-    PlatformBackHandler(enabled = !checkOpen && !phoneToolsOpen && !appIconOpen && !startInstructionOpen && !callTargetOpen, onBack = onBack)
+    PlatformBackHandler(enabled = !checkOpen && !phoneToolsOpen && !appIconOpen && !startInstructionOpen && !callTargetOpen && !languageOpen && !connectedDevicesOpen && !sidebarPagesOpen, onBack = onBack)
+    // A page opened over Settings takes the keyboard from the search, so nothing typed there lands in a hidden query.
+    val focus = LocalFocusManager.current
+    val pageOver = phoneToolsOpen || appIconOpen || startInstructionOpen || callTargetOpen || languageOpen || connectedDevicesOpen || sidebarPagesOpen
+    LaunchedEffect(pageOver) { if (pageOver) focus.clearFocus() }
     // The desktop lists the sections beside the page; they say here where they start.
     val anchors = remember { mutableStateMapOf<String, Int>() }
     CompositionLocalProvider(LocalSectionAnchors provides anchors.takeIf { isDesktop }) { SettingsView(
@@ -288,7 +313,11 @@ fun SettingsScreen(
         onChooseCallTarget = { callTargetOpen = true },
         appIcon = appIcons.current,
         onOpenAppIcon = { appIconOpen = true },
+        language = appLanguage(language.picked),
+        onOpenLanguage = { languageOpen = true },
         onOpenStartInstruction = { startInstructionOpen = true },
+        onOpenConnectedDevices = { connectedDevicesOpen = true },
+        onOpenSidebarPages = { sidebarPagesOpen = true },
         suggestions = suggestions,
         onInstallSuggestions = viewModel::installSuggestions,
         onCheckSuggestions = viewModel::checkSuggestions,
@@ -305,7 +334,12 @@ fun SettingsScreen(
             onBack = { startInstructionOpen = false },
         )
     }
+    if (connectedDevicesOpen) {
+        ConnectedDevicesScreen(settings, onUpdate = viewModel::update, onBack = { connectedDevicesOpen = false })
+    }
     if (appIconOpen) AppIconScreen(onBack = { appIconOpen = false })
+    if (sidebarPagesOpen) SidebarPagesScreen(settings, viewModel::update, onBack = { sidebarPagesOpen = false })
+    if (languageOpen) LanguageScreen(onBack = { languageOpen = false })
     ConnectionCheckSheet(
         visible = checkOpen,
         results = check.results,
@@ -327,11 +361,11 @@ internal fun ConnectionCheckSheet(
     BottomSheet(visible = visible, onDismiss = onDismiss) {
         Column(Modifier.padding(start = 20.dp, end = 20.dp, top = 4.dp, bottom = 20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text("Check connection", style = Theme[typography][title], color = Theme[colors][text], modifier = Modifier.semantics { heading() })
-                Text("Each stage is tested on its own.", style = Theme[typography][bodySmall], color = Theme[colors][textTertiary])
+                Text(stringResource(Res.string.common_check_connection), style = Theme[typography][title], color = Theme[colors][text], modifier = Modifier.semantics { heading() })
+                Text(stringResource(Res.string.settings_check_sheet_detail), style = Theme[typography][bodySmall], color = Theme[colors][textTertiary])
             }
             ConnectionChecklist(results, running = running)
-            InversePillButton(if (running) "Checking…" else "Check again", Lucide.RefreshCw, onCheckAgain, loading = running)
+            InversePillButton(if (running) stringResource(Res.string.common_checking) else stringResource(Res.string.common_check_again), Lucide.RefreshCw, onCheckAgain, loading = running)
         }
     }
 }
@@ -387,7 +421,12 @@ internal fun SettingsView(
     onChooseCallTarget: () -> Unit = {},
     appIcon: AppIcon = AppIcon.Blue,
     onOpenAppIcon: () -> Unit = {},
+    /** The language picked in Settings › Language; null for System default. */
+    language: AppLanguage? = null,
+    onOpenLanguage: () -> Unit = {},
     onOpenStartInstruction: () -> Unit = {},
+    onOpenConnectedDevices: () -> Unit = {},
+    onOpenSidebarPages: () -> Unit = {},
     /** Where the Next Prompt plugin behind Suggested replies stands on the gateway. */
     suggestions: SuggestionsPlugin = SuggestionsPlugin.Checking,
     onInstallSuggestions: () -> Unit = {},
@@ -402,34 +441,39 @@ internal fun SettingsView(
         contentAlignment = Alignment.TopCenter,
     ) {
         val scroll = rememberScrollState()
-        // The desktop's settings are many and a pointer away; a search over their names finds one quicker than scrolling.
+        // The settings are many; a search over their names finds one quicker than scrolling, on the phone too.
         val search = rememberTextFieldState()
-        val query = if (isDesktop) search.text.toString() else ""
+        val query = search.text.toString()
+        // New words show their matches from the top, not part way down where the page was scrolled to.
+        LaunchedEffect(search, scroll) { snapshotFlow { search.text.toString() }.drop(1).collect { scroll.scrollTo(0) } }
+        val focus = LocalFocusManager.current
         Column(Modifier.widthIn(max = 640.dp).fillMaxSize()) {
-            SubpageHeader("Settings", onBack = onBack)
-            if (isDesktop) {
-                TextField(
-                    state = search,
-                    placeholder = "Search settings",
-                    leadingIcon = Lucide.Search,
-                    clearable = true,
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                    modifier = Modifier.padding(start = 14.dp, end = 14.dp, bottom = 12.dp),
-                )
-            }
+            SubpageHeader(stringResource(Res.string.common_settings), onBack = onBack)
+            TextField(
+                state = search,
+                placeholder = stringResource(Res.string.settings_search_placeholder),
+                leadingIcon = Lucide.Search,
+                clearable = true,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                // The list already shows the matches; the keyboard's Search key puts the keyboard away to see them.
+                onKeyboardAction = { focus.clearFocus() },
+                modifier = Modifier.padding(start = 14.dp, end = 14.dp, bottom = 12.dp),
+            )
             Column(
                 Modifier.fillMaxSize().verticalScroll(scroll).padding(start = 14.dp, end = 14.dp, bottom = 32.dp),
                 verticalArrangement = Arrangement.spacedBy(if (query.isBlank()) 22.dp else 0.dp),
             ) { SearchableSettings(query) {
                 if (query.isBlank()) AccountCard(gatewayName, gatewayUrl, info.userLabel, onCheckConnection)
 
-                Section("Appearance") {
-                    Field("Theme") {
+                Section(stringResource(Res.string.settings_section_appearance)) {
+                    Field(stringResource(Res.string.settings_theme)) {
+                        // The control takes its labels as a plain lambda, so the words are resolved first.
+                        val themeLabels = ThemeMode.entries.associateWith { themeModeLabel(it) }
                         SegmentedControl(
                             options = ThemeMode.entries,
                             selected = settings.theme,
                             onSelect = { mode -> onUpdate { it.copy(theme = mode) } },
-                            optionLabel = { it.name },
+                            optionLabel = { themeLabels.getValue(it) },
                             optionIcon = {
                                 when (it) {
                                     ThemeMode.System -> if (isDesktop) Lucide.Monitor else Lucide.Smartphone
@@ -440,56 +484,63 @@ internal fun SettingsView(
                         )
                     }
                     Divider()
-                    Field("Accent", detail = "Buttons, links and your own messages.") {
+                    Field(stringResource(Res.string.settings_accent), detail = stringResource(Res.string.settings_accent_detail)) {
                         AccentPicker(
                             selected = AccentPalette.named(settings.accent),
                             onSelect = { palette -> onUpdate { it.copy(accent = palette.name) } },
                         )
                     }
                     Divider()
-                    // The launcher's icon is the phone's; the desktop keeps Herald's own, and iOS has no others yet.
+                    // The launcher's icon is the phone's; the desktop keeps its own, and iOS has no others yet.
                     if (appIconsShow) {
-                        NavRow(title = "App icon", detail = appIcon.label, icon = Lucide.LayoutGrid, onClick = onOpenAppIcon)
+                        NavRow(title = stringResource(Res.string.settings_app_icon), detail = stringResource(appIcon.labelRes), icon = Lucide.LayoutGrid, onClick = onOpenAppIcon)
                         Divider()
                     }
+                    NavRow(
+                        title = stringResource(Res.string.settings_language),
+                        detail = language?.endonym ?: stringResource(Res.string.settings_language_system),
+                        icon = Lucide.Languages,
+                        onClick = onOpenLanguage,
+                    )
+                    Divider()
                     SwitchRow(
-                        title = "Pure black",
-                        detail = "True black backgrounds in dark mode, easier on OLED screens.",
+                        title = stringResource(Res.string.settings_pure_black),
+                        detail = stringResource(Res.string.settings_pure_black_detail),
                         checked = settings.pureBlack,
                         onCheckedChange = { on -> onUpdate { it.copy(pureBlack = on) } },
                     )
                     Divider()
                     SwitchRow(
-                        title = "Glow",
-                        detail = "Soft colored light behind the top of each screen and under your messages and buttons. Off, everything sits flat.",
+                        title = stringResource(Res.string.settings_glow),
+                        detail = stringResource(Res.string.settings_glow_detail),
                         checked = settings.glow,
                         onCheckedChange = { on -> onUpdate { it.copy(glow = on) } },
                     )
                     Divider()
-                    Field("Text size", detail = if (isDesktop) "The text alone, on top of the zoom." else "On top of your phone's own font size.") {
+                    Field(stringResource(Res.string.settings_text_size), detail = if (isDesktop) stringResource(Res.string.settings_text_size_desktop_detail) else stringResource(Res.string.settings_text_size_detail)) {
                         TextSizeSlider(settings.textSize, onSelect = { size -> onUpdate { it.copy(textSize = size) } })
                     }
                     Divider()
-                    Field("Chat background", detail = "A photo behind your conversations.") {
+                    Field(stringResource(Res.string.settings_chat_background), detail = stringResource(Res.string.settings_chat_background_detail)) {
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                             if (wallpaper != null) {
                                 val shape = RoundedCornerShape(Theme[radii][radiusMedium])
                                 Image(
                                     wallpaper,
-                                    contentDescription = "Current chat background",
+                                    contentDescription = stringResource(Res.string.settings_chat_background_current),
                                     contentScale = ContentScale.Crop,
                                     modifier = Modifier.size(width = 40.dp, height = 64.dp).clip(shape).border(1.dp, Theme[colors][stroke], shape),
                                 )
                             }
                             Button(
-                                if (hasWallpaper) "Change" else "Choose photo",
+                                if (hasWallpaper) stringResource(Res.string.common_change) else stringResource(Res.string.common_choose_photo),
                                 onClick = onChooseWallpaper,
                                 variant = ButtonVariant.Secondary,
                                 size = ButtonSize.Small,
                                 leadingIcon = Lucide.Image,
                             )
                             if (hasWallpaper) {
-                                Button("Remove", onClick = onRemoveWallpaper, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
+                                Button(stringResource(Res.string.common_remove), onClick = onRemoveWallpaper, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
                             }
                         }
                         if (wallpaperError != null) {
@@ -498,112 +549,161 @@ internal fun SettingsView(
                     }
                     if (hasWallpaper) {
                         Divider()
-                        Field("Background strength", detail = "How much of the photo shows through.") {
+                        Field(stringResource(Res.string.settings_background_strength), detail = stringResource(Res.string.settings_background_strength_detail)) {
+                            // The control takes its labels as a plain lambda, so the words are resolved first.
+                            val wallpaperLabels = WallpaperStrength.entries.associateWith { wallpaperStrengthLabel(it) }
                             SegmentedControl(
                                 options = WallpaperStrength.entries,
                                 selected = settings.wallpaperStrength,
                                 onSelect = { strength -> onUpdate { it.copy(wallpaperStrength = strength) } },
-                                optionLabel = { it.name },
+                                optionLabel = { wallpaperLabels.getValue(it) },
                             )
                         }
                     }
                     Divider()
                     SwitchRow(
-                        title = "Projects as a list",
-                        detail = "Show the chat list's projects as one button that opens a list, instead of a row of chips that scrolls sideways.",
+                        title = stringResource(Res.string.settings_projects_as_list),
+                        detail = stringResource(Res.string.settings_projects_as_list_detail),
                         checked = settings.projectsAsDropdown,
                         onCheckedChange = { on -> onUpdate { it.copy(projectsAsDropdown = on) } },
                     )
+                    Divider()
+                    SwitchRow(
+                        title = stringResource(Res.string.settings_sidebar_switch),
+                        detail = stringResource(Res.string.settings_sidebar_switch_detail),
+                        checked = settings.sidebarModeSwitch,
+                        onCheckedChange = { on -> onUpdate { it.copy(sidebarModeSwitch = on) } },
+                    )
+                    // Without the switch, which side the sidebar shows is picked here.
+                    if (!settings.sidebarModeSwitch) {
+                        Divider()
+                        Field(stringResource(Res.string.settings_sidebar_view), detail = stringResource(Res.string.settings_sidebar_view_detail)) {
+                            // The control takes its labels as a plain lambda, so the words are resolved first.
+                            val viewLabels = SidebarMode.entries.associateWith { stringResource(navLabel(it.page)) }
+                            SegmentedControl(
+                                options = SidebarMode.entries,
+                                selected = settings.sidebarView,
+                                onSelect = { view -> onUpdate { it.copy(sidebarView = view) } },
+                                optionLabel = { viewLabels.getValue(it) },
+                                optionIcon = { navIcon(it.page) },
+                            )
+                        }
+                    }
+                    Divider()
+                    NavRow(
+                        title = stringResource(Res.string.settings_sidebar_pages),
+                        detail = sidebarPagesSummary(settings),
+                        icon = Lucide.LayoutList,
+                        onClick = onOpenSidebarPages,
+                    )
                 }
 
-                Section("Chat") {
+                Section(stringResource(Res.string.settings_section_chat)) {
                     Field(
-                        "While a reply is running, Send…",
-                        detail = "${settings.runningSend.summary}. Hold Send to pick another way for one message.",
+                        stringResource(Res.string.settings_running_send),
+                        detail = stringResource(
+                            Res.string.settings_running_send_detail,
+                            runningSendSummary(settings.runningSend),
+                        ),
                     ) {
+                        // The control takes its labels as a plain lambda, so the words are resolved first.
+                        val sendLabels = RunningSend.entries.associateWith { runningSendLabel(it) }
                         SegmentedControl(
                             options = RunningSend.entries,
                             selected = settings.runningSend,
                             onSelect = { mode -> onUpdate { it.copy(runningSend = mode) } },
-                            optionLabel = { it.label },
+                            optionLabel = { sendLabels.getValue(it) },
                         )
                     }
                     Divider()
                     NavRow(
-                        title = "Starting instruction",
-                        detail = settings.startInstruction.trim().ifEmpty { "None. Tell each new chat something first, like to keep replies short." },
+                        title = stringResource(Res.string.settings_start_instruction),
+                        // ifEmpty's lambda isn't composable, so the fallback is picked before the words are.
+                        detail = settings.startInstruction.trim().takeIf { it.isNotEmpty() }
+                            ?: stringResource(Res.string.settings_start_instruction_none),
                         icon = Lucide.MessageSquarePlus,
                         onClick = onOpenStartInstruction,
                         detailLines = 2,
                     )
                     Divider()
                     SwitchRow(
-                        title = "Show reasoning",
-                        detail = "The model's thinking, collapsed above each reply.",
+                        title = stringResource(Res.string.settings_use_last_project),
+                        detail = stringResource(Res.string.settings_use_last_project_detail),
+                        checked = settings.useLastProject,
+                        onCheckedChange = { on -> onUpdate { it.copy(useLastProject = on) } },
+                        icon = Lucide.Folder,
+                    )
+                    Divider()
+                    SwitchRow(
+                        title = stringResource(Res.string.settings_show_reasoning),
+                        detail = stringResource(Res.string.settings_show_reasoning_detail),
                         checked = settings.showReasoning,
                         onCheckedChange = { on -> onUpdate { it.copy(showReasoning = on) } },
                         icon = Lucide.Brain,
                     )
                     Divider()
                     SwitchRow(
-                        title = "Show tool activity",
-                        detail = "The tools each reply used, such as the terminal or web search.",
+                        title = stringResource(Res.string.settings_show_tool_activity),
+                        detail = stringResource(Res.string.settings_show_tool_activity_detail),
                         checked = settings.showToolActivity,
                         onCheckedChange = { on -> onUpdate { it.copy(showToolActivity = on) } },
                         icon = Lucide.Wrench,
                     )
                     Divider()
                     SwitchRow(
-                        title = "Show token usage",
-                        detail = "What each reply took, under it. The chat menu has the totals and cost.",
+                        title = stringResource(Res.string.settings_show_usage),
+                        detail = stringResource(Res.string.settings_show_usage_detail),
                         checked = settings.showUsage,
                         onCheckedChange = { on -> onUpdate { it.copy(showUsage = on) } },
                         icon = Lucide.Gauge,
                     )
                     Divider()
                     SwitchRow(
-                        title = "Message timestamps",
-                        detail = "The time under each prompt and finished reply.",
+                        title = stringResource(Res.string.settings_message_timestamps),
+                        detail = stringResource(Res.string.settings_message_timestamps_detail),
                         checked = settings.showTimestamps,
                         onCheckedChange = { on -> onUpdate { it.copy(showTimestamps = on) } },
                         icon = Lucide.Clock,
                     )
                     Divider()
                     SwitchRow(
-                        title = "Wrap code lines",
-                        detail = "Long lines in code blocks wrap instead of scrolling sideways.",
+                        title = stringResource(Res.string.settings_wrap_code),
+                        detail = stringResource(Res.string.settings_wrap_code_detail),
                         checked = settings.wrapCode,
                         onCheckedChange = { on -> onUpdate { it.copy(wrapCode = on) } },
                         icon = Lucide.WrapText,
                     )
                     Divider()
                     SwitchRow(
-                        title = "Show the pet",
-                        detail = "The profile's pet sits on the composer and acts out what the agent is doing. Adopt one with /pet.",
+                        title = stringResource(Res.string.settings_show_pet),
+                        detail = stringResource(Res.string.settings_show_pet_detail),
                         checked = settings.showPet,
                         onCheckedChange = { on -> onUpdate { it.copy(showPet = on) } },
                         icon = Lucide.Cat,
                     )
                     Divider()
                     SwitchRow(
-                        title = "Show link previews",
-                        detail = "A card for each web link in a finished reply. Kyllene opens the linked pages and their pictures itself, without your gateway's cookies.",
+                        title = stringResource(Res.string.settings_link_previews),
+                        detail = stringResource(Res.string.settings_link_previews_detail),
                         checked = settings.showLinkPreviews,
                         onCheckedChange = { on -> onUpdate { it.copy(showLinkPreviews = on) } },
                         icon = Lucide.Globe,
                     )
                     Divider()
                     SwitchRow(
-                        title = "Suggested replies",
+                        title = stringResource(Res.string.settings_suggested_replies),
                         detail = suggestionsDetail(settings.suggestedReplies, suggestions),
                         checked = settings.suggestedReplies,
                         onCheckedChange = { on -> onUpdate { it.copy(suggestedReplies = on) } },
                         icon = Lucide.Lightbulb,
                     )
-                    if (settings.suggestedReplies && (suggestions == SuggestionsPlugin.Missing || suggestions is SuggestionsPlugin.Failed)) {
+                    if (
+                        settings.suggestedReplies &&
+                        (suggestions == SuggestionsPlugin.Missing || suggestions is SuggestionsPlugin.Failed || suggestions == SuggestionsPlugin.NotListed)
+                    ) {
                         var asked by remember { mutableStateOf(false) }
                         Divider()
-                        ActionRow("Install Next Prompt on the gateway", Lucide.Download) { asked = true }
+                        ActionRow(stringResource(Res.string.settings_suggestions_install_row), Lucide.Download) { asked = true }
                         SuggestionsInstallDialog(asked, onDismiss = { asked = false }) {
                             asked = false
                             onInstallSuggestions()
@@ -611,117 +711,137 @@ internal fun SettingsView(
                     }
                     if (settings.suggestedReplies && (suggestions == SuggestionsPlugin.NeedsRestart || suggestions == SuggestionsPlugin.Unknown)) {
                         Divider()
-                        ActionRow("Check again", Lucide.RefreshCw, onClick = onCheckSuggestions)
+                        ActionRow(stringResource(Res.string.common_check_again), Lucide.RefreshCw, onClick = onCheckSuggestions)
                     }
                 }
 
-                if (hasVoice) Section("Voice") {
+                if (hasVoice) Section(stringResource(Res.string.settings_section_voice)) {
                     CallTargetRow(settings.callTargets[gatewayUrl] ?: CallTarget(), botFaces, onChooseCallTarget)
                     Divider()
                     SwitchRow(
-                        title = "Dictation",
-                        detail = "A mic in the composer to talk instead of type. Off, the model name gets its room.",
+                        title = stringResource(Res.string.settings_dictation),
+                        detail = stringResource(Res.string.settings_dictation_detail),
                         checked = settings.dictation,
                         onCheckedChange = { on -> onUpdate { it.copy(dictation = on) } },
                     )
                     Divider()
                     if (settings.dictation) {
                         Field(
-                            "Dictate with",
+                            stringResource(Res.string.settings_dictate_with),
                             detail = when (settings.dictationEngine) {
-                                DictationEngine.Device -> "The phone's speech recognizer writes as you talk. Falls back to the gateway on a phone without one."
-                                DictationEngine.Gateway -> "The profile's speech-to-text on the gateway, once you stop talking."
+                                DictationEngine.Device -> stringResource(Res.string.settings_dictate_device)
+                                DictationEngine.Gateway -> stringResource(Res.string.settings_dictate_gateway)
                             },
                         ) {
+                            // The control takes its labels as a plain lambda, so the words are resolved first.
+                            val dictationLabels = DictationEngine.entries.associateWith { dictationEngineLabel(it) }
                             SegmentedControl(
                                 options = DictationEngine.entries,
                                 selected = settings.dictationEngine,
                                 onSelect = { engine -> onUpdate { it.copy(dictationEngine = engine) } },
-                                optionLabel = { it.name },
+                                optionLabel = { dictationLabels.getValue(it) },
                             )
                         }
                         Divider()
                     }
-                    Field("Pause before sending", detail = "How long a voice chat waits after you stop talking. Short is Hermes Desktop's timing.") {
+                    Field(stringResource(Res.string.settings_voice_pause), detail = stringResource(Res.string.settings_voice_pause_detail)) {
+                        // The control takes its labels as a plain lambda, so the words are resolved first.
+                        val pauseLabels = VoicePause.entries.associateWith { voicePauseLabel(it) }
                         SegmentedControl(
                             options = VoicePause.entries,
                             selected = settings.voicePause,
                             onSelect = { pause -> onUpdate { it.copy(voicePause = pause) } },
-                            optionLabel = { it.name },
+                            optionLabel = { pauseLabels.getValue(it) },
                         )
                     }
                 }
 
-                if (isDesktop) Section("Desktop") {
+                if (isDesktop) Section(stringResource(Res.string.settings_section_desktop)) {
                     SwitchRow(
-                        title = "Keep running in the tray",
-                        detail = "Closing the window leaves Kyllene in the tray, still telling you of replies and questions. Quit from the tray's menu.",
+                        title = stringResource(Res.string.settings_keep_running),
+                        detail = stringResource(Res.string.settings_keep_running_detail),
                         checked = settings.closeToTray,
                         onCheckedChange = { on -> onUpdate { it.copy(closeToTray = on) } },
                         icon = Lucide.AppWindow,
                     )
                     Divider()
                     SwitchRow(
-                        title = "Quick entry",
-                        detail = "${keysLabel("Ctrl+Shift+Space")} from any app opens a small box to ask Hermes, in a new chat or the open one. Windows only for now." +
+                        title = stringResource(Res.string.settings_quick_entry),
+                        detail = quickEntryDetail() +
                             // Windows gives a hotkey to one app at a time: say so rather than leave it on and silent.
-                            if (settings.quickEntry && QuickEntryHotkey.taken) " Another app has these keys now, so it can't open." else "",
+                            if (settings.quickEntry && QuickEntryHotkey.taken) {
+                                " " + stringResource(Res.string.settings_quick_entry_taken)
+                            } else {
+                                ""
+                            },
                         checked = settings.quickEntry,
                         onCheckedChange = { on -> onUpdate { it.copy(quickEntry = on) } },
                         icon = Lucide.Keyboard,
                     )
                     Divider()
-                    Field("Zoom", detail = "${settings.zoom}%. ${keysLabel("Ctrl+=")} and ${keysLabel("Ctrl+-")} change it anywhere; ${keysLabel("Ctrl+0")} goes back to 100%.") {
+                    Field(
+                        stringResource(Res.string.settings_zoom),
+                        detail = stringResource(
+                            Res.string.settings_zoom_detail,
+                            settings.zoom,
+                            keysLabel("Ctrl+="),
+                            keysLabel("Ctrl+-"),
+                            keysLabel("Ctrl+0"),
+                        ),
+                    ) {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             // The same steps as the keys take.
                             // Each greys out at its end of the range, and 100% at 100%, rather than doing nothing.
-                            Button("Smaller", onClick = { onUpdate { it.copy(zoom = zoomAfter(Shortcut.ZoomOut, it.zoom) ?: it.zoom) } }, variant = ButtonVariant.Secondary, size = ButtonSize.Small, enabled = zoomAfter(Shortcut.ZoomOut, settings.zoom) != null)
-                            Button("100%", onClick = { onUpdate { it.copy(zoom = 100) } }, variant = ButtonVariant.Secondary, size = ButtonSize.Small, enabled = settings.zoom != 100)
-                            Button("Bigger", onClick = { onUpdate { it.copy(zoom = zoomAfter(Shortcut.ZoomIn, it.zoom) ?: it.zoom) } }, variant = ButtonVariant.Secondary, size = ButtonSize.Small, enabled = zoomAfter(Shortcut.ZoomIn, settings.zoom) != null)
+                            Button(stringResource(Res.string.settings_zoom_smaller), onClick = { onUpdate { it.copy(zoom = zoomAfter(Shortcut.ZoomOut, it.zoom) ?: it.zoom) } }, variant = ButtonVariant.Secondary, size = ButtonSize.Small, enabled = zoomAfter(Shortcut.ZoomOut, settings.zoom) != null)
+                            Button(stringResource(Res.string.settings_zoom_reset), onClick = { onUpdate { it.copy(zoom = 100) } }, variant = ButtonVariant.Secondary, size = ButtonSize.Small, enabled = settings.zoom != 100)
+                            Button(stringResource(Res.string.settings_zoom_bigger), onClick = { onUpdate { it.copy(zoom = zoomAfter(Shortcut.ZoomIn, it.zoom) ?: it.zoom) } }, variant = ButtonVariant.Secondary, size = ButtonSize.Small, enabled = zoomAfter(Shortcut.ZoomIn, settings.zoom) != null)
                         }
                     }
                 }
 
-                Section("Notifications") {
+                Section(stringResource(Res.string.settings_section_notifications)) {
                     var installAsked by remember { mutableStateOf(false) }
                     PluginInstallDialog(
                         visible = installAsked,
-                        feature = "Notifications anywhere",
-                        what = "It watches your bots' chats and sends each new reply to this phone, end-to-end " +
-                            "encrypted through ntfy.sh.",
+                        feature = stringResource(Res.string.settings_notifications_anywhere),
+                        what = stringResource(Res.string.plugin_notifications_what),
                         onDismiss = { installAsked = false },
                     ) {
                         installAsked = false
                         onPushAnywhere(true)
                     }
                     SwitchRow(
-                        title = "Approvals and questions",
-                        detail = if (isDesktop) "When the agent waits on you and Kyllene isn't the window in use." else "When the agent waits on you. Answer right from the notification.",
+                        title = stringResource(Res.string.settings_notify_requests),
+                        detail = if (isDesktop) stringResource(Res.string.settings_notify_requests_desktop_detail) else stringResource(Res.string.settings_notify_requests_detail),
                         checked = settings.notifyRequests,
                         onCheckedChange = { on -> onUpdate { it.copy(notifyRequests = on) } },
                         icon = Lucide.ShieldAlert,
                     )
                     Divider()
                     SwitchRow(
-                        title = "Finished replies",
-                        detail = if (isDesktop) "When a turn ends or fails while Kyllene isn't the window in use. Click it to open the chat." else "When a turn ends while Kyllene is in the background. Reply from the notification.",
+                        title = stringResource(Res.string.settings_notify_replies),
+                        detail = if (isDesktop) stringResource(Res.string.settings_notify_replies_desktop_detail) else stringResource(Res.string.settings_notify_replies_detail),
                         checked = settings.notifyReplies,
                         onCheckedChange = { on -> onUpdate { it.copy(notifyReplies = on) } },
                         icon = Lucide.MessageCircle,
                     )
                     Divider()
                     SwitchRow(
-                        title = "Notify for other chats while Kyllene is open",
-                        detail = "Replies and requests in chats other than the one on screen notify even while you're in Kyllene.",
+                        title = stringResource(Res.string.settings_notify_other_in_app),
+                        detail = stringResource(Res.string.settings_notify_other_in_app_detail),
                         checked = settings.notifyOtherChatsInApp,
                         onCheckedChange = { on -> onUpdate { it.copy(notifyOtherChatsInApp = on) } },
                         icon = Lucide.BellRing,
                     )
                     Divider()
                     SwitchRow(
-                        title = "Alerts for other chats",
-                        detail = "While you're in a chat, a dot on Sessions when another chat replies or waits on you. " +
-                            if (isDesktop) "${keysLabel("Ctrl+Tab")} goes to the next one." else "Long-press Sessions for the next one.",
+                        title = stringResource(Res.string.settings_alerts_other_chats),
+                        detail = stringResource(Res.string.settings_alerts_other_chats_detail) + " " +
+                            if (isDesktop) {
+                                stringResource(Res.string.settings_alerts_desktop_next, keysLabel("Ctrl+Tab"))
+                            } else {
+                                stringResource(Res.string.settings_alerts_phone_next)
+                            },
                         checked = settings.otherChatsAlerts,
                         onCheckedChange = { on -> onUpdate { it.copy(otherChatsAlerts = on) } },
                         icon = Lucide.PanelLeft,
@@ -730,8 +850,8 @@ internal fun SettingsView(
                     if (settings.otherChatsAlerts) {
                         Divider()
                         SwitchRow(
-                            title = "Banner for other chats",
-                            detail = "A card over the chat when another chat replies or waits on you, to open it from there.",
+                            title = stringResource(Res.string.settings_banner_other_chats),
+                            detail = stringResource(Res.string.settings_banner_other_chats_detail),
                             checked = settings.otherChatsBanner,
                             onCheckedChange = { on -> onUpdate { it.copy(otherChatsBanner = on) } },
                             icon = Lucide.PanelTop,
@@ -739,8 +859,8 @@ internal fun SettingsView(
                         // A computer doesn't buzz.
                         if (!isDesktop) Divider()
                         if (!isDesktop) SwitchRow(
-                            title = "Vibrate when another chat waits",
-                            detail = "A short buzz when another chat starts waiting on your approval or answer.",
+                            title = stringResource(Res.string.settings_vibrate_other_chats),
+                            detail = stringResource(Res.string.settings_vibrate_other_chats_detail),
                             checked = settings.otherChatsVibrate,
                             onCheckedChange = { on -> onUpdate { it.copy(otherChatsVibrate = on) } },
                             icon = Lucide.Vibrate,
@@ -749,7 +869,7 @@ internal fun SettingsView(
                     // The phone's push through ntfy; the desktop has no way to receive it yet.
                     if (!isDesktop) Divider()
                     if (!isDesktop) SwitchRow(
-                        title = "Notifications anywhere",
+                        title = stringResource(Res.string.settings_notifications_anywhere),
                         detail = pushDetail(settings.pushAnywhere, push),
                         checked = settings.pushAnywhere,
                         // On installs code on the gateway: said first, done only once the user agrees.
@@ -765,9 +885,9 @@ internal fun SettingsView(
                         Divider()
                         ActionRow(
                             when (pushTest) {
-                                true -> "Test sent: it should arrive in a moment"
-                                false -> "The gateway couldn't send the test"
-                                null -> "Send a test notification"
+                                true -> stringResource(Res.string.settings_push_test_sent)
+                                false -> stringResource(Res.string.settings_push_test_failed)
+                                null -> stringResource(Res.string.settings_push_test)
                             },
                             Lucide.Send,
                             onPushTest,
@@ -776,24 +896,30 @@ internal fun SettingsView(
                 }
 
                 // Android's own tools: not on the desktop or on iOS.
-                if (phoneToolsShow) Section("Phone") {
+                if (phoneToolsShow) Section(stringResource(Res.string.settings_section_phone)) {
                     NavRow(
-                        title = "Phone tools",
+                        title = stringResource(Res.string.settings_phone_tools),
                         detail = phoneToolsSummary(settings),
                         icon = Lucide.Smartphone,
                         onClick = onOpenPhoneTools,
                     )
+                    Divider()
+                    NavRow(
+                        title = stringResource(Res.string.settings_connected_devices),
+                        detail = connectedDevicesSummary(settings),
+                        icon = Lucide.Watch,
+                        onClick = onOpenConnectedDevices,
+                    )
                 }
 
-                if (!isDesktop) Section("Privacy") {
+                if (!isDesktop) Section(stringResource(Res.string.settings_section_privacy)) {
                     val canLock = deviceHasScreenLock()
                     SwitchRow(
-                        title = "App lock",
+                        title = stringResource(Res.string.settings_app_lock),
                         detail = if (canLock || settings.appLock) {
-                            "Ask for your fingerprint, face or screen lock when Kyllene opens and after a minute away. " +
-                                "Hides Kyllene in Recents and blocks screenshots of it. Notification actions keep working."
+                            stringResource(Res.string.settings_app_lock_detail)
                         } else {
-                            "Set a screen lock in Android's settings first."
+                            stringResource(Res.string.settings_app_lock_needs_screen_lock)
                         },
                         checked = settings.appLock,
                         onCheckedChange = { on -> if (canLock || !on) onUpdate { it.copy(appLock = on) } },
@@ -801,32 +927,36 @@ internal fun SettingsView(
                     )
                 }
 
-                Section("Account") {
-                    ActionRow("Check connection", Lucide.Activity, onCheckConnection)
+                Section(stringResource(Res.string.settings_section_account)) {
+                    ActionRow(stringResource(Res.string.common_check_connection), Lucide.Activity, onCheckConnection)
                     Divider()
-                    ActionRow("Switch or add a gateway", Lucide.ArrowLeftRight, onOpenGateways)
+                    ActionRow(stringResource(Res.string.settings_switch_gateway), Lucide.ArrowLeftRight, onOpenGateways)
                     Divider()
-                    ActionRow("Sign out", Lucide.LogOut, onSignOut)
+                    ActionRow(stringResource(Res.string.settings_sign_out), Lucide.LogOut, onSignOut)
                 }
 
-                Section("About") {
-                    InfoRow("App version", LocalAppVersion.current ?: "Unknown")
+                Section(stringResource(Res.string.settings_section_about)) {
+                    InfoRow(stringResource(Res.string.settings_app_version), LocalAppVersion.current ?: stringResource(Res.string.common_unknown))
                     Divider()
                     SwitchRow(
-                        title = "Check for updates",
-                        detail = "Asks GitHub, where the app is released, whether there's a newer version. Nothing else is sent.",
+                        title = stringResource(Res.string.settings_check_updates),
+                        detail = stringResource(Res.string.settings_check_updates_detail),
                         checked = settings.checkForUpdates,
                         onCheckedChange = { on -> onUpdate { it.copy(checkForUpdates = on) } },
                         icon = Lucide.RefreshCw,
                     )
-                    if (settingShown("Check for updates")) UpdateBanner(Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
+                    if (settingShown(stringResource(Res.string.settings_check_updates))) UpdateBanner(Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
                     Divider()
-                    InfoRow("Gateway", info.version?.let { "Hermes $it" } ?: "Checking…")
+                    InfoRow(
+                        stringResource(Res.string.settings_gateway),
+                        info.version?.let { stringResource(Res.string.settings_hermes_version, it) }
+                            ?: stringResource(Res.string.common_checking),
+                    )
                     Divider()
                     val uriHandler = LocalUriHandler.current
                     NavRow(
-                        title = "Join the Discord",
-                        detail = "Get help, report bugs, suggest features and hear about new releases.",
+                        title = stringResource(Res.string.settings_join_discord),
+                        detail = stringResource(Res.string.settings_join_discord_detail),
                         icon = Lucide.MessagesSquare,
                         onClick = { uriHandler.openUri(DISCORD_INVITE) },
                     )
@@ -859,50 +989,96 @@ internal fun SettingsView(
 /** The Kyllene community server; the invite never expires. */
 private const val DISCORD_INVITE = "https://discord.gg/wCtyvQ3KcM"
 
+/** The sidebar page each side of the Chats / Bots switch is, for its name and icon. */
+private val SidebarMode.page: SidebarPage
+    get() = when (this) {
+        SidebarMode.Chats -> SidebarPage.Chats
+        SidebarMode.Bots -> SidebarPage.Bots
+    }
+
 /** The Phone tools row's line: off, or how many tools the agent may use. */
+@Composable
 private fun phoneToolsSummary(settings: AppSettings): String {
     val count = settings.enabledPhoneTools().size
     return when {
-        !settings.phoneTools -> "Off. Let the agent use this phone, each tool only once you turn it on."
-        count == 0 -> "On, but no tool is turned on yet."
-        count == 1 -> "1 tool on."
-        else -> "$count tools on."
+        !settings.phoneTools -> stringResource(Res.string.settings_phone_tools_off)
+        count == 0 -> stringResource(Res.string.settings_phone_tools_none_on)
+        else -> pluralStringResource(Res.plurals.settings_phone_tools_count, count, count)
     }
 }
 
-/** What Suggested replies does, or where the plugin it needs stands on the gateway. */
-internal fun suggestionsDetail(on: Boolean, plugin: SuggestionsPlugin): String {
-    val what = "After a reply, the message you'd likely send next, over the composer: ${tapVerb.lowercase()} it to edit and send. " +
-        "It comes from the gateway's Next Prompt plugin, which asks a model once per turn."
-    if (!on) return what
+/**
+ * Which line Suggested replies shows: its own description, or where the Next Prompt plugin stands. Kept apart
+ * from the words so a test can check the choice without Compose.
+ */
+internal sealed interface SuggestionsLine {
+    /** The switch is off, or there is nothing to report: the line only says what the feature does. */
+    data object What : SuggestionsLine
+    data object Missing : SuggestionsLine
+    data object Installing : SuggestionsLine
+    data object NeedsRestart : SuggestionsLine
+
+    /** [message] is why the install failed, as the gateway said it; null when it didn't. */
+    data class Failed(val message: String?) : SuggestionsLine
+
+    /** Installed, but the gateway doesn't list it yet. */
+    data object NotListed : SuggestionsLine
+
+    /** [have] is the version on the gateway; [need] the one this Kyllene asks for. */
+    data class Outdated(val have: String?, val need: String) : SuggestionsLine
+}
+
+/** The line Suggested replies shows, from its switch and where its plugin stands on the gateway. */
+internal fun suggestionsLine(on: Boolean, plugin: SuggestionsPlugin): SuggestionsLine {
+    if (!on) return SuggestionsLine.What
     return when (plugin) {
-        SuggestionsPlugin.Missing -> "The gateway doesn't have the Next Prompt plugin, which makes the suggestions."
-        SuggestionsPlugin.Installing -> "Installing Next Prompt on the gateway…"
-        SuggestionsPlugin.NeedsRestart -> "Next Prompt is installed. Restart the gateway to start the suggestions."
-        is SuggestionsPlugin.Failed -> "Next Prompt wasn't installed: ${plugin.message}"
+        SuggestionsPlugin.Missing -> SuggestionsLine.Missing
+        SuggestionsPlugin.Installing -> SuggestionsLine.Installing
+        SuggestionsPlugin.NeedsRestart -> SuggestionsLine.NeedsRestart
+        is SuggestionsPlugin.Failed -> SuggestionsLine.Failed(plugin.message)
+        SuggestionsPlugin.NotListed -> SuggestionsLine.NotListed
         is SuggestionsPlugin.Installed -> if (plugin.outdated) {
-            "The gateway has Next Prompt ${plugin.version}. A gateway with several profiles needs " +
-                "${NextPromptApi.PLUGIN_VERSION} or later; update it in the dashboard's Plugins."
-        } else what
-        SuggestionsPlugin.Checking, SuggestionsPlugin.Unknown -> what
+            SuggestionsLine.Outdated(plugin.version, NextPromptApi.PLUGIN_VERSION)
+        } else {
+            SuggestionsLine.What
+        }
+        SuggestionsPlugin.Checking, SuggestionsPlugin.Unknown -> SuggestionsLine.What
     }
 }
+
+/** [line] in the app's language. */
+@Composable
+private fun suggestionsDetail(on: Boolean, plugin: SuggestionsPlugin): String =
+    when (val line = suggestionsLine(on, plugin)) {
+        // A click on the desktop, a tap on the phone.
+        SuggestionsLine.What ->
+            stringResource(if (isDesktop) Res.string.settings_suggestions_what_desktop else Res.string.settings_suggestions_what)
+        SuggestionsLine.Missing -> stringResource(Res.string.settings_suggestions_missing)
+        SuggestionsLine.Installing -> stringResource(Res.string.settings_suggestions_installing)
+        SuggestionsLine.NeedsRestart -> stringResource(Res.string.settings_suggestions_needs_restart)
+        is SuggestionsLine.Failed ->
+            stringResource(Res.string.settings_suggestions_failed, line.message ?: stringResource(Res.string.app_suggestions_no_reason))
+        // Installed: not under "wasn't installed", which would say both.
+        SuggestionsLine.NotListed -> stringResource(Res.string.app_suggestions_not_listed)
+        is SuggestionsLine.Outdated -> stringResource(Res.string.settings_suggestions_outdated, line.have.orEmpty(), line.need)
+    }
 
 /** What Notifications anywhere does, or where its setup on the gateway stands. */
+@Composable
 private fun pushDetail(on: Boolean, push: PushStatus): String {
-    if (!on) {
-        return "Hear from your bots even off your gateway's network, end-to-end encrypted through ntfy.sh. " +
-            "Installs the herald-push plugin on the gateway. Keeps a quiet notification."
-    }
+    if (!on) return stringResource(Res.string.settings_notifications_anywhere_detail)
     return when (push.state) {
-        PushStatus.State.On -> push.detail ?: "On. Bot messages come end-to-end encrypted through ntfy.sh; it only sees scrambled data."
-        PushStatus.State.Working -> push.detail ?: "Setting up with the gateway…"
-        PushStatus.State.NotInstalled -> "The gateway doesn't have the herald-push plugin. Turn this off and on to install it."
+        PushStatus.State.On -> push.detail ?: stringResource(Res.string.settings_push_on)
+        PushStatus.State.Working -> push.detail ?: stringResource(Res.string.settings_push_working)
+        PushStatus.State.NotInstalled -> stringResource(Res.string.settings_push_not_installed)
         PushStatus.State.Outdated -> push.update?.let {
-            "The gateway's herald-push plugin is ${it.installed}; this needs ${it.available}. Update it below."
-        } ?: "The gateway's herald-push plugin is too old."
-        PushStatus.State.Failed -> "Couldn't set up: ${push.detail ?: "unknown error"}"
-        PushStatus.State.Unknown, PushStatus.State.Off -> "On. Checks with the gateway the next time Kyllene reaches it."
+            stringResource(Res.string.settings_push_outdated, it.installed, it.available)
+        } ?: stringResource(Res.string.settings_push_too_old)
+        PushStatus.State.Failed -> stringResource(
+            Res.string.settings_push_failed,
+            push.detail ?: stringResource(Res.string.settings_error_unknown),
+        )
+        PushStatus.State.Unknown, PushStatus.State.Off -> stringResource(Res.string.settings_push_unknown)
     }
 }
 
@@ -932,7 +1108,7 @@ private fun AccountCard(gatewayName: String, gatewayUrl: String, userLabel: Stri
             Text(
                 // Who is signed in first, so a long address is what gets cut; the address only when the name
                 // above isn't already it.
-                listOfNotNull(userLabel ?: "Signed in", gatewayUrl.substringAfter("://").trimEnd('/').takeIf { it != gatewayName.trimEnd('/') })
+                listOfNotNull(userLabel ?: stringResource(Res.string.settings_signed_in), gatewayUrl.substringAfter("://").trimEnd('/').takeIf { it != gatewayName.trimEnd('/') })
                     .joinToString(" · "),
                 style = Theme[typography][code].copy(fontSize = 11.5.sp),
                 color = Theme[colors][textTertiary],
@@ -940,7 +1116,7 @@ private fun AccountCard(gatewayName: String, gatewayUrl: String, userLabel: Stri
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        PillButton("Check", Lucide.Activity, onCheck, description = "Check connection")
+        PillButton(stringResource(Res.string.common_check), Lucide.Activity, onCheck, description = stringResource(Res.string.common_check_connection))
     }
 }
 
@@ -981,8 +1157,8 @@ internal val LocalSectionAnchors = staticCompositionLocalOf<SnapshotStateMap<Str
 private const val UNPLACED_SECTION = Int.MIN_VALUE / 2
 
 /**
- * The desktop's settings search: what's typed in it, which each row checks its title and detail against. Empty, all
- * rows show.
+ * The settings search: what's typed in it, which each row checks its title and detail against. Empty, all rows
+ * show.
  */
 internal val LocalSettingsQuery = compositionLocalOf { "" }
 
@@ -991,9 +1167,13 @@ private val LocalSectionsShown = staticCompositionLocalOf<SnapshotStateMap<Strin
 
 /** True when a row saying [texts] is one the settings search keeps. */
 @Composable
-internal fun settingShown(vararg texts: String?): Boolean {
-    val query = LocalSettingsQuery.current.trim()
-    return query.isEmpty() || texts.any { it?.contains(query, ignoreCase = true) == true }
+internal fun settingShown(vararg texts: String?): Boolean = settingMatches(LocalSettingsQuery.current, *texts)
+
+/** True when [query] is empty, or one of [texts] has it in, whatever the case and the apostrophe. */
+internal fun settingMatches(query: String, vararg texts: String?): Boolean {
+    // The catalogue writes ’ where a search box gets ', so both count as the same apostrophe.
+    val words = query.trim().replace('’', '\'')
+    return words.isEmpty() || texts.any { it?.replace('’', '\'')?.contains(words, ignoreCase = true) == true }
 }
 
 @Composable
@@ -1003,7 +1183,7 @@ internal fun Section(title: String, content: @Composable ColumnScope.() -> Unit)
     val searching = query.isNotEmpty()
     // Searching, a section whose name matches shows whole; any other shows only its rows that match, and none of
     // itself when none do. Its rows are still laid out then, unseen, so it knows when one comes to match.
-    val whole = !searching || title.contains(query, ignoreCase = true)
+    val whole = !searching || settingMatches(query, title)
     var empty by remember { mutableStateOf(false) }
     val hidden = searching && empty
     val shown = LocalSectionsShown.current
@@ -1038,14 +1218,14 @@ internal fun Section(title: String, content: @Composable ColumnScope.() -> Unit)
     }
 }
 
-/** The page's list of settings with the desktop's search over it, and a word when the search finds none. */
+/** The page's list of settings with the search over it, and a word when the search finds none. */
 @Composable
 private fun SearchableSettings(query: String, content: @Composable () -> Unit) {
     val shown = remember { mutableStateMapOf<String, Boolean>() }
     CompositionLocalProvider(LocalSettingsQuery provides query, LocalSectionsShown provides shown) { content() }
     if (query.isNotBlank() && shown.values.none { it }) {
         Text(
-            "No settings match “${query.trim()}”.",
+            stringResource(Res.string.settings_no_match, query.trim()),
             style = Theme[typography][bodySmall],
             color = Theme[colors][textTertiary],
             modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
@@ -1122,15 +1302,19 @@ internal fun Divider() {
 @Composable
 private fun CallTargetRow(target: CallTarget, faces: BotFaces, onClick: () -> Unit) {
     val bot = target.profile?.let { name -> faces.bots.firstOrNull { it.name == name } ?: Bot(name = name, displayName = target.label) }
+    val title = stringResource(Res.string.settings_call_target)
+    val label = bot?.label ?: target.label
+    val detail = stringResource(Res.string.settings_call_target_detail)
+    if (!settingShown(title, label, detail)) return
     Row(Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = onClick).padding(horizontal = 14.dp, vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
         if (bot != null) BotAvatar(bot, faces.picture(bot), size = 32.dp)
         else Box(Modifier.size(32.dp).background(Theme[colors][accent], RoundedCornerShape(Theme[radii][radiusSmall])), contentAlignment = Alignment.Center) {
             UnstyledIcon(Lucide.Phone, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text("Default Call target", style = Theme[typography][body], color = Theme[colors][text], maxLines = 2, overflow = TextOverflow.Ellipsis)
-            Text(bot?.label ?: target.label, style = Theme[typography][bodySmall], color = Theme[colors][textSecondary], maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text("Where your call is routed, when you use call Hermes. Hold the app icon from your app drawer to use it", style = Theme[typography][bodySmall], color = Theme[colors][textTertiary])
+            Text(title, style = Theme[typography][body], color = Theme[colors][text], maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(label, style = Theme[typography][bodySmall], color = Theme[colors][textSecondary], maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(detail, style = Theme[typography][bodySmall], color = Theme[colors][textTertiary])
         }
         UnstyledIcon(Lucide.ChevronRight, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(16.dp))
     }
@@ -1193,15 +1377,17 @@ private fun AccentPicker(selected: AccentPalette, onSelect: (AccentPalette) -> U
         AccentPalette.all.forEach { palette ->
             val isSelected = palette == selected
             val color = if (dark) palette.dark.accent else palette.light.accent
+            // A colour's name, tooltip and all, in the app's language.
+            val name = accentName(palette)
             // A colour's name, for a pointer that rests on it.
-            Tooltip(palette.name) {
+            Tooltip(name) {
                 Box(
                     Modifier
                         .size(MinTouchTarget)
                         .clip(CircleShape)
                         .handCursor()
                         .selectable(selected = isSelected, role = Role.RadioButton, onClick = { onSelect(palette) })
-                        .semantics { contentDescription = palette.name },
+                        .semantics { contentDescription = name },
                     contentAlignment = Alignment.Center,
                 ) {
                     Box(
@@ -1232,6 +1418,8 @@ private fun TextSizeSlider(selected: TextSize, onSelect: (TextSize) -> Unit) {
     val pick = { to: Int -> if (to != current) onPick(sizes[to]) }
     // The "A"s keep one size whatever text size is picked, so the track never moves under the finger.
     val fontScale = LocalDensity.current.fontScale
+    val textSizeA11y = stringResource(Res.string.settings_text_size)
+    val sizeName = textSizeLabel(selected)
     // A keyboard reaches it with Tab and steps it with the arrows, Home and End, as a desktop's sliders go.
     var keyFocused by remember { mutableStateOf(false) }
     val keys = if (!isDesktop) Modifier else Modifier
@@ -1261,8 +1449,8 @@ private fun TextSizeSlider(selected: TextSize, onSelect: (TextSize) -> Unit) {
                     .handCursor()
                     .then(keys)
                     .semantics {
-                        contentDescription = "Text size"
-                        stateDescription = selected.name
+                        contentDescription = textSizeA11y
+                        stateDescription = sizeName
                         progressBarRangeInfo = ProgressBarRangeInfo(index.toFloat(), 0f..last.toFloat(), steps = last - 1)
                         setProgress { target ->
                             pick(target.roundToInt().coerceIn(0, last))
@@ -1313,7 +1501,7 @@ private fun TextSizeSlider(selected: TextSize, onSelect: (TextSize) -> Unit) {
             }
         }
         Text(
-            selected.name,
+            sizeName,
             style = Theme[typography][label].copy(fontSize = 12.sp),
             color = Theme[colors][accentText],
             textAlign = TextAlign.Center,
@@ -1323,6 +1511,93 @@ private fun TextSizeSlider(selected: TextSize, onSelect: (TextSize) -> Unit) {
 }
 
 private val SLIDER_THUMB = 22.dp
+
+/** The theme modes as the Theme control names them. */
+@Composable
+private fun themeModeLabel(mode: ThemeMode): String = stringResource(
+    when (mode) {
+        ThemeMode.System -> Res.string.settings_theme_system
+        ThemeMode.Light -> Res.string.settings_theme_light
+        ThemeMode.Dark -> Res.string.settings_theme_dark
+    },
+)
+
+/** How faintly the chat background shows, as the Background strength control names it. */
+@Composable
+private fun wallpaperStrengthLabel(strength: WallpaperStrength): String = stringResource(
+    when (strength) {
+        WallpaperStrength.Faint -> Res.string.wallpaper_faint
+        WallpaperStrength.Medium -> Res.string.wallpaper_medium
+        WallpaperStrength.Strong -> Res.string.wallpaper_strong
+    },
+)
+
+/** The text sizes as the slider names them. */
+@Composable
+private fun textSizeLabel(size: TextSize): String = stringResource(
+    when (size) {
+        TextSize.Small -> Res.string.text_size_small
+        TextSize.Default -> Res.string.text_size_default
+        TextSize.Large -> Res.string.text_size_large
+        TextSize.Largest -> Res.string.text_size_largest
+    },
+)
+
+/** Who writes down dictation, as the Dictate with control names it. */
+@Composable
+private fun dictationEngineLabel(engine: DictationEngine): String = stringResource(
+    when (engine) {
+        DictationEngine.Device -> Res.string.dictation_device
+        DictationEngine.Gateway -> Res.string.dictation_gateway
+    },
+)
+
+/** How long a voice chat waits, as the Pause control names it. */
+@Composable
+private fun voicePauseLabel(pause: VoicePause): String = stringResource(
+    when (pause) {
+        VoicePause.Short -> Res.string.voice_pause_short
+        VoicePause.Normal -> Res.string.voice_pause_normal
+        VoicePause.Long -> Res.string.voice_pause_long
+    },
+)
+
+/** What a message sent mid-reply does, as the Send control names it. */
+@Composable
+private fun runningSendLabel(mode: RunningSend): String = stringResource(
+    when (mode) {
+        RunningSend.Steer -> Res.string.running_send_steer_label
+        RunningSend.Queue -> Res.string.running_send_queue_label
+        RunningSend.StopAndSend -> Res.string.running_send_stop_and_send_label
+    },
+)
+
+/** The same, as the sentence under the control quotes it. */
+@Composable
+private fun runningSendSummary(mode: RunningSend): String = stringResource(
+    when (mode) {
+        RunningSend.Steer -> Res.string.running_send_steer
+        RunningSend.Queue -> Res.string.running_send_queue
+        RunningSend.StopAndSend -> Res.string.running_send_stop_and_send
+    },
+)
+
+/** An accent swatch's name for screen readers and tooltips; a palette the catalogue doesn't know keeps its name. */
+@Composable
+private fun accentName(palette: AccentPalette): String {
+    // The palette's own name is the stored setting and stays English, so it's matched on the palette.
+    val key = when (palette) {
+        AccentPalette.Blue -> Res.string.accent_blue
+        AccentPalette.Violet -> Res.string.accent_violet
+        AccentPalette.Green -> Res.string.accent_green
+        AccentPalette.Orange -> Res.string.accent_orange
+        AccentPalette.Pink -> Res.string.accent_pink
+        AccentPalette.Teal -> Res.string.accent_teal
+        else -> null
+    }
+    return if (key != null) stringResource(key) else palette.name
+}
+
 
 @Composable
 internal fun InfoRow(title: String, value: String) {
@@ -1344,5 +1619,20 @@ internal fun ActionRow(title: String, icon: ImageVector, onClick: () -> Unit) {
     ) {
         IconTile(icon)
         Text(title, style = Theme[typography][body], color = Theme[colors][text])
+    }
+}
+
+// What the feature does, then (where the desktop grants the shortcut) where that stands.
+@Composable
+private fun quickEntryDetail(): String {
+    val status = QuickEntryHotkey.status ?: return stringResource(Res.string.settings_quick_entry_detail, keysLabel("Ctrl+Shift+Space"))
+    return stringResource(Res.string.settings_quick_entry_detail_portal) + " " + when (status.state) {
+        QuickEntryHotkey.State.Off -> stringResource(Res.string.settings_quick_entry_off)
+        QuickEntryHotkey.State.Binding -> stringResource(Res.string.settings_quick_entry_binding)
+        QuickEntryHotkey.State.Bound -> stringResource(Res.string.settings_quick_entry_bound,
+            status.trigger ?: stringResource(Res.string.settings_quick_entry_desktop_choice))
+        QuickEntryHotkey.State.Unassigned -> stringResource(Res.string.settings_quick_entry_unassigned)
+        QuickEntryHotkey.State.Declined -> stringResource(Res.string.settings_quick_entry_declined)
+        QuickEntryHotkey.State.Unavailable -> stringResource(Res.string.settings_quick_entry_unavailable)
     }
 }

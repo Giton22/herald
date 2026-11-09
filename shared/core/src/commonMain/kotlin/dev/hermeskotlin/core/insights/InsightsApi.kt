@@ -6,6 +6,7 @@ import dev.hermeskotlin.core.network.apiCall
 import dev.hermeskotlin.core.network.map
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
+import io.ktor.client.plugins.timeout
 import io.ktor.client.request.get
 import io.ktor.client.request.parameter
 import kotlinx.serialization.SerialName
@@ -88,8 +89,22 @@ class InsightsApi(private val client: HttpClient) {
         client.get(url.resolve("api/analytics/usage")) {
             parameter("days", days)
             profile?.let { parameter("profile", it) }
+            // The gateway answers only once the whole report is built, which on a long history takes a while
+            // (a minute for a cold 90 days); the engine's own read timeout (10 s on OkHttp) would cut it off.
+            val millis = reportWaitMillis(days)
+            timeout {
+                requestTimeoutMillis = millis
+                socketTimeoutMillis = millis
+            }
         }
     }.map { it.body<UsageReport>() }
+}
+
+/** How long a report over [days] may take, silence included; the longest stays under a proxy's ~100 s limit. */
+internal fun reportWaitMillis(days: Int): Long = when {
+    days <= 7 -> 15_000
+    days <= 30 -> 45_000
+    else -> 100_000
 }
 
 /**

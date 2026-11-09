@@ -70,6 +70,8 @@ import dev.hermeskotlin.designsystem.typography
 import dev.hermeskotlin.ui.components.EmptyState
 import dev.hermeskotlin.ui.components.ListSkeleton
 import dev.hermeskotlin.ui.PlatformBackHandler
+import dev.hermeskotlin.ui.resources.*
+import org.jetbrains.compose.resources.stringResource
 
 /** Browse, search and install skills from the hub, into [profile]'s skills; [profileLabel] is how the subtitle names it. */
 @Composable
@@ -104,7 +106,14 @@ internal fun SkillsHubPage(
             onSessionExpired()
         }
     }
-    SkillsHubView(state, viewModel.query, viewModel, onBack, subtitle = "Installs into ${profileLabel ?: profile ?: "the main profile"}")
+    val into = profileLabel ?: profile
+    SkillsHubView(
+        state,
+        viewModel.query,
+        viewModel,
+        onBack,
+        subtitle = if (into != null) stringResource(Res.string.sessions_hub_installs_into, into) else stringResource(Res.string.sessions_hub_installs_into_main),
+    )
 }
 
 @Composable
@@ -123,7 +132,7 @@ internal fun SkillsHubView(
             state.detail?.let { HubDetailPage(it, state, actions, Modifier.fillMaxSize().pointerInput(Unit) { detectTapGestures { } }) }
         }
         // Above the sidebar's New chat button, as on the Capabilities page.
-        state.message?.let { MessageBanner(it, onDismiss = actions::dismissMessage, modifier = Modifier.padding(bottom = 96.dp)) }
+        state.message?.let { MessageBanner(it.text(), onDismiss = actions::dismissMessage, modifier = Modifier.padding(bottom = 96.dp)) }
     }
     HubConfirmSheet(state.confirm, actions)
 }
@@ -133,13 +142,13 @@ internal fun SkillsHubView(
 private fun HubBrowse(state: SkillsHubUiState, query: TextFieldState, actions: SkillsHubActions, onBack: () -> Unit, subtitle: String, modifier: Modifier) {
     Column(modifier) {
         SubpageHeader(
-            "Skills hub",
+            stringResource(Res.string.sessions_hub_title),
             onBack = onBack,
             subtitle = subtitle,
             actions = {
                 if (!state.unsupported) {
                     Button(
-                        "Update all",
+                        stringResource(Res.string.sessions_hub_update_all),
                         onClick = actions::updateAll,
                         variant = ButtonVariant.Ghost,
                         size = ButtonSize.Small,
@@ -150,11 +159,11 @@ private fun HubBrowse(state: SkillsHubUiState, query: TextFieldState, actions: S
         )
         Box(Modifier.weight(1f).fillMaxWidth()) {
             when {
-                state.unsupported -> Box(Modifier.fillMaxSize().padding(12.dp)) { ListNotice("This gateway doesn't have the skills hub yet.") }
+                state.unsupported -> Box(Modifier.fillMaxSize().padding(12.dp)) { ListNotice(stringResource(Res.string.sessions_hub_unsupported)) }
                 else -> Column(Modifier.fillMaxSize()) {
                     TextField(
                         state = query,
-                        placeholder = "Search the hub",
+                        placeholder = stringResource(Res.string.sessions_hub_search),
                         leadingIcon = Lucide.Search,
                         clearable = true,
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
@@ -177,8 +186,8 @@ private fun HubLists(state: SkillsHubUiState, actions: SkillsHubActions) {
                 found == null && results.error != null -> HubError(results.error, actions::refresh)
                 found == null -> ListSkeleton()
                 else -> LazyColumn(Modifier.fillMaxSize(), contentPadding = HubPadding) {
-                    if (state.timedOut.isNotEmpty()) item(key = "timeout") { Hint("Some sources didn't answer: ${state.timedOut.joinToString()}") }
-                    if (found.isEmpty()) item(key = "none") { Hint("No skills match your search.") }
+                    if (state.timedOut.isNotEmpty()) item(key = "timeout") { Hint(stringResource(Res.string.sessions_hub_timed_out, state.timedOut.joinToString())) }
+                    if (found.isEmpty()) item(key = "none") { Hint(stringResource(Res.string.sessions_hub_no_match)) }
                     else item(key = "results") { HubRows(found, state, actions) }
                 }
             }
@@ -188,28 +197,30 @@ private fun HubLists(state: SkillsHubUiState, actions: SkillsHubActions) {
         else -> LazyColumn(Modifier.fillMaxSize(), contentPadding = HubPadding) {
             val featured = state.featured.items.orEmpty()
             if (featured.isNotEmpty()) {
-                item(key = "h-featured") { HubHeading("FEATURED") }
+                item(key = "h-featured") { HubHeading(stringResource(Res.string.sessions_hub_featured)) }
                 item(key = "featured") { HubRows(featured, state, actions) }
             } else if (state.featured.error != null) {
-                item(key = "h-featured") { HubHeading("FEATURED") }
+                item(key = "h-featured") { HubHeading(stringResource(Res.string.sessions_hub_featured)) }
                 item(key = "featured-error") { Hint(state.featured.error) }
                 item(key = "featured-retry") {
-                    Button("Try again", onClick = actions::refresh, variant = ButtonVariant.Secondary, size = ButtonSize.Small, leadingIcon = Lucide.RefreshCw, modifier = Modifier.padding(start = 2.dp, bottom = 8.dp))
+                    Button(stringResource(Res.string.sessions_try_again), onClick = actions::refresh, variant = ButtonVariant.Secondary, size = ButtonSize.Small, leadingIcon = Lucide.RefreshCw, modifier = Modifier.padding(start = 2.dp, bottom = 8.dp))
                 }
             }
-            item(key = "h-official") { HubHeading("OFFICIAL") }
+            item(key = "h-official") { HubHeading(stringResource(Res.string.sessions_hub_official)) }
             val official = state.official.items
             when {
                 official == null && state.official.error != null -> {
                     item(key = "official-error") { Hint(state.official.error) }
                     item(key = "official-retry") {
-                        Button("Try again", onClick = actions::refresh, variant = ButtonVariant.Secondary, size = ButtonSize.Small, leadingIcon = Lucide.RefreshCw, modifier = Modifier.padding(start = 2.dp, bottom = 8.dp))
+                        Button(stringResource(Res.string.sessions_try_again), onClick = actions::refresh, variant = ButtonVariant.Secondary, size = ButtonSize.Small, leadingIcon = Lucide.RefreshCw, modifier = Modifier.padding(start = 2.dp, bottom = 8.dp))
                     }
                 }
-                official == null -> item(key = "official-loading") { Hint("Loading…") }
-                official.isEmpty() -> item(key = "official-none") { Hint("Nothing in the official catalog.") }
+                official == null -> item(key = "official-loading") { Hint(stringResource(Res.string.sessions_loading)) }
+                official.isEmpty() -> item(key = "official-none") { Hint(stringResource(Res.string.sessions_hub_official_empty)) }
                 else -> officialGroups(official).forEach { (category, inGroup) ->
-                    item(key = "c-$category") { HubHeading(category.uppercase()) }
+                    item(key = "c-$category") {
+                        HubHeading(if (category == OTHER_CATEGORY) stringResource(Res.string.sessions_skills_other) else category)
+                    }
                     item(key = "g-$category") { HubRows(inGroup, state, actions) }
                 }
             }
@@ -220,28 +231,29 @@ private fun HubLists(state: SkillsHubUiState, actions: SkillsHubActions) {
 /** The official catalog by category, uncategorised ones last as "other". */
 internal fun officialGroups(skills: List<HubSkill>): Map<String, List<HubSkill>> =
     skills
-        .groupBy { it.category?.trim()?.lowercase()?.takeIf(String::isNotEmpty) ?: "other" }
+        .groupBy { it.category?.trim()?.lowercase()?.takeIf(String::isNotEmpty) ?: OTHER_CATEGORY }
         // Sorted into a LinkedHashMap: toSortedMap is the JVM's only.
-        .entries.sortedWith(compareBy<Map.Entry<String, List<HubSkill>>> { it.key == "other" }.thenBy { it.key })
+        .entries.sortedWith(compareBy<Map.Entry<String, List<HubSkill>>> { it.key == OTHER_CATEGORY }.thenBy { it.key })
         .associate { it.key to it.value }
 
 private val HubPadding = PaddingValues(start = 14.dp, end = 14.dp, top = 4.dp, bottom = 32.dp)
 
 @Composable
 private fun HubError(message: String, onRetry: () -> Unit) =
-    EmptyState(Lucide.CloudOff, "Couldn't load", message, error = true) {
-        Button("Try again", onClick = onRetry, variant = ButtonVariant.Secondary, leadingIcon = Lucide.RefreshCw)
+    EmptyState(Lucide.CloudOff, stringResource(Res.string.sessions_couldnt_load), message, error = true) {
+        Button(stringResource(Res.string.sessions_try_again), onClick = onRetry, variant = ButtonVariant.Secondary, leadingIcon = Lucide.RefreshCw)
     }
 
+/** A section's heading, shown in capitals and read as written. */
 @Composable
 private fun HubHeading(label: String) {
     Text(
-        label,
+        label.uppercase(),
         style = Theme[typography][eyebrow],
         color = Theme[colors][textTertiary],
         modifier = Modifier.padding(start = 6.dp, top = 12.dp, bottom = 6.dp).semantics {
             heading()
-            contentDescription = label.lowercase()
+            contentDescription = label
         },
     )
 }
@@ -263,7 +275,7 @@ private fun HubRows(skills: List<HubSkill>, state: SkillsHubUiState, actions: Sk
                     overflow = TextOverflow.Ellipsis,
                 )
                 skill.trustLevel.takeIf { it.isNotBlank() }?.let { Tag(it, accent = false) }
-                if (installed) Tag("Installed", accent = true)
+                if (installed) Tag(stringResource(Res.string.sessions_hub_installed_tag), accent = true)
             }
             if (skill.description.isNotBlank()) {
                 Text(
@@ -292,8 +304,8 @@ private fun HubDetailPage(d: HubDetail, state: SkillsHubUiState, actions: Skills
             subtitle = listOfNotNull(skill.trustLevel.takeIf { it.isNotBlank() }, skill.source.takeIf { it.isNotBlank() }).joinToString(" · ").ifBlank { null },
             actions = {
                 when {
-                    installed -> Button("Installed", onClick = {}, enabled = false, variant = ButtonVariant.Secondary, size = ButtonSize.Small)
-                    else -> Button("Install", onClick = { actions.install(skill) }, enabled = !blocked, loading = id in state.running, size = ButtonSize.Small)
+                    installed -> Button(stringResource(Res.string.sessions_hub_installed_tag), onClick = {}, enabled = false, variant = ButtonVariant.Secondary, size = ButtonSize.Small)
+                    else -> Button(stringResource(Res.string.common_install), onClick = { actions.install(skill) }, enabled = !blocked, loading = id in state.running, size = ButtonSize.Small)
                 }
             },
         )
@@ -311,9 +323,9 @@ private fun HubDetailPage(d: HubDetail, state: SkillsHubUiState, actions: Skills
                 if (tags.isNotEmpty()) {
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) { tags.forEach { Tag(it, accent = false) } }
                 }
-                if (blocked) Text("Blocked by security scan", style = Theme[typography][bodySmall], color = Theme[colors][danger])
+                if (blocked) Text(stringResource(Res.string.sessions_hub_blocked_by_scan), style = Theme[typography][bodySmall], color = Theme[colors][danger])
                 d.error?.let { Text(it, style = Theme[typography][bodySmall], color = Theme[colors][danger]) }
-                d.scanError?.let { Text(it, style = Theme[typography][bodySmall], color = Theme[colors][danger]) }
+                d.scanError?.let { Text(it.text(), style = Theme[typography][bodySmall], color = Theme[colors][danger]) }
                 d.scan?.let { ScanFindings(it, expanded = blocked) }
                 when {
                     d.preview != null -> {
@@ -323,7 +335,7 @@ private fun HubDetailPage(d: HubDetail, state: SkillsHubUiState, actions: Skills
                         }
                     }
                     d.error != null -> Unit
-                    else -> Text("Loading…", style = Theme[typography][bodySmall], color = Theme[colors][textTertiary])
+                    else -> Text(stringResource(Res.string.sessions_loading), style = Theme[typography][bodySmall], color = Theme[colors][textTertiary])
                 }
             }
         }
@@ -336,7 +348,7 @@ private fun ScanFindings(scan: HubScan, expanded: Boolean) {
     var open by remember(scan) { mutableStateOf(expanded) }
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         if (!open && scan.findings.isNotEmpty()) {
-            Button("View scan", onClick = { open = true }, variant = ButtonVariant.Outline, size = ButtonSize.Small)
+            Button(stringResource(Res.string.sessions_hub_view_scan), onClick = { open = true }, variant = ButtonVariant.Outline, size = ButtonSize.Small)
         } else {
             Text(
                 listOf(scan.verdict, scan.summary).filter { it.isNotBlank() }.joinToString(": "),
@@ -358,7 +370,7 @@ internal fun HubConfirmSheet(scan: HubScan?, actions: SkillsHubActions) {
     BottomSheet(visible = scan != null, onDismiss = actions::cancelConfirm) {
         val s = kept ?: return@BottomSheet
         Column(Modifier.heightIn(max = 600.dp).verticalScroll(rememberScrollState())) {
-            SheetHeader("${s.verdict.replaceFirstChar { it.uppercase() }} scan", s.name.ifBlank { null })
+            SheetHeader(stringResource(Res.string.sessions_hub_scan_title, s.verdict.replaceFirstChar { it.uppercase() }), s.name.ifBlank { null })
             Column(Modifier.padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 listOf(s.summary, s.policyReason).filter { it.isNotBlank() }.forEach {
                     Text(it, style = Theme[typography][bodySmall], color = Theme[colors][textSecondary])
@@ -367,8 +379,8 @@ internal fun HubConfirmSheet(scan: HubScan?, actions: SkillsHubActions) {
                     FindingLine(it)
                 }
                 Row(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Button("Install anyway", onClick = actions::confirmInstall, variant = ButtonVariant.Danger)
-                    Button("Cancel", onClick = actions::cancelConfirm, variant = ButtonVariant.Secondary)
+                    Button(stringResource(Res.string.sessions_hub_install_anyway), onClick = actions::confirmInstall, variant = ButtonVariant.Danger)
+                    Button(stringResource(Res.string.common_cancel), onClick = actions::cancelConfirm, variant = ButtonVariant.Secondary)
                 }
             }
         }

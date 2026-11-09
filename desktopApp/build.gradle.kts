@@ -1,4 +1,5 @@
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
+import org.jetbrains.compose.desktop.application.tasks.AbstractProguardTask
 
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
@@ -28,6 +29,10 @@ kotlin {
             compileOnly(libs.jcef)
             // Windows' global hotkey for the quick entry.
             implementation(libs.jna.platform)
+            // The tray's, quick entry's and system prompts' words (src/jvmMain/composeResources).
+            implementation(compose.components.resources)
+            // FileKit uses the same D-Bus runtime; the Linux shortcut portal uses no file descriptors.
+            implementation(libs.dbus.core)
         }
         jvmTest.dependencies {
             implementation(libs.kotlin.test)
@@ -37,6 +42,14 @@ kotlin {
             implementation(libs.jcef)
         }
     }
+}
+
+// The desktop app's own words: the tray, the quick entry, notifications and the storage prompt. values/ is English,
+// one folder per language beside it, as in shared/ui (docs/i18n.md). They follow the system's language.
+compose.resources {
+    packageOfResClass = "dev.hermeskotlin.desktop.resources"
+    // "auto" looks for the library in commonMain, which a desktop-only module doesn't use.
+    generateResClass = always
 }
 
 compose.desktop {
@@ -56,9 +69,11 @@ compose.desktop {
 
         // The installers (packageRelease…) leave out the library code the app never reaches. Names are kept:
         // renaming would save little more, and code that looks classes up by name (Warmup, Compose's text menu)
-        // would need a rule for each.
+        // would need a rule for each. No optimisation either: it took over half of a Linux CI run (13 of 25 min)
+        // and saved only about 3.4 MB on top of the shrinking.
         buildTypes.release.proguard {
             obfuscate = false
+            optimize = false
             configurationFiles.from(project.file("proguard-rules.pro"))
         }
 
@@ -72,6 +87,8 @@ compose.desktop {
             // jdk.accessibility carries the Java Access Bridge that Windows screen readers (NVDA, JAWS) talk to; jcef
             // the Chromium that shows widgets and plugin pages, with its own files.
             modules("java.naming", "java.net.http", "java.sql", "jdk.unsupported", "jdk.accessibility", "jcef")
+            // D-Bus EXTERNAL authentication reads UnixSystem from this module.
+            if (System.getProperty("os.name").startsWith("Linux")) modules("jdk.security.auth")
             windows {
                 menuGroup = "Kyllene"
                 // Keeps upgrades in place: one Kyllene in Programs and Features, whatever the version.
@@ -134,6 +151,14 @@ afterEvaluate {
     val jdk = File(compose.desktop.application.javaHome)
     tasks.withType<org.jetbrains.compose.desktop.application.tasks.AbstractJLinkTask>().configureEach {
         val runtime = destinationDir
+        // The PDF viewer parses each document in a child JVM started from the runtime's own launcher
+        // (DesktopPdf.kt), which --strip-native-commands removes too. It's the same JDK build, so it goes back as is.
+        doLast {
+            val name = if (System.getProperty("os.name").startsWith("Windows")) "java.exe" else "java"
+            val java = runtime.get().asFile.resolve("bin/$name")
+            File(jdk, "bin/$name").copyTo(java, overwrite = true)
+            check(java.setExecutable(true, false) && java.canExecute()) { "Couldn't make $java executable" }
+        }
         doLast {
             val jmod = File(jdk, "jmods/jcef.jmod")
             if (!jmod.isFile) return@doLast
@@ -146,6 +171,12 @@ afterEvaluate {
                 // The remote-process server is for JCEF's out-of-process mode, which Herald doesn't use.
                 .filterNot { it.startsWith("cef_server") }
                 .forEach { File(jdk, "bin/$it").copyTo(File(bin, it), overwrite = true) }
+            // On Linux Chromium's helper process is a native-lib entry, lib/jcef_helper, and jlink writes those without
+            // the executable bit: Chromium then can't start it, and no widget or plugin page renders in the .deb.
+            val helper = runtime.get().asFile.resolve("lib/jcef_helper")
+            if (helper.isFile) {
+                check(helper.setExecutable(true, false) && helper.canExecute()) { "Couldn't make $helper executable" }
+            }
         }
     }
 }
@@ -161,8 +192,8 @@ if (System.getProperty("os.name").startsWith("Windows")) {
             launcherJvmArgs.add("-XX:SharedArchiveFile=\$APPDIR/herald.jsa")
         }
         // Herald's archive sits on top of the JDK's own (classes.jsa), which jlink leaves out of the trimmed runtime
-        // unless asked, and Compose doesn't ask. The runtime has no java.exe to make one with, so the packaging JDK's
-        // launcher is borrowed for it: it starts the runtime's own JVM, which archives the runtime's own modules.
+        // unless asked, and Compose doesn't ask. The runtime's java.exe (put back above for the PDF viewer) makes it:
+        // it starts the runtime's own JVM, which archives the runtime's own modules.
         // On the runtime image itself, which both the app folder and the installers copy.
         val launcher = File(compose.desktop.application.javaHome, "bin/java.exe")
         tasks.withType<org.jetbrains.compose.desktop.application.tasks.AbstractJLinkTask>().configureEach {
@@ -170,15 +201,55 @@ if (System.getProperty("os.name").startsWith("Windows")) {
             doLast {
                 val bin = runtime.get().asFile.resolve("bin")
                 val java = File(bin, "java.exe")
-                launcher.copyTo(java, overwrite = true)
-                try {
-                    val dump = ProcessBuilder(java.path, "-Xshare:dump").redirectErrorStream(true).start()
-                    val output = dump.inputStream.bufferedReader().readText()
-                    check(dump.waitFor() == 0 && File(bin, "server/classes.jsa").isFile) { "No CDS archive for the runtime:\n$output" }
-                } finally {
-                    java.delete()
-                }
+                if (!java.isFile) launcher.copyTo(java)
+                val dump = ProcessBuilder(java.path, "-Xshare:dump").redirectErrorStream(true).start()
+                val output = dump.inputStream.bufferedReader().readText()
+                check(dump.waitFor() == 0 && File(bin, "server/classes.jsa").isFile) { "No CDS archive for the runtime:\n$output" }
             }
         }
     }
+}
+
+// ProGuard reads junixsocket's Java 7 fallback classes, whose enclosing-method metadata is incompatible with
+// shrinking. Keep its matching multi-release Java/native libraries intact, but analyze them when shrinking the app.
+if (System.getProperty("os.name").startsWith("Linux")) {
+    val junixsocketVersion = libs.versions.junixsocket.get()
+    afterEvaluate {
+        val shrinker = tasks.named<AbstractProguardTask>("proguardReleaseJars").get()
+        // Snapshot the sources: inputFiles.from is a live set, so retaining it would make this collection recursive.
+        val original = files(shrinker.inputFiles.from.toList())
+        val nativeJars = original.filter {
+            it.name.startsWith("junixsocket-common-") || it.name.startsWith("junixsocket-native-common-")
+        }
+        val expected = setOf("junixsocket-common-$junixsocketVersion.jar", "junixsocket-native-common-$junixsocketVersion.jar")
+        val rules = layout.buildDirectory.file("secret-transport/native-libraries.pro")
+        val prepare = tasks.register("prepareSecretTransportLibraries") {
+            inputs.files(nativeJars)
+            inputs.property("expectedJars", expected)
+            outputs.file(rules)
+            doLast {
+                val jars = nativeJars.files
+                check(jars.size == 2 && jars.map { it.name }.toSet() == expected) {
+                    "Expected matching junixsocket libraries $expected, found ${jars.map { it.name }}"
+                }
+                val file = rules.get().asFile
+                file.parentFile.mkdirs()
+                file.writeText(jars.sortedBy { it.name }.joinToString("\n", postfix = "\n") {
+                    "-libraryjars \"${it.invariantSeparatorsPath}\""
+                })
+            }
+        }
+        shrinker.inputFiles.setFrom(original - nativeJars)
+        shrinker.inputs.files(nativeJars)
+        shrinker.configurationFiles.from(prepare)
+        val output = shrinker.destinationDir
+        shrinker.doLast {
+            nativeJars.forEach { it.copyTo(output.get().asFile.resolve(it.name), overwrite = true) }
+        }
+    }
+}
+
+// A failed check's message (which language, how wide) shows in the CI log, not only in the HTML report.
+tasks.withType<Test>().configureEach {
+    testLogging { exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL }
 }

@@ -1,0 +1,6 @@
+__pycache__/
+ci.json
+# prepare-ci.py --release writes these for the stable app.
+release.json
+app.kyllene.Kyllene.desktop
+app.kyllene.Kyllene.metainfo.xml
