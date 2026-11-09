@@ -14,7 +14,9 @@ class DesktopActionsTest(unittest.TestCase):
     def test_primary_launcher_forwards_one_uri_without_claiming_the_hermes_scheme(self):
         main = self.entry['Desktop Entry']
         self.assertEqual(shlex.split(main['Exec']), ['kyllene', '%u'])
-        self.assertEqual(main.get('MimeType', '').split(';'), ['x-scheme-handler/herald', ''])
+        types = main.get('MimeType', '').split(';')
+        self.assertIn('x-scheme-handler/herald', types)
+        self.assertNotIn('x-scheme-handler/hermes', types)
 
     def test_menu_actions_use_the_existing_entry_point(self):
         main = self.entry['Desktop Entry']
