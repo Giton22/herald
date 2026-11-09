@@ -70,7 +70,8 @@ static GColor s_on_fill;
 
 // The turn on screen: the ask it answers, what was said (when said here), the reply so far.
 static bool s_has_turn;
-static char s_ask_id[24];
+// Room for a chat's history ask, "h:" and its id (PebbleLink.historyAskId), as well as for an ask from here.
+static char s_ask_id[sizeof(s_chat_id) + 2];
 static char s_said[300];
 static char s_reply[MAX_REPLY + 1];
 static int s_reply_len;
