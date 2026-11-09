@@ -276,7 +276,7 @@ fun main(args: Array<String>) {
                     show()
                     links.newChat()
                 }
-                Item(stringResource(Res.string.tray_quick_entry), onClick = { quickOpen = true })
+                Item(stringResource(Res.string.tray_quick_entry), onClick = { quickOpen = true; quickRaise++ })
                 Separator()
                 Item(stringResource(Res.string.tray_quit), onClick = ::exitApplication)
             },

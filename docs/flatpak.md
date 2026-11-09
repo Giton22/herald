@@ -286,8 +286,9 @@ The entry handles the app's existing `herald://` links, including stored chats a
 bots. It does not claim `hermes://`, which belongs to Hermes Desktop. Launchers
 can use `herald://new-chat` and the desktop-only `herald://quick-entry` action.
 The latter is an exact action URI, without parameters or an extra path. On Linux,
-every launch or link that brings the app forward asks the window manager to
-activate its X11/Xwayland window; the manager may decline. This does not qualify a
+when the app is asked to come forward (a later launch, a link, the tray or a
+notification), it asks the window manager to activate its X11/Xwayland window;
+the manager may decline. This does not qualify a
 native Wayland backend. Global shortcut binding is a separate integration, and
 these entries don't set up automatic startup.
 
