@@ -141,6 +141,21 @@ class PebbleWatchTest {
     }
 
     @Test
+    fun itKnowsWhetherTheAppIsOpen() = pebbleTest { fake, watch ->
+        assertTrue(watch.isOpen)
+        fake.answers.addLast(PebbleSent.NotOpen)
+        watch.reply(update(1, "Hello"))
+        advanceUntilIdle()
+        assertEquals(false, watch.isOpen)
+        watch.opened()
+        advanceUntilIdle()
+        assertTrue(watch.isOpen)
+        watch.closed()
+        advanceUntilIdle()
+        assertEquals(false, watch.isOpen)
+    }
+
+    @Test
     fun aResyncSendsTheReplyAgainFromTheStart() = pebbleTest { fake, watch ->
         watch.reply(update(1, "Hello", ReplyPhase.Done))
         advanceUntilIdle()

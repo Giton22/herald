@@ -1,5 +1,6 @@
 package dev.hermeskotlin.wearlink
 
+import kotlin.concurrent.Volatile
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
@@ -84,7 +85,11 @@ class PebbleWatch(
         events.trySend(Event.Stopped(askId))
     }
 
-    // Only the sending coroutine touches these.
+    /** Whether Kyllene is open on the watch, as far as the phone knows: read from any thread. */
+    val isOpen: Boolean get() = open
+
+    // Only the sending coroutine touches these ([open] is only read elsewhere).
+    @Volatile
     private var open = true
     private val queue = ArrayDeque<PebbleDict>()
     private var latest: ReplyUpdate? = null

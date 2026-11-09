@@ -51,7 +51,8 @@ class PebbleRequests(
 
     fun start() {
         // Shown here, they'd show twice: once from Kyllene, once mirrored from the phone's notification.
-        wearRequests.shownOnWatch = { on && node.value != null }
+        // Only while Kyllene is open on that Pebble: closed or out of reach, nothing gets there, and the phone rings.
+        wearRequests.shownOnWatch = { on && node.value?.first?.let { outbox.watch(it).isOpen } == true }
         scope.launch {
             val state = relay.session.flatMapLatest { it?.state ?: flowOf(null) }
             val answering = settings.settings.map { it?.answersOnPebble == true }.distinctUntilChanged()
@@ -69,11 +70,18 @@ class PebbleRequests(
         }
     }
 
-    /** The Pebble [watch] asked in the watch's chat: what waits there goes to it. */
+    /**
+     * [watch] asked in the watch's chat: what waits there goes to it when it's a Pebble, and to none when it's a
+     * Wear OS watch, which shows them from the phone's notifications. A Pebble that had them shows them no more.
+     */
     fun askedFrom(watch: String) {
-        if (node.value?.first != watch) {
+        scope.launch {
+            val to = watch.takeIf(PebbleOutbox::isPebble)
+            val was = node.value?.first
+            if (was == to) return@launch
+            was?.let { old -> shown.forEach { outbox.watch(old).message(PebbleLink.requestEnd(it)) } }
             shown.clear()
-            node.value = watch to 0
+            node.value = to?.let { it to 0 }
         }
     }
 
