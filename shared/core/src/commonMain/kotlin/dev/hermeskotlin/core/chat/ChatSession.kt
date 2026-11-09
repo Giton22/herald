@@ -2265,8 +2265,7 @@ class ChatSession(
         liveRuntimeId(client)?.let { return@withLock it }
         _state.update { it.copy(attachment = Attachment.Attaching) }
         val picks = _state.value
-        // The session authority seeds no new chat (its create takes no `messages`); the chat goes without.
-        val instruction = startInstruction().takeUnless { client.sessionAuthority }
+        val instruction = startInstruction()
         val result = client.request(
             "session.create",
             buildJsonObject {
@@ -2285,7 +2284,8 @@ class ChatSession(
             },
         ) as? JsonObject ?: error("Empty session.create reply")
         val runtimeId = result.string("session_id") ?: error("session.create returned no session_id")
-        if (!instruction.isNullOrBlank()) rowExists = true
+        // The session authority stores every new chat's row on create, so a send after a lost link resumes it.
+        if (client.sessionAuthority || !instruction.isNullOrBlank()) rowExists = true
         streamMutex.withLock {
             lastSeq = null
             seqRuntime = runtimeId

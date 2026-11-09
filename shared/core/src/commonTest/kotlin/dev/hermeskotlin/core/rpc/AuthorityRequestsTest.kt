@@ -10,7 +10,9 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.addJsonObject
 import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonArray
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -178,6 +180,7 @@ class AuthorityRequestsTest {
         put("provider", "custom")
         put("reasoning_effort", "high")
         put("fast", true)
+        putJsonArray("messages") { addJsonObject { put("role", "user") } }
     }
 
     private companion object {

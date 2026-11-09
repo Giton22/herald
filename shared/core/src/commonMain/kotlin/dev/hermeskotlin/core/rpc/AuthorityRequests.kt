@@ -19,8 +19,9 @@ import kotlin.uuid.Uuid
  * tui_gateway/contracts/canonical_sessions.py, where every key is closed, so this does what Hermes Desktop's own
  * client does there (apps/desktop/src/api/canonical-protocol.ts):
  *
- * - `session.create` names the `gui` surface (stored as `desktop`), drops `cols`, sends the reasoning pick as
- *   `reasoning` and the fast pick as `service_tier`, and carries a `request_id`.
+ * - `session.create` names the `gui` surface (stored as `desktop`), sends the reasoning pick as `reasoning` and the
+ *   fast pick as `service_tier`, carries a `request_id` and drops what the contract has no field for (`cols`, and the
+ *   start instruction's `messages`: such a chat starts without it).
  * - `prompt.submit` carries a `submission_id`.
  * - Every request about a chat opened with a `profile` carries that profile. The gateway routes a named profile's
  *   chat to that profile's own connection, which is the only one that holds it: a send without the profile is
@@ -54,7 +55,7 @@ internal class AuthorityRequests(private val newId: () -> String = ::randomId) {
     }
 
     private fun create(params: JsonObject): JsonObject = buildJsonObject {
-        params.forEach { (key, value) -> if (key !in CREATE_REWRITTEN) put(key, value) }
+        params.forEach { (key, value) -> if (key in CREATE_KEYS) put(key, value) }
         put("source", GUI_SOURCE)
         params.text("reasoning_effort")?.let { put("reasoning", it) }
         val fast = (params["fast"] as? JsonPrimitive)?.takeUnless { it.isString }?.booleanOrNull
@@ -76,8 +77,16 @@ internal class AuthorityRequests(private val newId: () -> String = ::randomId) {
         /** The surface label a graphical client creates its chats with (gateway/session_policy.py SURFACES). */
         const val GUI_SOURCE = "gui"
 
-        /** `session.create` keys the authority's contract hasn't, or has under another name. */
-        val CREATE_REWRITTEN = setOf("source", "cols", "reasoning_effort", "fast")
+        /**
+         * The `session.create` keys sent on as they are: `CanonicalCreateParams` with ProfileParams' `profile`, less
+         * those set here. The rest (`cols`, the start instruction's `messages`) it has no field for.
+         */
+        val CREATE_KEYS = setOf(
+            "profile", "cwd", "row_cwd", "model", "provider", "base_url", "api_key", "toolsets", "reasoning",
+            "max_turns", "ignore_rules", "yolo", "safe_mode", "ignore_user_config", "skills", "checkpoints",
+            "accept_hooks", "pass_session_id", "editor", "title", "hidden", "follow_profile_config", "service_tier",
+            "cwd_explicit", "run_budget", "verbose", "client_env", "client", "request_id",
+        )
     }
 }
 
