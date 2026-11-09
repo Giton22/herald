@@ -73,8 +73,8 @@ Never show private data: no real chats, prompts, scheduled jobs, bots or gateway
 
 The landing page at [kyllene.app](https://kyllene.app) is the static site in `website/`: plain HTML and CSS, no build
 step. Preview it with any static server, for example `npx http-server website`, and check it at 375 px wide as well as
-on a desktop. Its screenshots are copies from `docs/screenshots`, so the same rules apply. Maintainers deploy it to
-Cloudflare Pages by hand:
+on a desktop. Its screenshots are copies from `docs/screenshots`, so the same rules apply. A merge to `master` that
+changes `website/` deploys it to Cloudflare Pages (`.github/workflows/website.yml`). By hand, maintainers run:
 
 ```bash
 npx wrangler pages deploy website --project-name kyllene --branch master

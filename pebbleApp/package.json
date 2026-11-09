@@ -1,0 +1,59 @@
+{
+  "name": "kyllene",
+  "author": "Kyllene",
+  "version": "0.1.0",
+  "private": true,
+  "pebble": {
+    "displayName": "Kyllene",
+    "uuid": "5f539f5a-9395-4cf1-8601-c3882e672ccd",
+    "sdkVersion": "3",
+    "enableMultiJS": false,
+    "targetPlatforms": ["basalt", "chalk", "diorite", "emery", "flint", "gabbro"],
+    "watchapp": { "watchface": false },
+    "capabilities": [],
+    "messageKeys": {
+      "TYPE": 1,
+      "ASK_ID": 2,
+      "SEQ": 3,
+      "PHASE": 4,
+      "TEXT": 5,
+      "TEXT_OFFSET": 6,
+      "TEXT_TOTAL": 7,
+      "ACTIVITY": 8,
+      "TITLE": 9,
+      "ERROR": 10,
+      "CHAT_ID": 11,
+      "INDEX": 12,
+      "COUNT": 13,
+      "AGO": 14,
+      "FLAGS": 15,
+      "ACCENT_REV": 16,
+      "ACCENT_FILL": 17,
+      "ACCENT_TEXT": 18,
+      "ACCENT_ON_FILL": 19,
+      "ACCENT_DIM": 20,
+      "REQUEST_ID": 21,
+      "APPROVAL": 22,
+      "AGENT": 23,
+      "ANSWERED": 24,
+      "VERSION": 25,
+      "SAID": 26,
+      "DETAIL": 27,
+      "CHOICES": 28,
+      "ANSWERING": 29,
+      "PROMPTS_REV": 30,
+      "PROMPTS": 31,
+      "SCOPE": 32
+    },
+    "companionApp": {
+      "android": {
+        "url": "https://github.com/Giton22/kyllene",
+        "apps": [
+          { "package": "dev.herald.android" },
+          { "package": "dev.herald.android.dev" }
+        ]
+      }
+    },
+    "resources": { "media": [] }
+  }
+}

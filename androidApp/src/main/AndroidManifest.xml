@@ -373,6 +373,20 @@
             </intent-filter>
         </service>
 
+        <!--
+            Messages from Kyllene's Pebble watchapp, handed over by the Pebble phone app while the watchapp is open.
+            Exported for the Pebble app to bind; PebbleKit's base class answers only the Pebble app Kyllene picked
+            (PebbleApps), checked by the caller's uid.
+        -->
+        <service
+            android:name=".pebble.PebbleBridgeService"
+            android:exported="true"
+            tools:ignore="ExportedService">
+            <intent-filter>
+                <action android:name="io.rebble.pebblekit2.RECEIVE_DATA_FROM_WATCH" />
+            </intent-filter>
+        </service>
+
         <service
             android:name=".notify.VoiceCallService"
             android:exported="false"

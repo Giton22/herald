@@ -25,6 +25,12 @@ class WearRequests(private val relay: WatchRelay, private val notifications: Cha
 
     private val posted = mutableSetOf<String>()
 
+    /**
+     * Whether a watch shows the watch's chat's requests itself (a Pebble, answering there): they're posted quietly
+     * then, and only on the phone, so the watch doesn't show each twice.
+     */
+    var shownOnWatch: () -> Boolean = { false }
+
     /** Posted quietly over a call, by request id, with its chat's id and title: the usual notification once it's over. */
     private val quiet = mutableMapOf<String, Triple<String?, String?, InputRequest>>()
 
@@ -38,7 +44,7 @@ class WearRequests(private val relay: WatchRelay, private val notifications: Cha
                     // On a live call the voice asks it: it waits here without a sound, and off the watch, in case the
                     // call doesn't get it answered.
                     val onCall = relay.onCall
-                    if (notifications.postRequest(state?.storedSessionId, state?.title, request, quiet = onCall)) {
+                    if (notifications.postRequest(state?.storedSessionId, state?.title, request, quiet = onCall || shownOnWatch())) {
                         posted += request.id
                         if (onCall) quiet[request.id] = Triple(state?.storedSessionId, state?.title, request)
                     }

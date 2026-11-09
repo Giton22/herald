@@ -29,7 +29,7 @@
     <string name="phone_rings_talk_title">Talk when I answer</string>
     <string name="phone_rings_talk_detail">Answering puts Hermes on the line: it asks in its own words, you answer by voice, and you can talk on. Off, Answer opens the chat instead.</string>
     <string name="phone_watch_rings_title">Ring my watch too</string>
-    <string name="phone_watch_rings_detail">Kyllene on your watch rings as well. Answer there, and Hermes asks on a call from the watch. Only when your gateway talks live.</string>
+    <string name="phone_watch_rings_detail">Kyllene on your watch rings as well. On a Wear OS watch, Answer starts a call from the watch, when your gateway talks live. On a Pebble, Answer shows the question there when Answer on the Pebble is on; else answer on your phone.</string>
     <string name="phone_quiet_title">Quiet hours</string>
     <string name="phone_quiet_empty">They start and end at %1$s, so nothing is quiet yet: pick another time.</string>
     <string name="phone_quiet_window">Nothing rings from %1$s to %2$s.</string>

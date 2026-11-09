@@ -28,7 +28,7 @@
     <string name="phone_rings_talk_title">Falar ao atender</string>
     <string name="phone_rings_talk_detail">Ao atender, o Hermes entra na linha: pergunta com as próprias palavras, você responde por voz e pode continuar falando. Desligado, Atender abre a conversa.</string>
     <string name="phone_watch_rings_title">Tocar também no relógio</string>
-    <string name="phone_watch_rings_detail">O Kyllene no seu relógio também toca. Atenda lá e o Hermes pergunta numa chamada pelo relógio. Só se o seu Gateway fala ao vivo.</string>
+    <string name="phone_watch_rings_detail">O Kyllene no seu relógio também toca. Num relógio Wear OS, Atender inicia uma chamada pelo relógio, se o seu Gateway fala ao vivo. Num Pebble, Atender mostra a pergunta lá se Responder no Pebble estiver ativado; senão, responda no celular.</string>
     <string name="phone_quiet_title">Horário de silêncio</string>
     <string name="phone_quiet_empty">Começa e termina às %1$s, então ainda não há silêncio: escolha outro horário.</string>
     <string name="phone_quiet_window">Nada toca das %1$s às %2$s.</string>

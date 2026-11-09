@@ -1,6 +1,6 @@
-# Pushing a tag like v0.2.0 tests and builds the signed phone and watch APKs and attaches them to a DRAFT release;
-# the `desktop` job adds the Windows, macOS and Linux installers to it (see there for their optional signing secrets),
-# and the `flatpak` job the Linux Flatpak bundle.
+# Pushing a tag like v0.2.0 tests and builds the signed phone and watch APKs and the Pebble watchapp, and attaches
+# them to a DRAFT release; the `desktop` job adds the Windows, macOS and Linux installers to it (see there for their
+# optional signing secrets), and the `flatpak` job the Linux Flatpak bundle.
 # Publishing the draft (on GitHub) is what makes it the latest release the app offers as an update.
 #
 # Repo secrets (Settings → Secrets and variables → Actions):
@@ -60,6 +60,17 @@ jobs:
           :wearApp:testDebugUnitTest :androidApp:assembleRelease :wearApp:assembleRelease
           -PappVersion="${GITHUB_REF_NAME#v}" -PreleasesRepo="$GITHUB_REPOSITORY"
 
+      # Built as CI builds it (see ci.yml), versioned as the tag.
+      - name: Pebble watchapp
+        run: |
+          pipx install pebble-tool==5.0.40
+          pebble sdk install 4.33.1
+          v="${GITHUB_REF_NAME#v}"
+          # A Pebble version is numbers only: no -rc1.
+          jq --arg v "${v%%-*}" '.version = $v' pebbleApp/package.json > package.json.tmp
+          mv package.json.tmp pebbleApp/package.json
+          (cd pebbleApp && pebble build)
+
       - name: Draft release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -67,14 +78,16 @@ jobs:
         # an underscore (kyllene-1.2.3_arm64-v8a.apk). GitHub lists assets by name and app versions up to 0.5.1
         # offer the first APK listed, so the universal one must sort first: "." comes before "_".
         # The Wear OS app is kyllene-wear-1.2.3.apk, which sorts after them all and which the app never offers
-        # (0.13.0 and newer know it by "-wear-"; older apps can't follow the renamed repo to see this release).
+        # (0.13.0 and newer know it by "-wear-"; older apps can't follow the renamed repo to see this release). Nor
+        # does it offer the Pebble watchapp, kyllene-pebble-1.2.3.pbw, which isn't an APK.
         run: |
           v="${GITHUB_REF_NAME#v}"
           out=androidApp/build/outputs/apk/release
           cp "$out/androidApp-universal-release.apk" "kyllene-$v.apk"
           for abi in arm64-v8a armeabi-v7a x86_64 x86; do cp "$out/androidApp-$abi-release.apk" "kyllene-${v}_$abi.apk"; done
           cp wearApp/build/outputs/apk/release/wearApp-release.apk "kyllene-wear-$v.apk"
-          for apk in kyllene-*.apk; do sha256sum "$apk" > "$apk.sha256"; done
+          cp pebbleApp/build/pebbleApp.pbw "kyllene-pebble-$v.pbw"
+          for file in kyllene-*.apk kyllene-pebble-*.pbw; do sha256sum "$file" > "$file.sha256"; done
           # Above the generated changelog: which APK to take.
           cat > which-apk.md <<EOF
           ### Which APK?
@@ -91,6 +104,8 @@ jobs:
 
           **Wear OS watch:** \`kyllene-wear-$v.apk\`. Install it on the watch with \`adb install\` (Developer options → Wireless debugging); it pairs with Kyllene on the phone by itself. Update it the same way.
 
+          **Pebble watch:** \`kyllene-pebble-$v.pbw\`. Open it on the phone, and the Pebble app installs it on the watch. Every Pebble with a microphone: Pebble Time, Time Round, Pebble 2, Pebble 2 Duo, Time 2 and Round 2.
+
           ### Desktop
 
           | Your computer | Download |
@@ -106,6 +121,7 @@ jobs:
           gh release create "$GITHUB_REF_NAME" "kyllene-$v.apk" "kyllene-$v.apk.sha256" --draft --generate-notes --notes-file which-apk.md --title "$GITHUB_REF_NAME"
           for abi in arm64-v8a armeabi-v7a x86_64 x86; do gh release upload "$GITHUB_REF_NAME" "kyllene-${v}_$abi.apk" "kyllene-${v}_$abi.apk.sha256"; done
           gh release upload "$GITHUB_REF_NAME" "kyllene-wear-$v.apk" "kyllene-wear-$v.apk.sha256"
+          gh release upload "$GITHUB_REF_NAME" "kyllene-pebble-$v.pbw" "kyllene-pebble-$v.pbw.sha256"
 
       - name: Remove the signing key
         if: always()

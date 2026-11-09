@@ -5,6 +5,7 @@ import com.google.android.gms.wearable.MessageEvent
 import com.google.android.gms.wearable.Wearable
 import com.google.android.gms.wearable.WearableListenerService
 import dev.hermeskotlin.android.notify.ChatNotifier
+import dev.hermeskotlin.android.pebble.PebbleRequests
 import dev.hermeskotlin.core.settings.SettingsStore
 import dev.hermeskotlin.core.wear.WatchRelay
 import dev.hermeskotlin.ui.voice.WatchCalls
@@ -45,6 +46,7 @@ class WearBridgeService : WearableListenerService() {
     private val scope: CoroutineScope by inject()
     private val notifier: ChatNotifier by inject()
     private val ringer: WatchRinger by inject()
+    private val pebbleRequests: PebbleRequests by inject()
 
     override fun onMessageReceived(event: MessageEvent) {
         val node = event.sourceNodeId
@@ -52,6 +54,7 @@ class WearBridgeService : WearableListenerService() {
         when (event.path) {
             WearPaths.ASK, WearPaths.BOT_ASK -> WearJson.decode<WatchAsk>(event.data)?.let {
                 if (event.path == WearPaths.BOT_ASK && it.botProfile.isNullOrBlank()) return
+                pebbleRequests.askedFrom(node)
                 relay.ask(node, it)
                 keepUp()
             }
@@ -121,6 +124,7 @@ class WearBridgeService : WearableListenerService() {
                 relay.expectedNothing()
                 return@launch
             }
+            pebbleRequests.askedFrom(channel.nodeId)
             relay.ask(channel.nodeId, recorded.first, recorded.second)
         }
     }
