@@ -27,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.collectAsState
@@ -141,7 +142,8 @@ val LocalAppVersion = staticCompositionLocalOf<String?> { null }
 
 /**
  * Root composable shared by every platform. Koin must be started by the platform host first.
- * [onDarkTheme] tells the host which theme is showing, e.g. to color the system bar icons.
+ * [onDarkTheme] tells the host which theme is showing, e.g. to color the system bar icons. [onBackground] tells it
+ * the color behind the screens, for a window that shows its own until the first frame and between resizes.
  * [releasesRepo] is the GitHub `owner/name` the build was released from, to look for newer releases.
  * While [locked] (App lock), a cover hides everything until [onUnlock] lets the user back in.
  * [phoneQuestion] is a phone tool asking before it changes something, shown over any screen.
@@ -154,6 +156,7 @@ fun App(
     appVersion: String? = null,
     releasesRepo: String? = null,
     onDarkTheme: (Boolean) -> Unit = {},
+    onBackground: (Color) -> Unit = {},
     locked: Boolean = false,
     onUnlock: () -> Unit = {},
     phoneQuestion: PhoneQuestion? = null,
@@ -191,6 +194,8 @@ fun App(
         )
     }
     ProvideAppLanguage(settings.language) { hermesTheme(palette)(schemeFor(settings, dark)) {
+        val ground = Theme[colors][background]
+        LaunchedEffect(ground) { onBackground(ground) }
         CompositionLocalProvider(
             LocalAccentPalette provides palette,
             LocalAppSettings provides settings,

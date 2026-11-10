@@ -167,6 +167,8 @@ fun ChatWindow(
                 }
                 val dark = Theme[colors][background].luminance() < 0.5f
                 LaunchedEffect(dark) { titleBar?.dark(dark) }
+                val ground = Theme[colors][background]
+                LaunchedEffect(ground) { paintWindowBackground(window, ground) }
                 Column(Modifier.fillMaxSize().background(Theme[colors][background]).keepFocusHeld(focusHeld)) {
                     titleBar?.Content(icon, title)
                     // The app's zoom, under the title bar as in the main window.
