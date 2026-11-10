@@ -129,6 +129,9 @@ import com.mikepenz.markdown.model.ImageTransformer
 /** Code blocks wrap long lines instead of scrolling sideways (the "Wrap code lines" setting). */
 val LocalCodeWrap = compositionLocalOf { false }
 
+/** How much of the text color the background of an inline code span takes, so a selection shows through it. */
+private const val INLINE_CODE_WASH = 0.05f
+
 /** The Markdown being drawn is still streaming in. */
 private val LocalStreaming = compositionLocalOf { false }
 
@@ -183,7 +186,9 @@ fun MarkdownText(text: String, modifier: Modifier = Modifier, streaming: Boolean
     val markdownColors = DefaultMarkdownColors(
         text = bodyStyle.color,
         codeBackground = Theme[colors][well],
-        inlineCodeBackground = Theme[colors][surface2],
+        // Translucent: Compose paints a span's background over a text selection's highlight, so an opaque one
+        // hides the selection on the code. A faint wash of the text color reads as the same chip in either theme.
+        inlineCodeBackground = Theme[colors][textColor].copy(alpha = INLINE_CODE_WASH),
         dividerColor = Theme[colors][stroke],
         tableBackground = Theme[colors][surface],
     )
