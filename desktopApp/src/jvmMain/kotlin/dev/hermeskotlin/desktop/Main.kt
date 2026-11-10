@@ -60,6 +60,7 @@ import dev.hermeskotlin.ui.DesktopBack
 import dev.hermeskotlin.ui.LocalDesktopBack
 import dev.hermeskotlin.ui.LocalFocusHeld
 import dev.hermeskotlin.ui.QuickEntryHotkey
+import dev.hermeskotlin.ui.SystemColorScheme
 import dev.hermeskotlin.ui.keepFocusHeld
 import dev.hermeskotlin.ui.LocalShortcuts
 import dev.hermeskotlin.ui.Shortcut
@@ -133,6 +134,10 @@ fun main(args: Array<String>) {
     // The read is a file's; were it ever stuck, the window opens in the system's language and switches once it's in.
     applyAppLanguage(runBlocking { withTimeoutOrNull(2_000) { settingsStore.settings.filterNotNull().first() } }?.language)
     useAppTextContextMenu()
+    // Linux's light or dark preference, which Compose reads only once there: this follows it as it changes. Waited
+    // for briefly, so the first frame is in the right theme; a desktop that can't say leaves it to Compose.
+    val colorScheme = if (System.getProperty("os.name") == "Linux") LinuxColorScheme({ SystemColorScheme.dark = it }) else null
+    colorScheme?.awaitFirst(1_000)
     val links = koin.get<ChatLinks>()
     val saved = WindowMemory.read(koin.get())
     // The same mark as docs/logo.svg, for the title bar, the taskbar and the tray.
@@ -415,6 +420,6 @@ fun main(args: Array<String>) {
         )
     }
     // The windows are gone; Chromium's helper processes go with the app, not after it.
-    try { Jcef.shutdown() } finally { instance.close() }
+    try { Jcef.shutdown() } finally { colorScheme?.close(); instance.close() }
     exitProcess(0)
 }
