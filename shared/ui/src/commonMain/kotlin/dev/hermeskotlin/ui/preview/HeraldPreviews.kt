@@ -98,6 +98,7 @@ import dev.hermeskotlin.ui.rooms.CreateRoomDialog
 import dev.hermeskotlin.ui.bots.BotEditor
 import dev.hermeskotlin.core.bots.BotDetails
 import dev.hermeskotlin.ui.plugins.PluginsView
+import dev.hermeskotlin.ui.kanban.KanbanView
 import dev.hermeskotlin.ui.assistant.AssistantBackdrop
 import dev.hermeskotlin.ui.assistant.AssistantCard
 import dev.hermeskotlin.ui.sessions.ProjectDraft
@@ -178,6 +179,7 @@ enum class PreviewScene(val label: String) {
     ConfigSearch("A search across Hermes's settings"),
     ConfigPicker("Picking a voice, with Other… for one off the list"),
     Plugins("Plugins with a page"),
+    Kanban("Kanban boards and cards"),
     Assistant("The assistant, called up over another app"),
     AssistantAnswer("The assistant, after a question about the screen"),
     Scheduled("Scheduled jobs"),
@@ -509,6 +511,25 @@ fun HeraldPreview(scene: PreviewScene, dark: Boolean = true, accent: String = DE
                 }
                 PreviewScene.Plugins -> OpenSidebar {
                     SidebarPage { PluginsView(PluginsUiState(plugins = PageSamples.plugins), onBack = {}, onOpenPlugin = {}, onRetry = {}) }
+                }
+                PreviewScene.Kanban -> OpenSidebar {
+                    SidebarPage {
+                        KanbanView(
+                            PageSamples.kanban(),
+                            remember { TextFieldState("") },
+                            onBack = {},
+                            onSelectBoard = {},
+                            onSearch = {},
+                            onTenant = {},
+                            onAssignee = {},
+                            onIncludeArchived = {},
+                            onOpenTask = {},
+                            onCloseTask = {},
+                            onRetry = {},
+                            onReloadDetail = {},
+                            onReloadLog = {},
+                        )
+                    }
                 }
                 PreviewScene.Scheduled, PreviewScene.ScheduledJob -> OpenSidebar {
                     SidebarPage {

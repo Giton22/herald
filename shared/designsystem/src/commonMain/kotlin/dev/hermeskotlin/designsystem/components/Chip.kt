@@ -29,6 +29,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.composeunstyled.Text
@@ -120,6 +121,7 @@ fun Chip(
                 style = Theme[typography][label].copy(fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium),
                 color = content,
                 singleLine = true,
+                overflow = TextOverflow.Ellipsis,
             )
             if (count != null) {
                 Text(

@@ -209,6 +209,11 @@ data class AppSettings(
     val zoom: Int = 100,
     /** Desktop: the sidebar's width in dp, as its edge was last dragged to. */
     val sidebarWidth: Int = 304,
+    /**
+     * The Kanban board last opened on each gateway (gateway URL to board slug). Null/absent means the
+     * gateway's own `current` board; a board the gateway no longer has reads as unset.
+     */
+    val kanbanBoards: Map<String, String> = emptyMap(),
 )
 
 /** The Pebble's prompts until they're edited. */
@@ -239,6 +244,13 @@ fun AppSettings.showsSidebarPage(name: String): Boolean = sidebarNav && name !in
 /** [name]'s button (`SidebarPage.name`) shown or hidden in the sidebar's pages. */
 fun AppSettings.withSidebarPage(name: String, shown: Boolean): AppSettings =
     copy(sidebarNavHidden = if (shown) sidebarNavHidden - name else (sidebarNavHidden + name).distinct())
+
+/** The Kanban board last opened on [gateway]; null when none was pinned (the gateway's `current` board). */
+fun AppSettings.kanbanBoard(gateway: GatewayUrl): String? = kanbanBoards[gateway.value]
+
+/** [slug] (null: unpinned) becomes the Kanban board last opened on [gateway]. */
+fun AppSettings.withKanbanBoard(gateway: GatewayUrl, slug: String?): AppSettings =
+    copy(kanbanBoards = if (slug == null) kanbanBoards - gateway.value else kanbanBoards + (gateway.value to slug))
 
 /** The [AppSettings.startInstruction] a new chat starts with, trimmed; null when there is none or the settings aren't read yet. */
 fun SettingsStore.startInstruction(): String? = settings.value?.startInstruction?.trim()?.takeIf { it.isNotEmpty() }

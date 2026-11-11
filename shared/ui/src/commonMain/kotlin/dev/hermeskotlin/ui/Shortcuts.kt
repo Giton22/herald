@@ -179,6 +179,7 @@ enum class SidebarPage(val label: StringResource) {
     Config(Res.string.app_page_config),
     Plugins(Res.string.plugins_title),
     Insights(Res.string.app_page_insights),
+    Kanban(Res.string.kanban_title),
 }
 
 /** The keys of the shortcuts listed in the palette and on the shortcuts page, as the platform writes them. */

@@ -138,7 +138,18 @@ def main(bundle):
             # The fixture opens /api/ws only with the ticket subprotocol, so any call proves the handshake.
             until(lambda: any(kind == 'RPC' for kind, _ in service.calls), 'ticketed WebSocket', app)
             time.sleep(1)
-            attempt(lambda: click(140, 424), lambda: pixels(LOADED), 'local HTML widget rendering')
+            def open_first_chat():
+                # The All/Running/Needs-you filter chips sit at y~415-442; probing them can select
+                # Needs-you and hide the fixture session. Reset to All (leftmost chip), then scan the
+                # chat list strictly below the chips for the single fixture row.
+                click(32, 428)
+                time.sleep(0.4)
+                for y in range(450, 601, 12):
+                    click(140, y)
+                    time.sleep(0.35)
+                    if pixels(LOADED):
+                        return
+            attempt(open_first_chat, lambda: pixels(LOADED), 'local HTML widget rendering')
             button = until(lambda: pixels(BUTTON), 'painted widget button', app)
             click((min(x for x, y in button) + max(x for x, y in button)) // 2,
                   (min(y for x, y in button) + max(y for x, y in button)) // 2)
@@ -148,6 +159,11 @@ def main(bundle):
         except Exception:
             log.seek(0)
             print(log.read(), file=sys.stderr)
+            # Leave a picture of the stuck screen so a failed probe can be diagnosed from the artifact.
+            try:
+                ImageGrab.grab(xdisplay=os.environ['DISPLAY']).save('smoke-failure.png')
+            except Exception:
+                pass
             raise
 
 
