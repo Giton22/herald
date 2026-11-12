@@ -24,6 +24,7 @@ import androidx.compose.ui.test.runComposeUiTest
 import androidx.compose.ui.unit.dp
 import com.composeunstyled.theme.ColorScheme
 import dev.hermeskotlin.designsystem.AccentPalette
+import dev.hermeskotlin.designsystem.PureBlack
 import dev.hermeskotlin.designsystem.hermesTheme
 import kotlin.test.Test
 import kotlin.test.assertTrue
@@ -53,6 +54,21 @@ class InlineCodeSelectionTest {
         )
     }
 
+    /** On pure black, where the span's wash is at its faintest: it is still drawn, and a selection shows over it. */
+    @Test
+    fun aSelectionShowsOverAnInlineCodeSpanOnBlack() = runComposeUiTest {
+        val (before, after) = renderUnselectedThenSelected(
+            "Some words before `inline code here` and some words after it.", PureBlack, Color.Black,
+        )
+        val chip = chipBackgroundPixels(before, Color.Black)
+        assertTrue(chip.size > 200, "found only ${chip.size} code-background pixels; the span doesn't stand out from a black page")
+        // The light theme's wash is too faint here (under 0.05 of white); a dark ground takes the stronger one.
+        val level = chip.first().let { (x, y) -> before[x, y].red }
+        assertTrue(level > 0.06f, "the code span is only $level above black, fainter than it was before the wash")
+        val tinted = chip.count { (x, y) -> isTintedTowardsSelection(after[x, y]) }
+        assertTrue(tinted.toFloat() / chip.size > 0.9f, "only $tinted of ${chip.size} of the code span's background pixels show the selection")
+    }
+
     /** The control: the plain text beside the span shows the selection, so the measurement means something. */
     @Test
     fun aSelectionShowsOverPlainText() = runComposeUiTest {
@@ -64,12 +80,16 @@ class InlineCodeSelectionTest {
         assertTrue(tinted.toFloat() / plain.size > 0.9f, "the selection did not draw over plain text, so the harness is not selecting")
     }
 
-    private fun ComposeUiTest.renderUnselectedThenSelected(markdown: String): Pair<PixelMap, PixelMap> {
+    private fun ComposeUiTest.renderUnselectedThenSelected(
+        markdown: String,
+        scheme: ColorScheme = ColorScheme.Light,
+        page: Color = Color.White,
+    ): Pair<PixelMap, PixelMap> {
         setContent {
-            hermesTheme(AccentPalette.Blue)(ColorScheme.Light) {
+            hermesTheme(AccentPalette.Blue)(scheme) {
                 CompositionLocalProvider(LocalTextSelectionColors provides TextSelectionColors(Color.Red, SELECTION)) {
                     SelectionContainer {
-                        Box(Modifier.width(COLUMN).background(Color.White).testTag(REPLY)) {
+                        Box(Modifier.width(COLUMN).background(page).testTag(REPLY)) {
                             MarkdownText(markdown)
                         }
                     }
@@ -91,14 +111,15 @@ class InlineCodeSelectionTest {
 
     /**
      * Pixels, on the first text line, that are the inline code span's background in the unselected image: the
-     * most common color on the line that is neither the white page nor text ink.
+     * most common color on the line that is neither the [page] nor text ink.
      */
-    private fun chipBackgroundPixels(image: PixelMap): List<Pair<Int, Int>> {
+    private fun chipBackgroundPixels(image: PixelMap, page: Color = Color.White): List<Pair<Int, Int>> {
         val band = (LINE_Y.toInt() - 4)..(LINE_Y.toInt() + 4)
         val counts = HashMap<Int, Int>()
         for (y in band) for (x in 0 until image.width) {
             val c = image[x, y]
-            if (!c.isCloseTo(Color.White) && c.luminance() > 0.85f) counts.merge(c.toArgb(), 1, Int::plus)
+            // Ink is far from the page in brightness; the span's background is near it.
+            if (!c.isCloseTo(page) && kotlin.math.abs(c.luminance() - page.luminance()) < 0.15f) counts.merge(c.toArgb(), 1, Int::plus)
         }
         val chip = Color(counts.maxByOrNull { it.value }?.key ?: return emptyList())
         return pixelsMatching(image) { it.isCloseTo(chip) }
@@ -107,7 +128,8 @@ class InlineCodeSelectionTest {
     /** Pixels, on the first text line and left of its last glyph, that are the plain page background. */
     private fun plainBackgroundPixels(image: PixelMap): List<Pair<Int, Int>> {
         // A selection ends with the text; the empty space after the last word is never selected.
-        val lastInk = (0 until image.width).last { x -> (LINE_Y.toInt() - 4..LINE_Y.toInt() + 4).any { y -> image[x, y].luminance() < 0.5f } }
+        val lastInk = (0 until image.width).lastOrNull { x -> (LINE_Y.toInt() - 4..LINE_Y.toInt() + 4).any { y -> image[x, y].luminance() < 0.5f } }
+            ?: return emptyList()
         return pixelsMatching(image) { it.isCloseTo(Color.White) }.filter { (x, _) -> x < lastInk }
     }
 
