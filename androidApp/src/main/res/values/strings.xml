@@ -202,4 +202,10 @@
     <string name="phone_place_not_accepted">it wasn’t accepted</string>
     <string name="phone_place_no_reach">Kyllene couldn’t reach the gateway</string>
     <string name="phone_place_refused">the gateway refused it</string>
+
+    <!-- The home screen widget, as the widget picker describes it -->
+    <string name="widget_description">New chat, Dictate and Call Hermes, and your gateways to switch to</string>
+    <!-- %1$s: the gateway's name, as the widget's buttons read it out -->
+    <string name="widget_gateway_in_use">%1$s, in use</string>
+    <string name="widget_gateway_switch">Switch to %1$s</string>
 </resources>

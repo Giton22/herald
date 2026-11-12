@@ -164,4 +164,9 @@
     <string name="phone_place_not_accepted">未被接受</string>
     <string name="phone_place_no_reach">Kyllene 无法连接到网关</string>
     <string name="phone_place_refused">网关拒绝了它</string>
+
+    <!-- The home screen widget -->
+    <string name="widget_description">新对话、听写和呼叫 Hermes，以及可切换的网关</string>
+    <string name="widget_gateway_in_use">%1$s，正在使用</string>
+    <string name="widget_gateway_switch">切换到 %1$s</string>
 </resources>

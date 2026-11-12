@@ -332,7 +332,8 @@ Agent tools that run on the phone: a gateway plugin registers them, Kyllene answ
 - [x] Web links in replies open in a Custom Tab in the app's colors, or the browser when there's none
 - [x] App lock (Settings → Privacy): fingerprint, face or screen lock on launch and after a minute away; content hidden in Recents
 - [ ] Tablet and foldable adaptive layout (list and detail side by side)
-- [ ] Home-screen widget and Quick Settings tile
+- [x] Home-screen widget: New chat, Dictate and Call Hermes on the gateway in use, and, with more than one gateway saved, up to six of them in rows of three (primary first, the one in use marked) to switch to in a tap; it follows the saved gateways as they change
+- [ ] Quick Settings tile
 - [x] Offline cache of sessions and messages: the chat list and the newest rows of the last 50 chats read are kept on the device (Room, rows encrypted with a Keystore-held key) and shown while the gateway can't be reached, marked "Saved copy"; signing out of a gateway forgets its chats
 - [ ] Send prompts typed offline once the gateway is back (an outbox)
 - [ ] iOS app

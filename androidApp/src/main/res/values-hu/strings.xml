@@ -166,4 +166,9 @@
     <string name="phone_place_not_accepted">nem fogadták el</string>
     <string name="phone_place_no_reach">A Kyllene nem érte el a Gateway-t</string>
     <string name="phone_place_refused">a Gateway elutasította</string>
+
+    <!-- The home screen widget -->
+    <string name="widget_description">Új csevegés, Diktálás és Hermes hívása, valamint a Gateway-eid a váltáshoz</string>
+    <string name="widget_gateway_in_use">%1$s, használatban</string>
+    <string name="widget_gateway_switch">Váltás erre: %1$s</string>
 </resources>

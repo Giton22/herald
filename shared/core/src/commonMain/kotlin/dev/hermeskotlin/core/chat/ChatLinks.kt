@@ -86,4 +86,16 @@ class ChatLinks {
 
     /** Clears [link] once opened, unless a newer one came in meanwhile. */
     fun consume(link: ChatLink) = _pending.update { if (it == link) null else it }
+
+    private val _gateway = MutableStateFlow<String?>(null)
+
+    /** A saved gateway to switch to, by address, asked for from outside the app's screens (the home-screen widget). */
+    val pendingGateway: StateFlow<String?> = _gateway.asStateFlow()
+
+    fun openGateway(url: String) {
+        _gateway.value = url
+    }
+
+    /** Clears [url] once switched to, unless another came in meanwhile. */
+    fun consumeGateway(url: String) = _gateway.update { if (it == url) null else it }
 }
