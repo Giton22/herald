@@ -92,6 +92,48 @@ the watchapp on every pull request, and a release attaches it as `kyllene-pebble
 For Kyllene on the phone to take the watch's messages, its package has to be in `companionApp` in
 `package.json`. `dev.herald.android` and `dev.herald.android.dev` (Kyllene Dev) are.
 
+## Pebble appstore
+
+Beside the `.pbw` on each release, the watchapp can be in the Pebble appstore, which the Pebble app installs from and
+updates. After the setup below, `.github/workflows/pebble-appstore.yml` does it: when a release is published on
+GitHub, it sends that release's `kyllene-pebble-<version>.pbw` to the store, checked against the SHA-256 the release
+carries, and the store's version is the tag's. Prereleases (and tags like `v1.2.3-rc1`) are skipped. To send a release
+that was published earlier, run the workflow by hand from the Actions tab with its tag.
+
+Setting it up takes a maintainer once:
+
+1. **Decide whose account owns the listing.** The app's UUID in `package.json` can be listed once, and a new release
+   has to come from the account that did.
+2. **Sign in** to the [Developer Dashboard](https://developer.repebble.com/dashboard) with Google, GitHub or Apple, and
+   always the same one. The first sign-in makes the developer account.
+3. **Make the listing by hand** from a release's `.pbw`: **New**, upload it, then:
+   - a name and description, and the category (Notifications or Tools & Utilities);
+   - the website and source code URLs, and visibility (Listed, Unlisted or Hidden);
+   - up to five screenshots per model, each the model's own size with no watch frame: 144×168 for basalt, diorite and
+     flint, 180×180 for chalk, 200×228 for emery and 260×260 for gabbro. `screenshots/` has emery's and gabbro's;
+     `pebble screenshot --all-platforms` takes the others. Sample data only, as for any screenshot here;
+   - the optional 80×80 and 144×144 icons and a 720×320 banner. Without icons the store makes them from the name.
+
+   An app goes live as soon as it's submitted; there's no review.
+4. **Let the workflow sign in**, one of:
+   - *A refresh token.* Run `pebble login` on your computer, then put the `refresh_token` from the file the tool
+     keeps into the repository secret `PEBBLE_FIREBASE_REFRESH_TOKEN`. The workflow trades it for a one-hour sign-in
+     each run. On Linux the file is `~/.local/share/pebble-sdk/firebase_oauth_storage.json` (`~/.pebble-sdk/` if that
+     exists; on macOS `~/Library/Application Support/Pebble SDK/`):
+
+     ```bash
+     jq -r .refresh_token ~/.local/share/pebble-sdk/firebase_oauth_storage.json | gh secret set PEBBLE_FIREBASE_REFRESH_TOKEN
+     ```
+   - *A trusted publisher.* In the dashboard, **Settings → Publish from GitHub Actions**: register this repository and
+     `pebble-appstore.yml`. This needs no secret, but it's newer, and whether the dashboard matches a workflow that
+     runs on a release tag (the others on a branch) isn't known; try it before relying on it.
+5. **Turn it on** with the repository variable `PEBBLE_APPSTORE` set to `true` (Settings → Secrets and variables →
+   Actions → Variables). Until then the workflow does nothing, and it never makes a listing itself: a release whose
+   UUID isn't listed fails there.
+
+After that a release needs nothing more than publishing its draft. If a release drops a model from `targetPlatforms`,
+the store stops offering the app on it, because it serves only the newest release.
+
 ## Try it
 
 On the emulator, the phone's side is played with `pebble send-app-message`, the keys being the numbers in

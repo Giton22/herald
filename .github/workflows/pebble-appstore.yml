@@ -1,0 +1,109 @@
+# Uploads a release's Pebble watchapp to the Pebble appstore when the release is published on GitHub.
+#
+# Publishing the draft that release.yml makes is the one step that decides: it makes the release the one the app
+# offers as an update, and this workflow then sends the same kyllene-pebble-1.2.3.pbw to the store, checked against
+# the SHA-256 the release carries. Nothing is built or rebuilt here.
+#
+# It does nothing until the listing exists and the repository variable PEBBLE_APPSTORE is "true"; the one-time setup
+# is in pebbleApp/README.md ("Pebble appstore"). It never creates a listing: the tool refuses to without a
+# description, which this workflow doesn't give it, so a release whose watchapp isn't listed fails here.
+#
+# Prereleases (and tags like v1.2.3-rc1) are skipped: a store version is numbers only, so two candidates of one
+# version would be the same release. To send one release again, or one published before this was set up, run this
+# workflow by hand with its tag.
+#
+# Signing in to the store, either of:
+#   PEBBLE_FIREBASE_REFRESH_TOKEN  secret: the refresh token of the account that owns the listing (see the README).
+#   a trusted publisher            registered for this workflow in the store's developer dashboard, no secret.
+# The secret wins when both are there.
+name: Pebble appstore
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to send to the store, for example v0.17.0"
+        required: true
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: pebble-appstore-${{ github.event.release.tag_name || inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: >-
+      vars.PEBBLE_APPSTORE == 'true'
+      && !github.event.release.prerelease
+      && !contains(github.event.release.tag_name, '-')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      # Only to sign in as a trusted publisher; nothing here builds or runs the project's code.
+      id-token: write
+    env:
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+    steps:
+      - name: Check the tag
+        run: |
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::'$TAG' isn't a release tag like v1.2.3; a store version is numbers only"
+            exit 1
+          fi
+
+      # The tool reads pebbleApp/package.json for the app's identity; only that folder is needed.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.TAG }}
+          sparse-checkout: pebbleApp
+          persist-credentials: false
+
+      - name: Download the watchapp from the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          v="${TAG#v}"
+          mkdir "$RUNNER_TEMP/pbw"
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir "$RUNNER_TEMP/pbw" \
+            --pattern "kyllene-pebble-$v.pbw" --pattern "kyllene-pebble-$v.pbw.sha256"
+          (cd "$RUNNER_TEMP/pbw" && sha256sum --check "kyllene-pebble-$v.pbw.sha256")
+
+      # The upload only, so the Pebble SDK isn't installed. Pinned like the tool CI builds with; this one has the
+      # sign-in with a trusted publisher and --pbw (5.0.40 has neither).
+      - name: Install the Pebble tool
+        run: |
+          python3 -m venv "$RUNNER_TEMP/pebble-tool"
+          "$RUNNER_TEMP/pebble-tool/bin/pip" install --quiet pebble-tool==5.1.2
+
+      - name: Publish to the Pebble appstore
+        working-directory: pebbleApp
+        env:
+          REFRESH_TOKEN: ${{ secrets.PEBBLE_FIREBASE_REFRESH_TOKEN }}
+        run: |
+          v="${TAG#v}"
+          pebble="$RUNNER_TEMP/pebble-tool/bin/pebble"
+          if [ -n "$REFRESH_TOKEN" ]; then
+            # A store sign-in token lasts an hour, so the secret is the long-lived refresh token, exchanged here
+            # with the tool's own public Firebase key. Without it, the tool signs in as a trusted publisher.
+            api_key=$("$RUNNER_TEMP/pebble-tool/bin/python" -c \
+              'from pebble_tool.firebase_account import DEFAULT_FIREBASE_API_KEY as k; print(k)')
+            umask 077
+            printf '%s' "$REFRESH_TOKEN" > "$RUNNER_TEMP/refresh-token"
+            id_token=$(curl -fsS "https://securetoken.googleapis.com/v1/token?key=$api_key" \
+              --data-urlencode grant_type=refresh_token \
+              --data-urlencode "refresh_token@$RUNNER_TEMP/refresh-token" | jq -er .id_token)
+            rm -f "$RUNNER_TEMP/refresh-token"
+            echo "::add-mask::$id_token"
+            export PEBBLE_FIREBASE_ID_TOKEN="$id_token"
+          fi
+          # The version is given: package.json holds a placeholder, which only release.yml sets as it builds.
+          # An upload to an existing listing goes live as soon as it's there.
+          "$pebble" publish --non-interactive \
+            --pbw "$RUNNER_TEMP/pbw/kyllene-pebble-$v.pbw" --version "$v" \
+            --release-notes "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/tag/$TAG" \
+            < /dev/null
