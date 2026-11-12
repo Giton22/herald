@@ -316,6 +316,12 @@ class StreamedSpeechTest {
         transcripts: List<String> = listOf("How was your day?"),
         /** The profile's config, as `GET /api/config` gives it. */
         config: String = """{"ok":true}""",
+        /** What the gateway answers `GET /api/config` with; one without the route says 404. */
+        configStatus: HttpStatusCode = HttpStatusCode.OK,
+        /** Holds the config's answer back until it completes. */
+        configGate: CompletableDeferred<Unit>? = null,
+        /** Returns once the first thing said is sent; false returns as soon as the chat is started. */
+        awaitSubmit: Boolean = true,
         /** Runs as each recording goes to be written down, by its number from 1. */
         transcribing: suspend (Int) -> Unit = {},
         streams: () -> SpeechStream?,
@@ -331,7 +337,10 @@ class StreamedSpeechTest {
                         val transcript = transcripts[minOf(transcribed++, transcripts.lastIndex)]
                         respond("""{"ok":true,"transcript":"$transcript"}""", HttpStatusCode.OK, json)
                     }
-                    "/api/config" -> respond(config, HttpStatusCode.OK, json)
+                    "/api/config" -> {
+                        configGate?.await()
+                        respond(config, configStatus, json)
+                    }
                     "/api/audio/speak" -> if (speakFails) {
                         respond("""{"detail":"TTS chunk 1 failed: quota exceeded"}""", HttpStatusCode.BadRequest, json)
                     } else {
@@ -351,8 +360,80 @@ class StreamedSpeechTest {
         session.start()
         val voice = VoiceController(AudioApi(client), recorder, player, backgroundScope, backgroundScope, speechStreams = { _, _ -> streams() })
         voice.startChat(session, gateway, "rin")
-        socket.submits.first { it.isNotEmpty() }
+        if (awaitSubmit) socket.submits.first { it.isNotEmpty() }
         return Setup(socket, voice, player, spoken, session)
+    }
+
+    @Test
+    fun chainedAudioIsNotRoutedForTalkOverDisabled() = runTest {
+        val routes = mutableListOf<String>()
+        val setup = chat(player = Player(routes = routes), config = """{"voice":{"barge_in":false}}""") { Stream() }
+        assertEquals(emptyList(), routes)
+        setup.voice.stopChat()
+        yield()
+        // Not just late: the chat never took call audio.
+        assertEquals(emptyList(), routes)
+    }
+
+    /** The route is settled before the microphone opens: changing it under a recording clips what's said. */
+    @Test
+    fun chainedAudioIsOpenBeforeTheFirstListen() = runTest {
+        val player = Player()
+        val heard = OneRequest()
+        var openAtFirstListen: Boolean? = null
+        val recorder = object : VoiceRecorder by heard {
+            override suspend fun record(activity: VoiceActivity, onLevel: (Float) -> Unit, onSpeech: () -> Unit): Recording {
+                if (openAtFirstListen == null) openAtFirstListen = player.audioOpen
+                return heard.record(activity, onLevel, onSpeech)
+            }
+        }
+        val setup = chat(player = player, recorder = recorder) { Stream() }
+        assertEquals(true, openAtFirstListen)
+        setup.voice.stopChat()
+    }
+
+    /** An older gateway can't say whether talk-over is on: the chat takes call audio, as it always did. */
+    @Test
+    fun chainedAudioIsOpenWhenTheGatewayCannotSay() = runTest {
+        val player = Player()
+        val setup = chat(player = player, config = "Not Found", configStatus = HttpStatusCode.NotFound) { Stream() }
+        assertTrue(player.audioOpen)
+        setup.voice.stopChat()
+        assertFalse(player.audioOpen)
+    }
+
+    /** Nothing is recorded, and no route taken, until the gateway has said: then the chat listens on the right one. */
+    @Test
+    fun theFirstListenWaitsForTheGatewayToSay() = runTest {
+        val routes = mutableListOf<String>()
+        val recorder = OneRequest()
+        val gate = CompletableDeferred<Unit>()
+        val setup = chat(
+            player = Player(routes = routes), recorder = recorder, config = """{"voice":{"barge_in":false}}""",
+            configGate = gate, awaitSubmit = false,
+        ) { Stream() }
+        repeat(5) { yield() }
+        assertEquals(0, recorder.recordings)
+        assertEquals(emptyList(), routes)
+
+        gate.complete(Unit)
+        setup.socket.submits.first { it.isNotEmpty() }
+        assertEquals(emptyList(), routes)
+        setup.voice.stopChat()
+    }
+
+    /** Ended while the gateway is still being asked: no route is taken afterwards. */
+    @Test
+    fun aChatEndedBeforeTheGatewaySaysTakesNoRoute() = runTest {
+        val routes = mutableListOf<String>()
+        val gate = CompletableDeferred<Unit>()
+        val setup = chat(player = Player(routes = routes), configGate = gate, awaitSubmit = false) { Stream() }
+        yield()
+        setup.voice.stopChat()
+        gate.complete(Unit)
+        setup.voice.chat.first { it.phase == VoicePhase.Off }
+        yield()
+        assertEquals(emptyList(), routes)
     }
 
     @Test

@@ -281,8 +281,8 @@ class AndroidSpeechPlayer(private val context: Context) : SpeechPlayer {
     private var clip: MediaPlayer? = null
 
     /**
-     * A chained chat on the phone's own speaker uses call routing, so the phone's echo cancelling keeps the voice out
-     * of the microphone. Headphones, earbuds or another speaker keep their usual route: call routing would move
+     * A chained chat with talk-over on, on the phone's own speaker, uses call routing, so the phone's echo cancelling
+     * keeps the voice out of the microphone. Headphones, earbuds or another speaker keep their usual route: call routing would move
      * earbuds without a call profile to the phone's speaker and drop the others to call quality. A route that won't
      * take leaves the chat on its usual one, never on the earpiece. Headphones that come or go mid-chat change the
      * route. The returned close action is safe to call again; the route goes back once every chat has closed.

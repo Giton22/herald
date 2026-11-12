@@ -161,7 +161,7 @@ object NoDeviceDictation : DeviceDictation {
 interface SpeechPlayer {
     /**
      * Sets up chained chat audio; the returned action restores it. Best effort: neither throws, and a chat goes on
-     * without it. Other voice modes don't call this.
+     * without it. Only a chat with talk-over on calls this, before its first listen; other voice modes don't.
      */
     fun chainedChatAudio(): () -> Unit = {}
 

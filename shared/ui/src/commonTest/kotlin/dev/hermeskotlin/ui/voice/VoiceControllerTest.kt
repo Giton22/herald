@@ -19,6 +19,7 @@ import dev.hermeskotlin.core.voice.VoiceActivity
 import dev.hermeskotlin.core.voice.VoiceKeepAlive
 import dev.hermeskotlin.core.voice.VoiceRecorder
 import io.ktor.client.engine.mock.MockEngine
+import io.ktor.client.engine.mock.MockEngineConfig
 import io.ktor.client.engine.mock.respond
 import io.ktor.client.engine.mock.toByteArray
 import io.ktor.client.request.HttpRequestData
@@ -27,12 +28,14 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
@@ -100,9 +103,14 @@ class VoiceControllerTest {
         leased: CompletableDeferred<Unit>? = null,
         /** How many transcriptions fail before they work again. */
         transcribeFailures: Int = 0,
+        /**
+         * Where the gateway answers. A test that steps the clock by hand gives its own scheduler, so the profile's
+         * settings, asked for before the first listen, are in by the time it looks; otherwise another thread.
+         */
+        dispatcher: CoroutineDispatcher? = null,
     ) = AudioApi(
         createHttpClient(
-            MockEngine { request ->
+            MockEngine(MockEngineConfig().apply { dispatcher?.let { this.dispatcher = it } }.also { it.addHandler { request ->
                 requests.add(request)
                 if (request.url.encodedPath == "/api/audio/tts-lease") leased?.complete(Unit)
                 val transcribes = requests.count { it.url.encodedPath == "/api/audio/transcribe" }
@@ -114,7 +122,7 @@ class VoiceControllerTest {
                     }
                     else -> respond("""{"ok":true}""", HttpStatusCode.OK, json)
                 }
-            },
+            } }),
             PersistentCookiesStorage(InMemoryKeyValueStore()),
         ),
     )
@@ -771,7 +779,8 @@ class VoiceControllerTest {
     fun aChatStartedAgainThatEndsFirstStillLetsTheCallServiceGo() = runTest {
         val keeper = SharedKeeper()
         val recorder = SlowThenBrokenRecorder(stopMs = 10_000)
-        val voice = VoiceController(audio("unused", Requests()), recorder, FakePlayer(), backgroundScope, backgroundScope, keepAlive = keeper)
+        val api = audio("unused", Requests(), dispatcher = StandardTestDispatcher(testScheduler))
+        val voice = VoiceController(api, recorder, FakePlayer(), backgroundScope, backgroundScope, keepAlive = keeper)
 
         voice.startChat(offlineSession(), gateway, null)
         recorder.listening.await()
@@ -892,12 +901,13 @@ class VoiceControllerTest {
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     @Test
     fun aChatStuckEndingIsWaitedOnOnlyOnce() = runTest {
+        val onClock = StandardTestDispatcher(testScheduler)
         val slow = SlowToStopRecorder(stopMs = 60_000)
-        val stuck = VoiceController(audio("unused", Requests()), slow, FakePlayer(), backgroundScope, backgroundScope)
+        val stuck = VoiceController(audio("unused", Requests(), dispatcher = onClock), slow, FakePlayer(), backgroundScope, backgroundScope)
         val second = ScriptedRecorder()
-        val two = VoiceController(audio("unused", Requests()), second, FakePlayer(), backgroundScope, backgroundScope)
+        val two = VoiceController(audio("unused", Requests(), dispatcher = onClock), second, FakePlayer(), backgroundScope, backgroundScope)
         val third = ScriptedRecorder()
-        val three = VoiceController(audio("unused", Requests()), third, FakePlayer(), backgroundScope, backgroundScope)
+        val three = VoiceController(audio("unused", Requests(), dispatcher = onClock), third, FakePlayer(), backgroundScope, backgroundScope)
 
         stuck.startChat(offlineSession(), gateway, null)
         slow.listening.await()

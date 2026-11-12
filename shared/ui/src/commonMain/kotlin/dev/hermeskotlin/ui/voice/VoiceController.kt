@@ -254,9 +254,14 @@ class VoiceController(
                         // A connection cue must never prevent the call.
                     }
                 } else null
-                if (startLive(session, gateway, profile, opener) { ringing?.cancelAndJoin() }) return@launch
+                // Asked while the live check goes on: a chained chat needs it before its first listen.
+                val talkOver = async { audio.bargeIn(gateway, profile) }
+                if (startLive(session, gateway, profile, opener) { ringing?.cancelAndJoin() }) {
+                    talkOver.cancel()
+                    return@launch
+                }
                 ringing?.cancelAndJoin()
-                converseChained(session, gateway, profile, pauseMs, opener)
+                converseChained(session, gateway, profile, pauseMs, opener, talkOver)
             } finally {
                 ringing?.cancel()
 
@@ -301,12 +306,20 @@ class VoiceController(
     }
 
     /** Desktop's chained voice chat: listen, send what you said, read the reply aloud, until it ends. */
-    private suspend fun converseChained(session: ChatSession, gateway: GatewayUrl, profile: String?, pauseMs: Long, opener: CallReason?) = coroutineScope {
-        val closeAudio = player.chainedChatAudio()
+    private suspend fun converseChained(
+        session: ChatSession,
+        gateway: GatewayUrl,
+        profile: String?,
+        pauseMs: Long,
+        opener: CallReason?,
+        settings: Deferred<BargeInSettings>,
+    ) = coroutineScope {
+        // Only talk-over needs call audio, for its echo cancelling. The route is settled before the first listen or
+        // the opener, since changing it under a recording or a voice clips them. A gateway that can't say has
+        // talk-over on, so it gets call audio.
+        val closeAudio: () -> Unit = if (settings.await().enabled) player.chainedChatAudio() else ({})
         chainedAudio = closeAudio
         appScope.launch { audio.ttsLease(gateway, active = true, profile) }
-        // Read while the first listen goes on; it's needed once the first reply is on its way.
-        val settings = async { audio.bargeIn(gateway, profile) }
         bargeIn = settings
         cantListenOver = false
         val running = coroutineContext.job
