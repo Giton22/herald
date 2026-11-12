@@ -154,6 +154,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.composables.icons.lucide.Archive
 import com.composables.icons.lucide.Blocks
+import com.composables.icons.lucide.Kanban
 import com.composables.icons.lucide.Puzzle
 import com.composables.icons.lucide.SlidersHorizontal
 import com.composables.icons.lucide.ArchiveRestore
@@ -301,6 +302,7 @@ import dev.hermeskotlin.core.plugins.DashboardPlugin
 import dev.hermeskotlin.core.rooms.DesktopRoom
 import dev.hermeskotlin.ui.rooms.CreateRoomDialog
 import dev.hermeskotlin.ui.plugins.PluginsPage
+import dev.hermeskotlin.ui.kanban.KanbanPage
 import dev.hermeskotlin.ui.rooms.RoomsViewModel
 import org.koin.compose.viewmodel.koinViewModel
 import dev.hermeskotlin.ui.resources.*
@@ -440,6 +442,7 @@ fun SessionsSidebar(
     }
     var pluginsOpen by remember { mutableStateOf(false) }
     var insightsOpen by remember { mutableStateOf(false) }
+    var kanbanOpen by remember { mutableStateOf(false) }
     /** The bot whose routines are showing. */
     var routinesOf by remember { mutableStateOf<Bot?>(null) }
     var actionTarget by remember { mutableStateOf<SessionSummary?>(null) }
@@ -502,8 +505,9 @@ fun SessionsSidebar(
         configOpen = false
         pluginsOpen = false
         insightsOpen = false
+        kanbanOpen = false
     }
-    val pageOpen = scheduledOpen || inboxOpen || routinesOf != null || capabilitiesOpen || configOpen || pluginsOpen || insightsOpen
+    val pageOpen = scheduledOpen || inboxOpen || routinesOf != null || capabilitiesOpen || configOpen || pluginsOpen || insightsOpen || kanbanOpen
 
     // Back steps out of search or the Scheduled / Archived pages before it closes the drawer. On the desktop the
     // sidebar stays put and a filter is picked like a tab, so Escape leaves it for the chat (stopping a reply).
@@ -600,6 +604,7 @@ fun SessionsSidebar(
                 configOpen = false
                 pluginsOpen = false
                 insightsOpen = false
+                kanbanOpen = false
                 if (state.filter != SessionListFilter.Recent) viewModel.setFilter(SessionListFilter.Recent)
                 when (shortcut.page) {
                     SidebarPage.Chats -> pickMode(SidebarMode.Chats)
@@ -614,6 +619,7 @@ fun SessionsSidebar(
                     SidebarPage.Config -> configOpen = true
                     SidebarPage.Plugins -> pluginsOpen = true
                     SidebarPage.Insights -> insightsOpen = true
+                    SidebarPage.Kanban -> kanbanOpen = true
                 }
             }
             else -> false
@@ -647,6 +653,7 @@ fun SessionsSidebar(
         configOpen -> "config"
         pluginsOpen -> "plugins"
         insightsOpen -> "insights"
+        kanbanOpen -> "kanban"
         else -> null
     }
     // Beside the sidebar, a page stays live while the sidebar is folded away.
@@ -708,6 +715,12 @@ fun SessionsSidebar(
                 onBack = { insightsOpen = false },
                 onSessionExpired = onSessionExpired,
             )
+            kanbanOpen -> KanbanPage(
+                gateway = gateway,
+                visible = pageVisible,
+                onBack = { kanbanOpen = false },
+                onSessionExpired = onSessionExpired,
+            )
         }
     }
     // The page buttons left on in Settings › Sidebar pages, over the chats; over the bots too while the switch is
@@ -724,6 +737,7 @@ fun SessionsSidebar(
                     SidebarPage.Capabilities -> NavLink(icon, label, selected = pageInMain && capabilitiesOpen) { closePages(); capabilitiesOpen = true }
                     SidebarPage.Plugins -> NavLink(icon, label, selected = pageInMain && pluginsOpen) { closePages(); pluginsOpen = true }
                     SidebarPage.Config -> NavLink(icon, label, selected = pageInMain && configOpen) { closePages(); configOpen = true }
+                    SidebarPage.Kanban -> NavLink(icon, label, selected = pageInMain && kanbanOpen) { closePages(); kanbanOpen = true }
                     SidebarPage.Archived -> NavLink(icon, label, selected = isDesktop && state.filter == SessionListFilter.Archived) {
                         viewModel.setFilter(SessionListFilter.Archived)
                     }
@@ -739,7 +753,7 @@ fun SessionsSidebar(
         DisposableEffect(pageKey) {
             val key = pageKey
             // Scheduled and Config lay a list beside what's open in it, so they take a wider page.
-            val wide = key == "scheduled" || key == "config" || key?.startsWith("routines:") == true
+            val wide = key == "scheduled" || key == "config" || key == "kanban" || key?.startsWith("routines:") == true
             if (key != null) mainPage.show(key, { latest() }, close = { closePages() }, wide = wide)
             onDispose { if (key != null) mainPage.clear(key) }
         }
@@ -1697,6 +1711,7 @@ internal val NAV_PAGES = listOf(
     SidebarPage.Inbox,
     SidebarPage.Scheduled,
     SidebarPage.Insights,
+    SidebarPage.Kanban,
     SidebarPage.Capabilities,
     SidebarPage.Plugins,
     SidebarPage.Config,
@@ -1720,6 +1735,7 @@ internal fun navIcon(page: SidebarPage): ImageVector = when (page) {
     SidebarPage.Inbox -> Lucide.Inbox
     SidebarPage.Scheduled -> Lucide.CalendarClock
     SidebarPage.Insights -> Lucide.ChartColumn
+    SidebarPage.Kanban -> Lucide.Kanban
     SidebarPage.Capabilities -> Lucide.Blocks
     SidebarPage.Plugins -> Lucide.Puzzle
     SidebarPage.Config -> Lucide.SlidersHorizontal
@@ -1733,6 +1749,7 @@ internal fun navLabel(page: SidebarPage): StringResource = when (page) {
     SidebarPage.Inbox -> Res.string.sessions_nav_inbox
     SidebarPage.Scheduled -> Res.string.sessions_nav_scheduled
     SidebarPage.Insights -> Res.string.sessions_nav_insights
+    SidebarPage.Kanban -> Res.string.kanban_title
     SidebarPage.Capabilities -> Res.string.sessions_nav_capabilities
     SidebarPage.Plugins -> Res.string.sessions_nav_plugins
     SidebarPage.Config -> Res.string.sessions_nav_config

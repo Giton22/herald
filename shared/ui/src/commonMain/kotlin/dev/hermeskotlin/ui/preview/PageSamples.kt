@@ -67,6 +67,15 @@ import dev.hermeskotlin.core.journey.JourneyGraph
 import dev.hermeskotlin.core.journey.JourneyNode
 import dev.hermeskotlin.ui.journey.JourneyState
 import dev.hermeskotlin.core.plugins.PluginTab
+import dev.hermeskotlin.core.kanban.KanbanAge
+import dev.hermeskotlin.core.kanban.KanbanBoardMeta
+import dev.hermeskotlin.core.kanban.KanbanBoardResponse
+import dev.hermeskotlin.core.kanban.KanbanColumn
+import dev.hermeskotlin.core.kanban.KanbanLinkCounts
+import dev.hermeskotlin.core.kanban.KanbanProgress
+import dev.hermeskotlin.core.kanban.KanbanTask
+import dev.hermeskotlin.core.kanban.KanbanWarnings
+import dev.hermeskotlin.ui.kanban.KanbanUiState
 
 /** Made-up data for the sidebar pages and the chat's sheets, in the same home-server story as [ChatSamples]. */
 internal object PageSamples {
@@ -505,4 +514,56 @@ internal object PageSamples {
 
     /** Picked lately, newest first. */
     val recentModels = listOf("openai-codex/gpt-6.1-sol", "openrouter/deepseek/deepseek-v4", "anthropic/claude-opus-5-5")
+
+    /** Two boards and a week's cards, so the board rail and the column rail read when drawn. */
+    fun kanban(): KanbanUiState {
+        val now = Clock.System.now().toEpochMilliseconds() / 1000
+        val hour = 3600L
+        fun task(id: String, title: String, status: String, assignee: String? = null, ageHours: Long = 2, warnings: KanbanWarnings? = null, priority: Int = 0, tenant: String? = null) = KanbanTask(
+            id = id,
+            title = title,
+            status = status,
+            assignee = assignee,
+            priority = priority,
+            tenant = tenant,
+            workspaceKind = "dir",
+            workspacePath = "/home/you/projects/kyllene",
+            age = KanbanAge(createdAgeSeconds = ageHours * hour, startedAgeSeconds = ageHours * hour / 2),
+            createdAt = now - ageHours * hour,
+            linkCounts = KanbanLinkCounts(0, 0),
+            warnings = warnings,
+            latestSummary = "",
+        )
+        return KanbanUiState(
+            boards = listOf(
+                KanbanBoardMeta(slug = "waypoint", name = "Waypoint", counts = mapOf("running" to 1, "todo" to 2), total = 3, isCurrent = true),
+                KanbanBoardMeta(slug = "herald", name = "Herald / Kyllene", counts = mapOf("done" to 2, "review" to 1), total = 3),
+            ),
+            boardsLoading = false,
+            board = "waypoint",
+            response = KanbanBoardResponse(
+                columns = listOf(
+                    KanbanColumn("ready", listOf(task("t_1", "APIs: the schedule off the wire", "ready", "coder", 3, priority = 10, tenant = "herald"))),
+                    KanbanColumn(
+                        "running",
+                        listOf(
+                            task("t_2", "Shell: a clock that finishes the turn", "running", "coder", 1, warnings = KanbanWarnings(1, mapOf("crash" to 1), highestSeverity = "error")),
+                        ),
+                    ),
+                    KanbanColumn(
+                        "blocked",
+                        listOf(
+                            task("t_3", "Gateway: chat over the Webapp listener", "blocked", "reviewer", 26),
+                        ),
+                    ),
+                    KanbanColumn("done", listOf(task("t_4", "Fix the flaky reconnect test", "done", "coder", 30))),
+                ),
+                tenants = listOf("herald"),
+                assignees = listOf("coder", "reviewer"),
+                latestEventId = 42,
+                now = now,
+            ),
+            loading = false,
+        )
+    }
 }

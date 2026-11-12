@@ -12,6 +12,7 @@ import dev.hermeskotlin.ui.sessions.CapabilitiesViewModel
 import dev.hermeskotlin.ui.sessions.SkillsHubViewModel
 import dev.hermeskotlin.ui.sessions.ConfigViewModel
 import dev.hermeskotlin.ui.plugins.PluginsViewModel
+import dev.hermeskotlin.ui.kanban.KanbanViewModel
 import dev.hermeskotlin.ui.sessions.InsightsViewModel
 import dev.hermeskotlin.ui.inbox.InboxViewModel
 import dev.hermeskotlin.core.inbox.InboxNotices
@@ -45,6 +46,7 @@ val uiModule = module {
     viewModelOf(::SkillsHubViewModel)
     viewModelOf(::ConfigViewModel)
     viewModelOf(::PluginsViewModel)
+    viewModelOf(::KanbanViewModel)
     viewModelOf(::InsightsViewModel)
     // Spelled out: past 22 parameters viewModelOf has no overload, and the last two are optional.
     viewModel {

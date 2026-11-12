@@ -23,6 +23,9 @@ import dev.hermeskotlin.core.capabilities.SkillsHubApi
 import dev.hermeskotlin.core.plugins.NextPromptApi
 import dev.hermeskotlin.core.plugins.PluginsApi
 import dev.hermeskotlin.core.cron.CronApi
+import dev.hermeskotlin.core.kanban.GatewayKanbanEvents
+import dev.hermeskotlin.core.kanban.KanbanEvents
+import dev.hermeskotlin.core.kanban.KanbanApi
 import dev.hermeskotlin.core.insights.InsightsApi
 import dev.hermeskotlin.core.config.ConfigApi
 import dev.hermeskotlin.core.connection.GatewayConnection
@@ -71,6 +74,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import org.koin.core.module.Module
 import org.koin.core.qualifier.named
+import org.koin.dsl.bind
 import org.koin.dsl.module
 
 private const val OUTSIDE_CLIENT = "outside"
@@ -101,6 +105,8 @@ val coreModule = module {
     single { SkillsHubApi(get()) }
     single { PluginsApi(get()) }
     single { NextPromptApi(get(), get(), get()) }
+    single { KanbanApi(get()) }
+    single { GatewayKanbanEvents(get<HttpClient>(), get<AuthApi>()) } bind KanbanEvents::class
     single { InsightsApi(get()) }
     single { ConfigApi(get()) }
     single { LastChatStore(get()) }
