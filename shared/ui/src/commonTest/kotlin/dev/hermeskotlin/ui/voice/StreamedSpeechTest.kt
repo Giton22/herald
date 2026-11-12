@@ -356,6 +356,14 @@ class StreamedSpeechTest {
     }
 
     @Test
+    fun chainedAudioIsNotRoutedForTalkOverDisabled() = runTest {
+        val player = Player()
+        val setup = chat(player = player, config = """{"voice":{"barge_in":false}}""") { Stream() }
+        assertFalse(player.audioOpen)
+        setup.voice.stopChat()
+    }
+
+    @Test
     fun chainedAudioIsOpenBeforeTheReplyAndClosedOnEnd() = runTest {
         val player = Player()
         val setup = chat(Stream(), player)

@@ -302,11 +302,15 @@ class VoiceController(
 
     /** Desktop's chained voice chat: listen, send what you said, read the reply aloud, until it ends. */
     private suspend fun converseChained(session: ChatSession, gateway: GatewayUrl, profile: String?, pauseMs: Long, opener: CallReason?) = coroutineScope {
-        val closeAudio = player.chainedChatAudio()
-        chainedAudio = closeAudio
-        appScope.launch { audio.ttsLease(gateway, active = true, profile) }
-        // Read while the first listen goes on; it's needed once the first reply is on its way.
+        // Read the profile without holding up the first listen. Only talk-over needs call audio for echo cancellation.
         val settings = async { audio.bargeIn(gateway, profile) }
+        var restoreAudio: (() -> Unit)? = null
+        val closeAudio: () -> Unit = { restoreAudio?.invoke(); restoreAudio = null }
+        chainedAudio = closeAudio
+        val route = launch {
+            if (settings.await().enabled) restoreAudio = player.chainedChatAudio()
+        }
+        appScope.launch { audio.ttsLease(gateway, active = true, profile) }
         bargeIn = settings
         cantListenOver = false
         val running = coroutineContext.job
@@ -341,6 +345,7 @@ class VoiceController(
                 }
             }
         } finally {
+            route.cancel()
             bargeIn = null
             // A newer chat may have started while this one wound down; it keeps its own.
             if (chained === running) chained = null
