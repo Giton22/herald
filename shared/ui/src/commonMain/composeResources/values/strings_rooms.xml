@@ -125,6 +125,10 @@
     <string name="bots_start_fresh_detail">%1$s’s chat is archived and a new, empty one begins. %1$s keeps its memory, skills and settings, and the old chat stays on the gateway, archived.</string>
     <string name="bots_edit_named">Edit %1$s</string>
     <string name="bots_face">Face</string>
+    <string name="bots_photo_choose">Choose photo</string>
+    <string name="bots_photo_change">Change photo</string>
+    <string name="bots_photo_remove">Remove photo</string>
+    <string name="bots_photo_save_failed">Couldn’t save %1$s’s picture.</string>
     <string name="bots_shape_circle">Circle</string>
     <string name="bots_shape_squircle">Squircle</string>
     <string name="bots_shape_pill">Pill</string>

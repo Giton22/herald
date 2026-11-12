@@ -40,6 +40,24 @@ class BotsApi(private val connection: GatewayConnection) : BotChatBackend {
     }
 
     /**
+     * Sets [name]'s picture (`profiles.set_asset`): [png] as the bot's face on every client, Desktop's included,
+     * or null to take it away so its shape is drawn again. The gateway keeps one PNG, JPEG or WebP of up to 2 MB.
+     */
+    @OptIn(ExperimentalEncodingApi::class)
+    suspend fun setAvatar(name: String, png: ByteArray?) {
+        val reply = client().request(
+            "profiles.set_asset",
+            buildJsonObject {
+                put("name", name)
+                put("asset", "avatar")
+                if (png == null) put("clear", true) else put("data", "data:image/png;base64," + Base64.encode(png))
+            },
+            timeoutMs = SLOW_MS,
+        ) as? JsonObject
+        if ((reply?.get("ok") as? JsonPrimitive)?.booleanOrNull != true) throw RpcException(0, "The gateway didn't keep the picture.")
+    }
+
+    /**
      * Changes some of [name]'s Bot Mode fields (null removes one), the way Desktop writes them: the gateway
      * merges `ui_meta` per top-level key, so the whole `hermes-bots` block goes, read fresh and named by its
      * revision so a concurrent edit from Desktop isn't overwritten; a lost race reads again and retries.

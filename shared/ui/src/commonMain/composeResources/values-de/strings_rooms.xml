@@ -122,6 +122,10 @@
     <string name="bots_start_fresh_detail">Der Chat von %1$s wird archiviert und ein neuer, leerer beginnt. %1$s behält sein Gedächtnis, seine Skills und Einstellungen, und der alte Chat bleibt archiviert auf dem Gateway.</string>
     <string name="bots_edit_named">%1$s bearbeiten</string>
     <string name="bots_face">Gesicht</string>
+    <string name="bots_photo_choose">Foto wählen</string>
+    <string name="bots_photo_change">Foto ändern</string>
+    <string name="bots_photo_remove">Foto entfernen</string>
+    <string name="bots_photo_save_failed">Das Bild von %1$s konnte nicht gespeichert werden.</string>
     <string name="bots_shape_circle">Kreis</string>
     <string name="bots_shape_squircle">Squircle</string>
     <string name="bots_shape_pill">Pille</string>
