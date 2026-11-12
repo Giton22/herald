@@ -373,6 +373,7 @@ fun main(args: Array<String>) {
                             appVersion = System.getProperty("herald.version"),
                             releasesRepo = System.getProperty("herald.releasesRepo"),
                             onDarkTheme = { titleBar?.dark(it) },
+                            onBackground = { paintWindowBackground(window, it) },
                             titleBar = titleBar?.forScreens(),
                             // Signed out of a gateway, or left for another: its chats' windows close, calls and all.
                             onSessionEnded = { url -> chatWindows.removeAll { it.target.gateway.url == url } },

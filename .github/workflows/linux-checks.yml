@@ -29,6 +29,9 @@ jobs:
           ./gradlew --no-daemon --max-workers=4
           :shared:core:jvmTest :shared:designsystem:jvmTest :shared:ui:jvmTest
           :shared:wearlink:jvmTest :desktopApp:jvmTest :desktopApp:compileKotlinJvm
+      - name: Desktop tests that need a display
+        # They skip themselves in the step above, which has none.
+        run: xvfb-run -a ./gradlew --no-daemon :desktopApp:jvmTest --tests "*WindowBackgroundTest"
       - name: Lightweight packaging contracts
         run: |
           # Without Pillow the installed-smoke tests skip, and no other job runs them.
