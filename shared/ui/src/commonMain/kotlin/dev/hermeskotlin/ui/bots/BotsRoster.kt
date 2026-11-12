@@ -63,6 +63,7 @@ import com.composables.icons.lucide.EyeOff
 import com.composables.icons.lucide.History
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.MessageSquarePlus
+import com.composables.icons.lucide.Monitor
 import com.composables.icons.lucide.Pencil
 import com.composables.icons.lucide.Pin
 import com.composables.icons.lucide.PinOff
@@ -165,6 +166,9 @@ interface BotActions {
 
     /** The bot's scheduled routines. */
     fun routines(bot: Bot)
+
+    /** The bot's screen: the live picture of what it is doing, and the user's hand on it. */
+    fun screen(bot: Bot)
 }
 
 /**
@@ -469,6 +473,7 @@ private fun BotCard(
     val openRecent = stringResource(Res.string.bots_open_recent)
     val newChat = stringResource(Res.string.bots_new_chat_with, bot.label)
     val routines = stringResource(Res.string.bots_routines)
+    val screen = stringResource(Res.string.bots_screen)
     val startFresh = stringResource(Res.string.bots_start_fresh)
     val edit = stringResource(Res.string.bots_edit)
     val duplicate = stringResource(Res.string.bots_duplicate)
@@ -481,6 +486,7 @@ private fun BotCard(
             RowMenuItem(openRecent, Lucide.History) { actions.openRecent(bot) }.takeIf { recent != null },
             RowMenuItem(newChat, Lucide.MessageSquarePlus) { actions.newChat(bot) },
             RowMenuItem(routines, Lucide.CalendarClock) { actions.routines(bot) },
+            RowMenuItem(screen, Lucide.Monitor) { actions.screen(bot) },
             RowMenuItem(startFresh, Lucide.RotateCcw, run = onStartOver).takeIf { bot.canonicalSession != null },
             RowMenuItem(edit, Lucide.Pencil) { actions.edit(bot) },
             RowMenuItem(duplicate, Lucide.Copy) { actions.duplicate(bot) },

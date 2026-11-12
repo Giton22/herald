@@ -102,6 +102,30 @@ commentary moves from the reply into Reasoning when the chat loads again.
 **Codegen:** `components.schemas` is JSON Schema → generate `@Serializable` Kotlin classes rather than
 hand-writing ~1 MB of contract. Regenerate when bumping supported Hermes version.
 
+### Bot Screen: `display.*` and the display stream
+- The gateway can give a bot its own desktop (a virtual X display with Xfce) on a **Linux** gateway host.
+  The methods, all scoped by `profile`:
+  - `display.status` — `supported`, `installed`, `missing`, `running`, `display`, `socket`, `geometry`,
+    `memory_available_mb`, `memory_limit_mb`, `blocker`, `install_command` (the exact line to run on the
+    gateway host), `lease` (`holder`, `viewer_hash`, `since`, `epoch`, `reason`)
+  - `display.start`, `display.stop {force}` — starting is idempotent; stopping is refused while a human
+    holds the screen
+  - `display.thumbnail` — a JPEG `data_url`, nothing while a human holds the screen
+  - `display.observe {viewer_id?}` — mints a **single-use ticket that lives 30 s**, the route
+    `/api/display/ws` and a server-minted `viewer_id`
+- The stream: `GET /api/display/ws?display_ticket=<ticket>` upgrades to a WebSocket that carries the
+  **raw RFB bytes** of the desktop as binary frames, both ways. The gateway splices the screen's own RFB
+  socket into it; the ticket rides in the query because a viewer cannot add a header to the socket.
+  The client speaks ordinary RFB (3.8, no password, 32-bit true colour): the app's viewer page is
+  [noVNC](https://novnc.com/), which asks for the encodings it can read (raw, copy-rect, hextile, tight,
+  desktop-size) and draws them. The stream is a plain RFB server on the other side — TigerVNC's Xvnc —
+  so any RFB client can read it.
+- Control: `display.lease.acquire {viewer_id}` and `display.lease.release {viewer_id?, force?}`. The lease
+  is the gate — the gateway **drops the keyboard, pointer and clipboard messages of a viewer that does not
+  hold it**, so a client sends what the user does and lets the gateway answer. A dropped link keeps the
+  holder, so a viewer that comes back with the same `viewer_id` finds its lease waiting.
+- A gateway older than the Bot Screen has no `display.*` at all and answers `-32601` (method not found).
+
 ---
 
 ## 2. Gateway API server (later / "lite" mode)

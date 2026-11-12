@@ -302,6 +302,7 @@ import dev.hermeskotlin.core.rooms.DesktopRoom
 import dev.hermeskotlin.ui.rooms.CreateRoomDialog
 import dev.hermeskotlin.ui.plugins.PluginsPage
 import dev.hermeskotlin.ui.rooms.RoomsViewModel
+import dev.hermeskotlin.ui.screen.ScreenPane
 import org.koin.compose.viewmodel.koinViewModel
 import dev.hermeskotlin.ui.resources.*
 import org.jetbrains.compose.resources.StringResource
@@ -442,6 +443,8 @@ fun SessionsSidebar(
     var insightsOpen by remember { mutableStateOf(false) }
     /** The bot whose routines are showing. */
     var routinesOf by remember { mutableStateOf<Bot?>(null) }
+    /** The bot whose screen is showing. */
+    var screenOf by remember { mutableStateOf<Bot?>(null) }
     var actionTarget by remember { mutableStateOf<SessionSummary?>(null) }
     var renameTarget by remember { mutableStateOf<SessionSummary?>(null) }
     var deleteTarget by remember { mutableStateOf<SessionSummary?>(null) }
@@ -498,12 +501,13 @@ fun SessionsSidebar(
             // What was fixed there shows on the roster at once.
             bots.refreshRoutines()
         }
+        screenOf = null
         capabilitiesOpen = false
         configOpen = false
         pluginsOpen = false
         insightsOpen = false
     }
-    val pageOpen = scheduledOpen || inboxOpen || routinesOf != null || capabilitiesOpen || configOpen || pluginsOpen || insightsOpen
+    val pageOpen = scheduledOpen || inboxOpen || routinesOf != null || screenOf != null || capabilitiesOpen || configOpen || pluginsOpen || insightsOpen
 
     // Back steps out of search or the Scheduled / Archived pages before it closes the drawer. On the desktop the
     // sidebar stays put and a filter is picked like a tab, so Escape leaves it for the chat (stopping a reply).
@@ -596,6 +600,7 @@ fun SessionsSidebar(
                 scheduledOpen = false
                 inboxOpen = false
                 routinesOf = null
+                screenOf = null
                 capabilitiesOpen = false
                 configOpen = false
                 pluginsOpen = false
@@ -642,6 +647,7 @@ fun SessionsSidebar(
     val pageKey = when {
         inboxOpen -> "inbox"
         scheduledOpen -> "scheduled"
+        screenOf != null -> "screen:${screenOf?.name}"
         routinesOf != null -> "routines:${routinesOf?.name}"
         capabilitiesOpen -> "capabilities"
         configOpen -> "config"
@@ -653,6 +659,7 @@ fun SessionsSidebar(
     val pageVisible = visible || pageInMain
     val pageView: @Composable () -> Unit = {
         val bot = routinesOf
+        val screenBot = screenOf
         when {
             inboxOpen -> InboxPage(
                 gateway = gateway,
@@ -671,6 +678,11 @@ fun SessionsSidebar(
                 onOpenRun = open,
                 onSessionExpired = onSessionExpired,
                 onPopOutRun = popOut.takeIf { isDesktop },
+            )
+            screenBot != null -> ScreenPane(
+                bot = screenBot,
+                gateway = gateway,
+                onBack = { closePages() },
             )
             bot != null -> ScheduledPage(
                 gateway = gateway,
@@ -839,6 +851,9 @@ fun SessionsSidebar(
                                     override fun checkAgain(bot: Bot) = bots.checkAgain(bot)
                                     override fun routines(bot: Bot) {
                                         routinesOf = bot
+                                    }
+                                    override fun screen(bot: Bot) {
+                                        screenOf = bot
                                     }
                                 }
                             },
@@ -1335,6 +1350,7 @@ internal object PreviewBotActions : BotActions {
     override fun delete(bot: Bot) = Unit
     override fun checkAgain(bot: Bot) = Unit
     override fun routines(bot: Bot) = Unit
+    override fun screen(bot: Bot) = Unit
 }
 
 private val SessionListFilter.label: StringResource

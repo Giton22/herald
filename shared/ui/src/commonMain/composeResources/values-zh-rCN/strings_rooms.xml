@@ -104,6 +104,7 @@
     <string name="bots_open_recent">打开最近的会话</string>
     <string name="bots_new_chat_with">与 %1$s 新建对话</string>
     <string name="bots_routines">例行任务</string>
+    <string name="bots_screen">屏幕</string>
     <string name="bots_start_fresh">重新开始</string>
     <string name="bots_edit">编辑</string>
     <string name="bots_duplicate">复制</string>

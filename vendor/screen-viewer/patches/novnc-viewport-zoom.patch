@@ -1,0 +1,145 @@
+--- a/core/display.js	2026-11-02 14:13:34
++++ b/core/display.js	2026-11-02 14:13:34
+@@ -10,6 +10,9 @@
+ import Base64 from "./base64.js";
+ import { toSigned32bit } from './util/int.js';
+ 
++// Kyllene's patch: how far the view may be zoomed in.
++const MAX_ZOOM = 8;
++
+ export default class Display {
+     constructor(target) {
+         this._drawCtx = null;
+@@ -61,6 +64,8 @@
+ 
+         this._scale = 1.0;
+         this._clipViewport = false;
++        // Kyllene's patch: how much bigger the view is than the whole screen.
++        this._zoom = 1;
+     }
+ 
+     // ===== PROPERTIES =====
+@@ -70,6 +75,33 @@
+         this._rescale(scale);
+     }
+ 
++    // Kyllene's patch: the zoom.
++    //
++    // The view is a part of the screen, and the zoom says how much of it there is. The screen is
++    // not scaled up: the part of it that is looked at is drawn larger, so what is under the user's
++    // finger stays where it was, and what the remote gets is still the pixel the user pointed at.
++    get zoom() { return this._zoom; }
++    set zoom(factor) {
++        const zoom = Math.min(Math.max(factor, 1), MAX_ZOOM);
++        this._zoom = zoom;
++
++        if ((this._fbWidth === 0) || (this._fbHeight === 0)) {
++            // The size of the screen is not known yet: the zoom is remembered and applied when it is.
++            return;
++        }
++
++        const vp = this._viewportLoc;
++        // What is in the middle of the view stays in the middle of the view.
++        const middleX = vp.x + vp.w / 2;
++        const middleY = vp.y + vp.h / 2;
++        const width = Math.max(1, Math.round(this._fbWidth / zoom));
++        const height = Math.max(1, Math.round(this._fbHeight / zoom));
++        // The view is a part of the screen, so the viewport may be smaller than the screen.
++        this._clipViewport = true;
++        this.viewportChangeSize(width, height);
++        this.viewportChangePos(middleX - (vp.x + width / 2), middleY - (vp.y + height / 2));
++    }
++
+     get clipViewport() { return this._clipViewport; }
+     set clipViewport(viewport) {
+         this._clipViewport = viewport;
+@@ -218,6 +250,9 @@
+         const vp = this._viewportLoc;
+         this.viewportChangeSize(vp.w, vp.h);
+         this.viewportChangePos(0, 0);
++
++        // Kyllene's patch: the zoom is a part of the screen, so it is measured against the new size.
++        this.zoom = this._zoom;
+     }
+ 
+     getImageData() {
+@@ -469,6 +504,10 @@
+             this._target.style.width = width;
+             this._target.style.height = height;
+         }
++
++        // Kyllene's patch: a part of the screen drawn larger keeps its own pixels, and a screen drawn
++        // smaller is easier to read when the browser smooths it.
++        this._target.style.imageRendering = (factor > 1) ? 'pixelated' : 'auto';
+     }
+ 
+     _setFillColor(color) {
+--- a/core/rfb.js	2026-11-02 14:13:34
++++ b/core/rfb.js	2026-11-02 14:13:34
+@@ -356,6 +356,30 @@
+         }
+     }
+ 
++    // Kyllene's patch: the zoom the app asks for, and the pan a finger asks for.
++    //
++    // noVNC can only scale the screen to fit, and its own pinch gesture zooms the *remote* desktop:
++    // it sends Ctrl and the mouse wheel, which the program on the other end zooms. To magnify what
++    // the user is looking at, the viewer has to look at a part of the screen and draw that part
++    // larger, which is what the display's zoom does.
++    get zoom() { return this._display.zoom; }
++    set zoom(value) {
++        this._display.zoom = value;
++        // The part of the screen that is looked at has to fill the page again.
++        const size = this._screenSize();
++        this._display.autoscale(size.w, size.h);
++        this._fixScrollbars();
++    }
++
++    // Moves the view the way a finger that slid across the page would.
++    //
++    // The distance is in page pixels, the way the finger moved, and not in screen pixels: the page is
++    // what the finger is on, and the screen is what is under it.
++    dragView(dx, dy) {
++        const scale = this._display.scale || 1;
++        this._display.viewportChangePos(-dx / scale, -dy / scale);
++    }
++
+     get resizeSession() { return this._resizeSession; }
+     set resizeSession(resize) {
+         this._resizeSession = resize;
+@@ -776,6 +800,10 @@
+     _updateScale() {
+         if (!this._scaleViewport) {
+             this._display.scale = 1.0;
++        } else if (this._display.zoom > 1) {
++            // Kyllene's patch: the zoom is a part of the screen that is looked at, so it has to be put
++            // back after anything that reset the viewport.
++            this.zoom = this._display.zoom;
+         } else {
+             const size = this._screenSize();
+             this._display.autoscale(size.w, size.h);
+@@ -1158,7 +1186,10 @@
+                         this._viewportHasMoved = true;
+ 
+                         this._viewportDragPos = {'x': pos.x, 'y': pos.y};
+-                        this._display.viewportChangePos(deltaX, deltaY);
++                        // Kyllene's patch: the drag is in page pixels, and the view is a part of the
++                        // screen drawn larger, so the distance is the page's and not the screen's.
++                        this._display.viewportChangePos(deltaX / this._display.scale,
++                                                        deltaY / this._display.scale);
+                     }
+ 
+                     // Skip sending mouse events
+@@ -1386,7 +1417,11 @@
+                                 this._viewportHasMoved = true;
+ 
+                                 this._viewportDragPos = {'x': pos.x, 'y': pos.y};
+-                                this._display.viewportChangePos(deltaX, deltaY);
++                                // Kyllene's patch: the drag is in page pixels, and the view is a part
++                                // of the screen drawn larger, so the distance is the page's and not
++                                // the screen's.
++                                this._display.viewportChangePos(deltaX / this._display.scale,
++                                                                deltaY / this._display.scale);
+                             }
+                         } else {
+                             this._fakeMouseMove(ev, pos.x, pos.y);

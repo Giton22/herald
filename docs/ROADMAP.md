@@ -261,6 +261,7 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [x] Rooms: notifications for bots' lines while Kyllene is out of sight (one conversation per room, a tap opens it), and an unread dot on room rows
 - [x] Rooms: @mention a member (`@` lists Everyone and the members with their faces; the composer says who answers first, by the gateway's own rule)
 - [x] Rooms: who's replying and who's next, read off the room's log; a member that passes says so
+- [x] Bot Screen: a bot's own desktop on a Linux gateway, watched live in the app and taken over when the bot needs a login, a 2FA code or a CAPTCHA (`display.status | thumbnail | start | stop | observe`, `display.lease.acquire | release`, then the RFB stream over `/api/display/ws`); the gateway holds the screen for the agent until someone takes over, and drops the keyboard, pointer and clipboard of a viewer that does not hold it, so the app sends what the user does and lets the gateway answer; a dropped link keeps the lease, and the app comes back with the same viewer id; the picture can be looked at closer (a pinch on a phone, buttons on a desktop), moved with a drag, and a double tap is a double click on the bot's own screen
 
 ### Automation & configuration
 - [x] Scheduled jobs in the sidebar (`GET /api/cron/jobs`): schedule in plain words, next run, state; a job page with its prompt, last error, Run now, Pause / Resume, and its runs (`/api/cron/jobs/{id}/runs`), each opening as a chat

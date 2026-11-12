@@ -106,6 +106,7 @@
     <string name="bots_open_recent">Ouvrir la session récente</string>
     <string name="bots_new_chat_with">Nouvelle conversation avec %1$s</string>
     <string name="bots_routines">Routines</string>
+    <string name="bots_screen">Écran</string>
     <string name="bots_start_fresh">Repartir de zéro</string>
     <string name="bots_edit">Modifier</string>
     <string name="bots_duplicate">Dupliquer</string>

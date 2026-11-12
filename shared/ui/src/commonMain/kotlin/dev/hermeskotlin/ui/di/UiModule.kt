@@ -18,6 +18,7 @@ import dev.hermeskotlin.core.inbox.InboxNotices
 import dev.hermeskotlin.core.inbox.NoInboxNotices
 import dev.hermeskotlin.ui.sessions.ScheduledViewModel
 import dev.hermeskotlin.ui.rooms.RoomsViewModel
+import dev.hermeskotlin.ui.screen.ScreenViewModel
 import dev.hermeskotlin.ui.sessions.OtherChatsViewModel
 import dev.hermeskotlin.ui.sessions.SessionsViewModel
 import dev.hermeskotlin.ui.settings.PhoneToolsViewModel
@@ -40,6 +41,8 @@ val uiModule = module {
     viewModelOf(::BotsViewModel)
     viewModelOf(::RoomsViewModel)
     viewModelOf(::ScheduledViewModel)
+    // One screen at a time, so one view model: it is told which bot's screen to watch.
+    viewModelOf(::ScreenViewModel)
     viewModel { InboxViewModel(get(), get(), get(), get(), get(), get(), getOrNull<InboxNotices>() ?: NoInboxNotices) }
     viewModelOf(::CapabilitiesViewModel)
     viewModelOf(::SkillsHubViewModel)

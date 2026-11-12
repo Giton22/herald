@@ -322,4 +322,7 @@ we need.
 | **6: rooms** | 3a read-only Desktop rooms; 3b hosted rooms (create, send, read, stop, approve) |
 | later | blob faces; per-bot routines; sections; search and filters (useful past 8 bots); QR pairing compatible with PR #103766 |
 
-Not planned: Bot Screen (VNC takeover), multi-connection relay, Desktop's room engine.
+Not planned: multi-connection relay, Desktop's room engine.
+
+Bot Screen (the VNC takeover of a bot's own desktop) is done: see the protocol notes for `display.*` and
+the display stream.

@@ -3,6 +3,8 @@ package dev.hermeskotlin.ui
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import dev.hermeskotlin.ui.screen.ScreenViewerEvent
+import dev.hermeskotlin.ui.screen.ScreenViewerHandle
 import org.koin.compose.getKoin
 
 /**
@@ -23,6 +25,19 @@ interface DesktopWeb {
     /** A plugin's page at [url] on [gateway], signed in as the app is, with a bar that names it and closes it. */
     @Composable
     fun PluginPage(url: String, gateway: String, title: String, onClose: () -> Unit)
+
+    /**
+     * The bot's screen, drawn by the browser: the app's own page at [streamUrl], which opens the gateway's
+     * display stream itself. [onHandle] is what the app can ask of the page, [onEvent] how the screen is doing.
+     */
+    @Composable
+    fun ScreenPage(
+        streamUrl: String,
+        viewOnly: Boolean,
+        onHandle: (ScreenViewerHandle) -> Unit,
+        onEvent: (ScreenViewerEvent) -> Unit,
+        modifier: Modifier,
+    )
 }
 
 /** The app's [DesktopWeb], or null where the runtime has no browser. */

@@ -55,6 +55,19 @@ android {
     // WebRTC's native library is 7–16 MB per ABI; compressed in the APK it is about a third of that.
     packaging { jniLibs.useLegacyPackaging = true }
 
+    // The bot screen's viewer page: the app's own page, built from noVNC (see vendor/screen-viewer). It
+    // travels in the assets because a browser will only load it from a file: address, which is the one
+    // the gateway accepts for a display stream. The licences of what the page carries travel with it.
+    sourceSets {
+        getByName("main") {
+            assets.srcDir(rootProject.file("vendor/screen-viewer/dist"))
+        }
+    }
+
+    // The app carries the viewer, so it carries the viewer's licences: the build stops before the app is
+    // made when the page would be packaged without them.
+    tasks.named("preBuild") { dependsOn(":shared:ui:verifyScreenViewerNotices") }
+
     // A published release also gets one APK per ABI, each with only its own WebRTC library, beside the
     // universal one; the in-app update offers the one for the device. Other builds stay one APK.
     splits {

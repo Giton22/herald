@@ -74,6 +74,10 @@ kotlin {
             }
             implementation(libs.pdfbox)
         }
+        // The bot screen's viewer page: the app's own page, built from noVNC (see vendor/screen-viewer).
+        // It travels in the resources because a browser will only load it from a file: address, which is
+        // the one the gateway accepts for a display stream.
+        jvmMain.get().resources.srcDir(rootProject.file("vendor/screen-viewer/dist"))
         jvmTest.dependencies {
             implementation(compose.desktop.uiTestJUnit4)
             implementation(compose.desktop.currentOs)
@@ -96,6 +100,28 @@ compose.resources {
     packageOfResClass = "dev.hermeskotlin.ui.resources"
 }
 
+// The viewer's third-party notices travel with it. The page carries noVNC's core, and noVNC's core
+// carries the pako it ships with, so the page is covered by their licences and has to say so: the
+// notices sit in the viewer's dist, which is what the apps package. A build that would package the
+// page without them stops here.
+val verifyScreenViewerNotices = tasks.register("verifyScreenViewerNotices") {
+    val dist = rootProject.file("vendor/screen-viewer/dist")
+    val notices = listOf("LICENSE.noVNC.txt", "AUTHORS.noVNC.txt", "LICENSE.pako.txt")
+    inputs.dir(dist).withPropertyName("viewer")
+    outputs.upToDateWhen { false }
+    doLast {
+        val missing = notices.filter { !File(dist, it).isFile }
+        if (missing.isNotEmpty()) {
+            throw GradleException(
+                "The viewer would ship without ${missing.joinToString()}. " +
+                    "Run vendor/screen-viewer/build.sh and commit what it writes.",
+            )
+        }
+    }
+}
+
+// The desktop app's resources are the viewer's dist, so the jar it ships carries the notices.
+tasks.matching { it.name == "jvmJar" }.configureEach { dependsOn(verifyScreenViewerNotices) }
 // `-Drtl.geometry=<dir>` asks the RTL layout tests to write their geometry and pixels there.
 providers.systemProperty("rtl.geometry").orNull?.let { dir ->
     tasks.withType<Test>().configureEach { systemProperty("rtl.geometry", dir) }

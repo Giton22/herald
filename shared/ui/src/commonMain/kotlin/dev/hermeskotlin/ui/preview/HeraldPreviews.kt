@@ -98,6 +98,7 @@ import dev.hermeskotlin.ui.rooms.CreateRoomDialog
 import dev.hermeskotlin.ui.bots.BotEditor
 import dev.hermeskotlin.core.bots.BotDetails
 import dev.hermeskotlin.ui.plugins.PluginsView
+import dev.hermeskotlin.ui.screen.ScreenView
 import dev.hermeskotlin.ui.assistant.AssistantBackdrop
 import dev.hermeskotlin.ui.assistant.AssistantCard
 import dev.hermeskotlin.ui.sessions.ProjectDraft
@@ -218,6 +219,8 @@ enum class PreviewScene(val label: String) {
     Connect("Connecting to a gateway that answered"),
     ConnectFailed("A gateway that didn't answer"),
     SignIn("Signing in"),
+    BotScreen("A bot's screen"),
+    BotScreenZoomed("A bot's screen, looked at closer"),
 }
 
 /**
@@ -366,6 +369,37 @@ fun HeraldPreview(scene: PreviewScene, dark: Boolean = true, accent: String = DE
                                 )
                             },
                             makeFolder = { _, _ -> null },
+                        )
+                    }
+                }
+                PreviewScene.BotScreen -> OpenSidebar {
+                    SidebarPage {
+                        ScreenView(
+                            state = ScreenSamples.watching,
+                            title = "Scribe",
+                            onBack = {},
+                            onStart = {},
+                            onReopen = {},
+                            onTakeOver = {},
+                            onHandBack = {},
+                            // A preview cannot run the viewer, so the picture is a made-up one.
+                            screen = { _, area -> SampleScreen(area) },
+                        )
+                    }
+                }
+                PreviewScene.BotScreenZoomed -> OpenSidebar {
+                    SidebarPage {
+                        ScreenView(
+                            state = ScreenSamples.zoomed,
+                            title = "Scribe",
+                            onBack = {},
+                            onStart = {},
+                            onReopen = {},
+                            onTakeOver = {},
+                            onHandBack = {},
+                            // A preview cannot run the viewer, so the picture is a made-up one, drawn
+                            // larger the way the viewer draws a part of the screen.
+                            screen = { _, area -> SampleScreen(area, zoom = 2f) },
                         )
                     }
                 }
