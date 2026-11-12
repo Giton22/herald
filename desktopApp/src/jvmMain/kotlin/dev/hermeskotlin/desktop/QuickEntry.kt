@@ -128,6 +128,9 @@ private fun QuickEntry(window: java.awt.Window, framed: Boolean, onSend: (String
         focus.requestFocus()
     }
     val shape = RoundedCornerShape(Theme[radii][radiusLarge])
+    // Where the system rounds the window it isn't see-through, and shows its own background until the picture is in.
+    val ground = Theme[colors][surfaceElevated]
+    if (!framed) LaunchedEffect(ground) { paintWindowBackground(window, ground) }
     Column(
         Modifier.fillMaxSize()
             .then(
