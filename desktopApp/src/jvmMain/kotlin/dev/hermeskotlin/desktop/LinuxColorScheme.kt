@@ -25,17 +25,19 @@ internal interface SettingsPortal : DBusInterface {
 /**
  * The Linux desktop's light or dark preference, from the settings portal's `org.freedesktop.appearance`
  * `color-scheme`, which a Flatpak may read as any app may. Compose reads the preference once on Linux and never
- * looks again, so without this the app follows a change only after a restart. [onChange] gets true for dark,
- * false for light and null when the desktop has none or the portal can't be asked; it is called from this
- * class's own thread, first with what the portal says now and then at each change.
+ * looks again, so without this the app follows a change only after a restart. [onChange] gets true for dark and
+ * false for light, from this class's own threads: first what the portal says now, then each change. It isn't
+ * called while the portal can't be asked, so a portal that goes away leaves the last answer standing.
  */
 internal class LinuxColorScheme(
-    private val onChange: (Boolean?) -> Unit,
+    private val onChange: (Boolean) -> Unit,
     private val address: String? = null,
 ) : AutoCloseable {
     private val alive = AtomicBoolean(true)
     private val first = CountDownLatch(1)
     private val stop = CountDownLatch(1)
+    /** One answer at a time, in the order the portal gave them: a read at the start can't land after a newer change. */
+    private val order = Any()
     private val worker = thread(name = "kyllene-color-scheme", isDaemon = true) { run() }
 
     /** Waits up to [millis] for the first answer, or for the failure to get one, so a first frame can have it. */
@@ -44,17 +46,19 @@ internal class LinuxColorScheme(
     override fun close() {
         if (!alive.getAndSet(false)) return
         stop.countDown()
+        // It may be inside a call to a portal that doesn't answer.
+        worker.interrupt()
         worker.join(1_000)
     }
 
     private fun report(dark: Boolean?) {
-        if (alive.get()) onChange(dark)
+        if (dark != null && alive.get()) onChange(dark)
         first.countDown()
     }
 
     private fun run() {
         try {
-            if (System.getProperty("os.name") != "Linux") { report(null); return }
+            if (System.getProperty("os.name") != "Linux") return
             // Check the authentication class before D-Bus can open a socket.
             Class.forName("com.sun.security.auth.module.UnixSystem")
             val builder = if (address == null) DBusConnectionBuilder.forSessionBus() else DBusConnectionBuilder.forAddress(address)
@@ -65,23 +69,30 @@ internal class LinuxColorScheme(
                 // The sender of a change must be the portal itself, whichever process that is now.
                 val owner = AtomicReference<String?>(null)
                 bus.addSigHandler(SettingsPortal.SettingChanged::class.java) { signal ->
-                    if (signal.source == owner.get() && signal.path == PATH && signal.namespace == NAMESPACE && signal.key == KEY) {
-                        report(isDark(signal.value))
+                    synchronized(order) {
+                        if (signal.source == owner.get() && signal.path == PATH && signal.namespace == NAMESPACE && signal.key == KEY) {
+                            report(isDark(signal.value))
+                        }
                     }
                 }.use {
                     // A restarted portal (or one that starts late) has a new owner and may hold another answer.
                     bus.addSigHandler(DBus.NameOwnerChanged::class.java) { signal ->
                         if (signal.source == "org.freedesktop.DBus" && signal.path == "/org/freedesktop/DBus" && signal.name == NAME) {
-                            val now = signal.newOwner.takeIf { it.isNotEmpty() }
+                            synchronized(order) {
+                                val now = signal.newOwner.takeIf { it.isNotEmpty() }
+                                owner.set(now)
+                                report(now?.let { read(bus, it) })
+                            }
+                        }
+                    }.use {
+                        // A signal that comes in during this waits its turn, so it is neither lost nor overwritten.
+                        synchronized(order) {
+                            val now = try { daemon.GetNameOwner(NAME) } catch (_: Exception) {
+                                try { daemon.StartServiceByName(NAME, UInt32(0)); daemon.GetNameOwner(NAME) } catch (_: Exception) { null }
+                            }
                             owner.set(now)
                             report(now?.let { read(bus, it) })
                         }
-                    }.use {
-                        val now = try { daemon.GetNameOwner(NAME) } catch (_: Exception) {
-                            try { daemon.StartServiceByName(NAME, UInt32(0)); daemon.GetNameOwner(NAME) } catch (_: Exception) { null }
-                        }
-                        owner.set(now)
-                        report(now?.let { read(bus, it) })
                         stop.await()
                     }
                 }
@@ -108,17 +119,15 @@ internal class LinuxColorScheme(
         private const val KEY = "color-scheme"
 
         /**
-         * What a `color-scheme` value says: 1 is dark, 2 is light, 0 (no preference) and anything else says
-         * nothing. `Read` wraps its answer in a second variant, which `ReadOne` and the change signal don't.
+         * What a `color-scheme` value says: 1 is dark, and every other number is light. That includes 0, no
+         * preference, which is what a desktop with only a dark switch says once it is turned off; saying nothing
+         * for it would leave the app in the dark theme it started in. Null is for what isn't a number at all.
+         * `Read` wraps its answer in a second variant, which `ReadOne` and the change signal don't.
          */
         fun isDark(value: Any?): Boolean? {
             var inner = value
             while (inner is Variant<*>) inner = inner.value
-            return when ((inner as? UInt32)?.toLong()) {
-                1L -> true
-                2L -> false
-                else -> null
-            }
+            return (inner as? UInt32)?.let { it.toLong() == 1L }
         }
     }
 }

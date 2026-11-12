@@ -33,8 +33,19 @@ class LinuxColorSchemeTest {
             Files.writeString(config, """<busconfig><type>session</type><listen>unix:tmpdir=/tmp</listen><auth>EXTERNAL</auth>
                 <policy context="default"><allow own="*"/><allow send_destination="*"/><allow receive_sender="*"/></policy></busconfig>""")
             daemon = ProcessBuilder("/usr/bin/dbus-daemon", "--config-file=$config", "--nofork", "--print-address=1").start()
-            address = CompletableFuture.supplyAsync { daemon.inputStream.bufferedReader().readLine() }.get(3, TimeUnit.SECONDS)
-            portal = DBusConnectionBuilder.forAddress(address).withShared(false).build()
+            try {
+                address = CompletableFuture.supplyAsync { daemon.inputStream.bufferedReader().readLine() }.get(3, TimeUnit.SECONDS)
+                portal = DBusConnectionBuilder.forAddress(address).withShared(false).build()
+            } catch (failure: Exception) {
+                stopDaemon()
+                throw failure
+            }
+        }
+
+        private fun stopDaemon() {
+            daemon.destroy()
+            if (!daemon.waitFor(2, TimeUnit.SECONDS)) daemon.destroyForcibly()
+            Files.deleteIfExists(config)
         }
 
         fun serve() {
@@ -49,6 +60,11 @@ class LinuxColorSchemeTest {
             portal.requestBusName("org.freedesktop.portal.Desktop")
         }
 
+        /** The portal gives up its name, as it does when it stops; [comeBack] is its restart. */
+        fun leave() = portal.releaseBusName("org.freedesktop.portal.Desktop")
+
+        fun comeBack() = portal.requestBusName("org.freedesktop.portal.Desktop")
+
         fun change(value: Any, namespace: String = "org.freedesktop.appearance", key: String = "color-scheme",
             from: DBusConnection = portal) {
             from.sendMessage(SettingsPortal.SettingChanged("/org/freedesktop/portal/desktop", namespace, key, Variant(value)))
@@ -56,8 +72,7 @@ class LinuxColorSchemeTest {
 
         override fun close() {
             runCatching { portal.close() }
-            daemon.destroy()
-            Files.deleteIfExists(config)
+            stopDaemon()
         }
     }
 
@@ -80,8 +95,24 @@ class LinuxColorSchemeTest {
                 assertEquals(false, reports.next())
                 bus.change(UInt32(1))
                 assertEquals(true, reports.next())
+                // No preference is what turning a dark switch off says: the app goes light with it.
                 bus.change(UInt32(0))
-                assertNull(reports.next())
+                assertEquals(false, reports.next())
+            }
+        }
+    }
+
+    @Test fun aPortalThatGoesAwayLeavesTheLastAnswerUntilItIsBack() {
+        Bus().use { bus ->
+            bus.serve()
+            val reports = Reports()
+            LinuxColorScheme(reports::add, bus.address).use {
+                assertEquals(true, reports.next())
+                bus.leave()
+                reports.none()
+                bus.scheme = Variant(Variant(UInt32(2)))
+                bus.comeBack()
+                assertEquals(false, reports.next())
             }
         }
     }
@@ -100,7 +131,7 @@ class LinuxColorSchemeTest {
             val reports = Reports()
             LinuxColorScheme(reports::add, bus.address).use { scheme ->
                 assertTrue(scheme.awaitFirst(5_000))
-                assertNull(reports.next())
+                reports.none()
             }
         }
     }
@@ -126,8 +157,9 @@ class LinuxColorSchemeTest {
     @Test fun aPortalThatAppearsLaterIsPickedUp() {
         Bus().use { bus ->
             val reports = Reports()
-            LinuxColorScheme(reports::add, bus.address).use {
-                assertNull(reports.next())
+            LinuxColorScheme(reports::add, bus.address).use { scheme ->
+                assertTrue(scheme.awaitFirst(5_000))
+                reports.none()
                 bus.serve()
                 assertEquals(true, reports.next())
             }
@@ -137,8 +169,8 @@ class LinuxColorSchemeTest {
     @Test fun whatEachValueMeans() {
         assertEquals(true, LinuxColorScheme.isDark(UInt32(1)))
         assertEquals(false, LinuxColorScheme.isDark(UInt32(2)))
-        assertNull(LinuxColorScheme.isDark(UInt32(0)))
-        assertNull(LinuxColorScheme.isDark(UInt32(3)))
+        assertEquals(false, LinuxColorScheme.isDark(UInt32(0)))
+        assertEquals(false, LinuxColorScheme.isDark(UInt32(3)))
         // Read wraps its answer twice, the change signal once.
         assertEquals(true, LinuxColorScheme.isDark(Variant(Variant(UInt32(1)))))
         assertEquals(false, LinuxColorScheme.isDark(Variant(UInt32(2))))
