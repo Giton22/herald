@@ -106,6 +106,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.composables.icons.lucide.Activity
 import com.composables.icons.lucide.BellRing
+import com.composables.icons.lucide.Bot
 import com.composables.icons.lucide.PanelLeft
 import com.composables.icons.lucide.PanelTop
 import com.composables.icons.lucide.Vibrate
@@ -244,6 +245,8 @@ import org.jetbrains.compose.resources.stringResource
 fun SettingsScreen(
     gateway: SavedGateway,
     botFaces: BotFaces = BotFaces(),
+    /** The Bots roster hasn't finished loading; the assistant sheet reads an empty roster as "still looking". */
+    botsLoading: Boolean = false,
     onBack: () -> Unit,
     onSignOut: () -> Unit,
     onOpenGateways: () -> Unit,
@@ -278,11 +281,14 @@ fun SettingsScreen(
     val appIcons = key(appIconOpen) { rememberAppIcons() }
     val language = rememberLanguageChoice()
     val suggestions by viewModel.suggestions.collectAsStateWithLifecycle()
+    var assistantSetupOpen by remember { mutableStateOf(false) }
+    var assistantBusy by remember { mutableStateOf(false) }
+    var assistantError by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(gateway, profile) { viewModel.bind(gateway, profile) }
-    PlatformBackHandler(enabled = !checkOpen && !phoneToolsOpen && !appIconOpen && !startInstructionOpen && !callTargetOpen && !languageOpen && !connectedDevicesOpen && !sidebarPagesOpen, onBack = onBack)
+    PlatformBackHandler(enabled = !checkOpen && !phoneToolsOpen && !appIconOpen && !startInstructionOpen && !callTargetOpen && !languageOpen && !connectedDevicesOpen && !sidebarPagesOpen && !assistantSetupOpen, onBack = onBack)
     // A page opened over Settings takes the keyboard from the search, so nothing typed there lands in a hidden query.
     val focus = LocalFocusManager.current
-    val pageOver = phoneToolsOpen || appIconOpen || startInstructionOpen || callTargetOpen || languageOpen || connectedDevicesOpen || sidebarPagesOpen
+    val pageOver = phoneToolsOpen || appIconOpen || startInstructionOpen || callTargetOpen || languageOpen || connectedDevicesOpen || sidebarPagesOpen || assistantSetupOpen
     LaunchedEffect(pageOver) { if (pageOver) focus.clearFocus() }
     // The desktop lists the sections beside the page; they say here where they start.
     val anchors = remember { mutableStateMapOf<String, Int>() }
@@ -319,7 +325,53 @@ fun SettingsScreen(
         suggestions = suggestions,
         onInstallSuggestions = viewModel::installSuggestions,
         onCheckSuggestions = viewModel::checkSuggestions,
+        assistantProfile = settings.assistantProfiles[gateway.url],
+        onToggleAssistant = { on ->
+            if (on) {
+                assistantError = null
+                assistantSetupOpen = true
+            } else {
+                viewModel.update { it.copy(assistantProfiles = it.assistantProfiles - gateway.url) }
+            }
+        },
+        onChangeAssistant = {
+            assistantError = null
+            assistantSetupOpen = true
+        },
     ) }
+    if (assistantSetupOpen) AssistantSetupSheet(
+        profiles = botFaces.bots,
+        profilesLoading = botsLoading,
+        current = settings.assistantProfiles[gateway.url],
+        taken = botFaces.bots.map { it.name }.toSet(),
+        busy = assistantBusy,
+        error = assistantError,
+        onDismiss = {
+            if (!assistantBusy) assistantSetupOpen = false
+        },
+        onUse = { profile ->
+            // Guard against a pick made while a create is in flight: its callback would overwrite the
+            // mapping this just recorded. (The sheet also disables the mode switch while busy.)
+            if (!assistantBusy) {
+                // Only the local mapping changes; the chosen profile keeps its gateway-side setup untouched.
+                viewModel.useAssistant(gateway, profile)
+                assistantSetupOpen = false
+            }
+        },
+        onMake = { profile, toolsets ->
+            assistantBusy = true
+            assistantError = null
+            viewModel.makeAssistant(gateway.gatewayUrl, profile, toolsets) { error ->
+                assistantBusy = false
+                if (error == null) {
+                    viewModel.update { it.copy(assistantProfiles = it.assistantProfiles + (gateway.url to profile)) }
+                    assistantSetupOpen = false
+                } else {
+                    assistantError = error
+                }
+            }
+        },
+    )
     if (callTargetOpen) CallTargetPicker(gateway, viewModel, botFaces, onDismiss = { callTargetOpen = false }) { target ->
         viewModel.update { it.copy(callTargets = it.callTargets + (gateway.url to target)) }
         callTargetOpen = false
@@ -429,6 +481,11 @@ internal fun SettingsView(
     suggestions: SuggestionsPlugin = SuggestionsPlugin.Checking,
     onInstallSuggestions: () -> Unit = {},
     onCheckSuggestions: () -> Unit = {},
+    /** The voice assistant's profile on this gateway, or null when it's off. */
+    assistantProfile: String? = null,
+    onToggleAssistant: (Boolean) -> Unit = {},
+    /** Opens the setup sheet to change the assistant's profile while it's on. */
+    onChangeAssistant: () -> Unit = {},
 ) {
     Box(
         Modifier
@@ -708,6 +765,26 @@ internal fun SettingsView(
                     if (settings.suggestedReplies && (suggestions == SuggestionsPlugin.NeedsRestart || suggestions == SuggestionsPlugin.Unknown)) {
                         Divider()
                         ActionRow(stringResource(Res.string.common_check_again), Lucide.RefreshCw, onClick = onCheckSuggestions)
+                    }
+                }
+
+                // The assistant panel is the phone's own (the assist session and its manifest live in androidApp),
+                // so desktop doesn't get the switch.
+                if (!isDesktop) Section("Assistant") {
+                    SwitchRow(
+                        title = "Voice assistant",
+                        detail = if (assistantProfile == null) {
+                            "Calls Herald up over the app you're in, with its screen. Off, it chats on your Chats profile."
+                        } else {
+                            "Runs on the \"$assistantProfile\" profile instead of your Chats one. Off, it goes back to your Chats profile; the profile stays on the gateway."
+                        },
+                        checked = assistantProfile != null,
+                        onCheckedChange = onToggleAssistant,
+                    )
+                    // On, the profile can be changed (to another existing one, or a new bot) without toggling off.
+                    if (assistantProfile != null) {
+                        Divider()
+                        ActionRow("Change assistant profile", Lucide.Bot, onClick = onChangeAssistant)
                     }
                 }
 

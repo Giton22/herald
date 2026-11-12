@@ -161,7 +161,21 @@ class AssistantPanelModel(
     val connectionState get() = connection.state
 
     private var gateway: SavedGateway? = null
-    private var profile: String? = null
+
+    /** The gateway's Chats profile: where the panel's chats run while the voice assistant is off there. */
+    private var chatsProfile: String? = null
+
+    /**
+     * Where the panel's chats run: the voice assistant's profile when it's switched on for this gateway, else the
+     * Chats one. Read as it's needed, so a change in Settings applies to the next chat.
+     */
+    private val profile: String?
+        get() {
+            val url = gateway?.url ?: return chatsProfile
+            val assistants: Map<String, String> = settings?.settings?.value?.assistantProfiles.orEmpty()
+            return assistants[url] ?: chatsProfile
+        }
+
     private var sessionScope: CoroutineScope? = null
 
     // Above init: bind() may run before the constructor gets past it, and a later initializer would undo it.
@@ -195,7 +209,19 @@ class AssistantPanelModel(
             return
         }
         gateway = saved
-        profile = profiles.get(saved.gatewayUrl)
+        chatsProfile = profiles.get(saved.gatewayUrl)
+        // The settings may still be on their way from storage; the chat must not start on the wrong profile.
+        settings?.let { store -> withTimeoutOrNull(SETTINGS_WAIT_MS) { store.settings.first { it != null } } }
+        // The assistant's bot may have been deleted from the roster since the switch went on: the stored profile
+        // then names one the gateway hasn't, and every chat on it would fail. Drop the stale mapping — the panel
+        // falls back to the Chats profile and the switch shows off. An unreadable roster (offline, say) keeps it.
+        val assistant = settings?.settings?.value?.assistantProfiles?.get(saved.url)
+        if (assistant != null) {
+            val roster = profileRoster?.roster(saved.gatewayUrl)
+            if (roster is ApiResult.Success && roster.value.profiles.none { it.name == assistant }) {
+                settings?.update { it.copy(assistantProfiles = it.assistantProfiles - saved.url) }
+            }
+        }
         // Already running when Kyllene is open; otherwise the panel brings the socket up while the user speaks.
         connection.start(saved.gatewayUrl)
         newChat()
@@ -457,6 +483,9 @@ class AssistantPanelModel(
         const val SCREEN_ONLY_PROMPT = "What's on my screen?"
         const val CIRCLED_PROMPT = "What's this?"
         private const val SCREEN_WAIT_MS = 2_000L
+
+        /** Settings come from local storage, long before this; the bound only keeps a stuck read from stalling the panel. */
+        private const val SETTINGS_WAIT_MS = 2_000L
 
         /** Long past a slow app's text and screenshot, which take well under a second. */
         private const val SCREEN_GIVE_UP_MS = 4_000L
