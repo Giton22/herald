@@ -75,6 +75,20 @@ import dev.hermeskotlin.core.kanban.KanbanLinkCounts
 import dev.hermeskotlin.core.kanban.KanbanProgress
 import dev.hermeskotlin.core.kanban.KanbanTask
 import dev.hermeskotlin.core.kanban.KanbanWarnings
+import dev.hermeskotlin.core.widget.ChatWidgetRow
+import dev.hermeskotlin.core.widget.ChatsWidgetSnapshot
+import dev.hermeskotlin.core.widget.KanbanStaleTier
+import dev.hermeskotlin.core.widget.KanbanWidgetRow
+import dev.hermeskotlin.core.widget.KanbanWidgetSnapshot
+import dev.hermeskotlin.core.widget.NowNeedsYouItem
+import dev.hermeskotlin.core.widget.NowNeedsYouKind
+import dev.hermeskotlin.core.widget.NowQuietState
+import dev.hermeskotlin.core.widget.NowRunningItem
+import dev.hermeskotlin.core.widget.NowRunningKind
+import dev.hermeskotlin.core.widget.NowTarget
+import dev.hermeskotlin.core.widget.NowWidgetSnapshot
+import dev.hermeskotlin.core.widget.ScheduledWidgetRow
+import dev.hermeskotlin.core.widget.ScheduledWidgetSnapshot
 import dev.hermeskotlin.ui.kanban.KanbanUiState
 
 /** Made-up data for the sidebar pages and the chat's sheets, in the same home-server story as [ChatSamples]. */
@@ -566,4 +580,96 @@ internal object PageSamples {
             loading = false,
         )
     }
+
+    // The home-screen widgets' preview data (D28): made up like everything above — no real chats, jobs,
+    // bots or gateway addresses.
+    private const val WIDGET_GATEWAY = "https://widgets.example.test"
+    private const val WIDGET_SAVED_AT = 1_761_000_000L // 2026-10-20 12:00 UTC, fixed so previews don't drift
+
+    fun nowNeedsYou(): NowWidgetSnapshot = NowWidgetSnapshot(
+        gatewayUrl = WIDGET_GATEWAY,
+        profile = null,
+        needsYou = listOf(
+            NowNeedsYouItem(
+                kind = NowNeedsYouKind.ChatWaiting,
+                title = "Weekend deploy plan",
+                detail = "Has a question",
+                target = NowTarget(storedSessionId = "chat_1", title = "Weekend deploy plan"),
+                activityEpochSeconds = 1_761_000_100.0,
+            ),
+            NowNeedsYouItem(
+                kind = NowNeedsYouKind.BotAnswer,
+                title = "Scribe",
+                detail = "Needs approval",
+                target = NowTarget(storedSessionId = "bot_chat_1", title = "Scribe", botProfile = "scribe"),
+                botProfile = "scribe",
+                activityEpochSeconds = 1_761_000_050.0,
+            ),
+            NowNeedsYouItem(
+                kind = NowNeedsYouKind.KanbanAttention,
+                title = "Shell: a clock that finishes the turn",
+                detail = "blocked",
+                target = NowTarget(kanbanBoard = "waypoint", kanbanTaskId = "t_3"),
+                activityEpochSeconds = 1_760_990_000.0,
+            ),
+        ),
+        running = listOf(
+            NowRunningItem(
+                kind = NowRunningKind.ChatTurn,
+                title = "Release notes draft",
+                target = NowTarget(storedSessionId = "chat_2", title = "Release notes draft"),
+                startedAtEpochSeconds = 1_761_000_080.0,
+            ),
+        ),
+        quiet = null,
+        socketSavedAtEpochSeconds = null,
+        savedAtEpochSeconds = WIDGET_SAVED_AT,
+    )
+
+    fun nowRunning(): NowWidgetSnapshot = nowNeedsYou().copy(needsYou = emptyList())
+
+    fun nowQuiet(): NowWidgetSnapshot = NowWidgetSnapshot(
+        gatewayUrl = WIDGET_GATEWAY,
+        profile = null,
+        needsYou = emptyList(),
+        running = emptyList(),
+        quiet = NowQuietState(nextRunEpochSeconds = 1_761_003_600L, nextJobName = "Morning briefing"),
+        socketSavedAtEpochSeconds = null,
+        savedAtEpochSeconds = WIDGET_SAVED_AT,
+    )
+
+    fun chatsWidget(): ChatsWidgetSnapshot = ChatsWidgetSnapshot(
+        gatewayUrl = WIDGET_GATEWAY,
+        profile = null,
+        rows = listOf(
+            ChatWidgetRow("chat_3", "Kyllene roadmap", subtitle = "The widget wave lands this week.", unread = true, pinned = true, activityEpochSeconds = 1_761_000_200.0),
+            ChatWidgetRow("chat_1", "Weekend deploy plan", waitingLabel = "Has a question", activityEpochSeconds = 1_761_000_100.0),
+            ChatWidgetRow("chat_2", "Release notes draft", running = true, activityEpochSeconds = 1_761_000_080.0),
+            ChatWidgetRow("chat_4", "Water the plants reminder", subtitle = "Done — every Sunday at 9.", thread = true, activityEpochSeconds = 1_760_900_000.0),
+        ),
+        savedAtEpochSeconds = WIDGET_SAVED_AT,
+    )
+
+    fun kanbanWidget(): KanbanWidgetSnapshot = KanbanWidgetSnapshot(
+        gatewayUrl = WIDGET_GATEWAY,
+        boardSlug = "waypoint",
+        boardName = "Waypoint",
+        counts = mapOf("running" to 1, "blocked" to 1, "review" to 0, "ready" to 1),
+        rows = listOf(
+            KanbanWidgetRow("t_3", "Gateway: chat over the Webapp listener", status = "blocked", assignee = "reviewer", priority = 5, stale = KanbanStaleTier.Red, warningCount = 0),
+            KanbanWidgetRow("t_1", "APIs: the schedule off the wire", status = "ready", assignee = "coder", priority = 10, stale = KanbanStaleTier.None),
+            KanbanWidgetRow("t_2", "Shell: a clock that finishes the turn", status = "running", assignee = "coder", priority = 0, stale = KanbanStaleTier.None, warningCount = 1),
+        ),
+        savedAtEpochSeconds = WIDGET_SAVED_AT,
+    )
+
+    fun scheduledWidget(): ScheduledWidgetSnapshot = ScheduledWidgetSnapshot(
+        gatewayUrl = WIDGET_GATEWAY,
+        rows = listOf(
+            ScheduledWidgetRow("job_2", profile = "scribe", displayName = "Inbox sweep", routineOwnerLabel = "Scribe", problemSummary = "Last run missed its fire", state = "scheduled", isProblem = true),
+            ScheduledWidgetRow("job_1", displayName = "Morning briefing", scheduleDisplay = "Every day at 9:00", nextRunEpochSeconds = 1_761_003_600L, state = "scheduled"),
+            ScheduledWidgetRow("job_3", displayName = "Weekly disk tidy", scheduleDisplay = "Mondays at 8:00", state = "paused"),
+        ),
+        savedAtEpochSeconds = WIDGET_SAVED_AT,
+    )
 }

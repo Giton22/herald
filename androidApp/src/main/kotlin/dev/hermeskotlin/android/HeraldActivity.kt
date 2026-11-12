@@ -26,12 +26,15 @@ import dev.hermeskotlin.android.notify.BotNotifier
 import dev.hermeskotlin.android.notify.BotShortcuts
 import dev.hermeskotlin.android.notify.ChatNotifications
 import dev.hermeskotlin.android.phone.PhoneConfirmations
+import dev.hermeskotlin.android.widget.WidgetIntents
 import dev.hermeskotlin.ui.settings.AppIconRestart
 import dev.hermeskotlin.ui.settings.PhoneQuestion
 import dev.hermeskotlin.core.chat.AppLink
 import dev.hermeskotlin.core.chat.ChatHost
 import dev.hermeskotlin.core.chat.ChatLinks
+import dev.hermeskotlin.core.cron.ScheduledLinks
 import dev.hermeskotlin.core.inbox.InboxLinks
+import dev.hermeskotlin.core.kanban.links.KanbanLinks
 import dev.hermeskotlin.core.rooms.RoomLinks
 import dev.hermeskotlin.core.chat.ComposeDraft
 import dev.hermeskotlin.core.chat.SharedContent
@@ -68,6 +71,8 @@ class HeraldActivity : FragmentActivity() {
     private val links: ChatLinks by inject()
     private val roomLinks: RoomLinks by inject()
     private val inboxLinks: InboxLinks by inject()
+    private val kanbanLinks: KanbanLinks by inject()
+    private val scheduledLinks: ScheduledLinks by inject()
     private val settings: SettingsStore by inject()
     private val appScope: CoroutineScope by inject()
     private val bots: BotNotifier by inject()
@@ -165,7 +170,8 @@ class HeraldActivity : FragmentActivity() {
     /**
      * A tapped notification about a chat opens that chat, not just the last one; a bot's notification or
      * shortcut opens that bot's chat; a room's notification opens that room; a `hermes://` link opens what it
-     * names (a new chat, a stored one, a bot).
+     * names (a new chat, a stored one, a bot, Tasks, Scheduled); a widget row's extras name its board,
+     * task, job or routine, and ride the same App-lock gate as everything else.
      */
     private fun openLinkedChat(intent: Intent) {
         val bot = intent.getStringExtra(ChatNotifications.EXTRA_OPEN_BOT)
@@ -174,12 +180,18 @@ class HeraldActivity : FragmentActivity() {
         val title = intent.getStringExtra(ChatNotifications.EXTRA_OPEN_TITLE)
         val link = intent.data?.let { AppLink.parse(it.toString()) }
         val inbox = intent.getStringExtra(ChatNotifications.EXTRA_OPEN_INBOX)
+        val kanbanBoard = intent.getStringExtra(WidgetIntents.EXTRA_OPEN_KANBAN_BOARD)
+        val kanbanTask = intent.getStringExtra(WidgetIntents.EXTRA_OPEN_KANBAN_TASK)
+        val scheduledJob = intent.getStringExtra(WidgetIntents.EXTRA_OPEN_SCHEDULED_JOB)
+        val scheduledProfile = intent.getStringExtra(WidgetIntents.EXTRA_OPEN_SCHEDULED_PROFILE)
         when {
             inbox != null -> inboxLinks.open(inbox)
             room != null -> roomLinks.open(room, title)
             bot != null -> links.openBot(bot, title, sessionId)
             sessionId != null -> links.open(sessionId, title)
-            link != null -> links.follow(link)
+            kanbanTask != null || kanbanBoard != null -> kanbanLinks.open(kanbanBoard, kanbanTask)
+            scheduledJob != null || scheduledProfile != null -> scheduledLinks.open(scheduledJob, scheduledProfile)
+            link != null -> routeAppLink(link, links, kanbanLinks, scheduledLinks)
             else -> return
         }
         // Handled once: a recreated activity must not jump back to it.
@@ -187,6 +199,10 @@ class HeraldActivity : FragmentActivity() {
         intent.removeExtra(ChatNotifications.EXTRA_OPEN_BOT)
         intent.removeExtra(ChatNotifications.EXTRA_OPEN_ROOM)
         intent.removeExtra(ChatNotifications.EXTRA_OPEN_INBOX)
+        intent.removeExtra(WidgetIntents.EXTRA_OPEN_KANBAN_BOARD)
+        intent.removeExtra(WidgetIntents.EXTRA_OPEN_KANBAN_TASK)
+        intent.removeExtra(WidgetIntents.EXTRA_OPEN_SCHEDULED_JOB)
+        intent.removeExtra(WidgetIntents.EXTRA_OPEN_SCHEDULED_PROFILE)
         intent.data = null
     }
 
@@ -279,5 +295,21 @@ class HeraldActivity : FragmentActivity() {
         const val KEY_DARK = "dark"
         const val KEY_ASKED_NOTIFICATIONS = "asked_notifications"
         const val KEY_APP_LOCK = "app_lock"
+    }
+}
+
+/**
+ * Routes a `hermes://` [link] to the bus it names (docs/WIDGETS-SPEC.md D20): Kanban and Scheduled
+ * links go to their own buses — the chat bus stays chat-only, and `hermes://now` just opens the app,
+ * so it is a no-op here. Testable without Android: every bus is a plain class.
+ */
+fun routeAppLink(link: AppLink, links: ChatLinks, kanbanLinks: KanbanLinks, scheduledLinks: ScheduledLinks) {
+    when (link) {
+        AppLink.Kanban -> kanbanLinks.open(null, null)
+        is AppLink.KanbanTask -> kanbanLinks.open(link.board, link.taskId)
+        AppLink.Scheduled -> scheduledLinks.open(null, null)
+        is AppLink.ScheduledJob -> scheduledLinks.open(link.jobId, null)
+        AppLink.Now -> Unit
+        else -> links.follow(link)
     }
 }

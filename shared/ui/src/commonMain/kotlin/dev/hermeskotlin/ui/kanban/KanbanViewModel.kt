@@ -12,6 +12,7 @@ import dev.hermeskotlin.core.kanban.KanbanEvents
 import dev.hermeskotlin.core.kanban.KanbanLogResponse
 import dev.hermeskotlin.core.kanban.KanbanTask
 import dev.hermeskotlin.core.kanban.KanbanTaskDetailResponse
+import dev.hermeskotlin.core.kanban.stale
 import dev.hermeskotlin.core.network.ApiResult
 import dev.hermeskotlin.core.network.errorMessage
 import dev.hermeskotlin.core.settings.SettingsStore
@@ -27,30 +28,6 @@ import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-
-/**
- * Staleness tiers, the dashboard's (`STALENESS` in the Kanban bundle): amber then red seconds past the
- * created clock (the running clock once started). Any other status never tints.
- */
-val KANBAN_STALENESS: Map<String, Pair<Long, Long>> = mapOf(
-    "ready" to (1 * 60 * 60L to 24 * 60 * 60L),
-    "running" to (10 * 60L to 60 * 60L),
-    "blocked" to (1 * 60 * 60L to 24 * 60 * 60L),
-    "todo" to (7 * 24 * 60 * 60L to 30 * 24 * 60 * 60L),
-)
-
-enum class KanbanStale { None, Amber, Red }
-
-fun KanbanTask.stale(): KanbanStale {
-    val (amber, red) = KANBAN_STALENESS[status] ?: return KanbanStale.None
-    val age = if (status == "running") age?.startedAgeSeconds else age?.createdAgeSeconds
-    if (age == null || age < 0) return KanbanStale.None
-    return when {
-        age >= red -> KanbanStale.Red
-        age >= amber -> KanbanStale.Amber
-        else -> KanbanStale.None
-    }
-}
 
 /** Whether [task] matches the toolbar filters, the dashboard's predicate (search is a substring over the row). */
 fun KanbanTask.matches(q: String, tenant: String?, assignee: String?): Boolean {
@@ -126,6 +103,32 @@ class KanbanViewModel(
     private var tailBoard: String? = null
     private var cursor: Long? = null
 
+    /**
+     * A task asked for from outside the page (a widget tap, a `hermes://kanban/<board>/<taskId>` link) that
+     * arrived before its board loaded: the board slug ("" names whatever board resolves) and the task id.
+     * Applied once a board load completes — [selectBoard] runs first when the queue names another board —
+     * and a task the board doesn't have clears the queue silently (no error row for a deleted task).
+     */
+    private val _pendingOpenTask = MutableStateFlow<Pair<String, String>?>(null)
+    val pendingOpenTask: StateFlow<Pair<String, String>?> = _pendingOpenTask.asStateFlow()
+
+    fun queueOpenTask(board: String, taskId: String) {
+        _pendingOpenTask.value = board to taskId
+    }
+
+    /** Runs on every completed board load: selects the queued board first when it differs, else opens the task. */
+    private fun applyPendingOpenTask(slug: String) {
+        val (board, taskId) = _pendingOpenTask.value ?: return
+        if (board.isNotEmpty() && board != slug) {
+            selectBoard(board)
+            return
+        }
+        _pendingOpenTask.value = null
+        val tasks = _state.value.response?.columns.orEmpty().flatMap { it.tasks }
+        if (tasks.any { it.id == taskId }) openTask(taskId)
+        // else: a deleted task clears the queue silently.
+    }
+
     /** The page appeared. A new gateway starts over; a reopen after [stop] refreshes and retails. */
     fun bind(gateway: SavedGateway) {
         if (this.gateway == gateway) {
@@ -139,6 +142,8 @@ class KanbanViewModel(
         stopped = false
         _state.value = KanbanUiState()
         cursor = null
+        // A pending task belongs to the gateway it was queued on; the new one starts clean.
+        _pendingOpenTask.value = null
         refresh()
     }
 
@@ -337,6 +342,7 @@ class KanbanViewModel(
             if (result is ApiResult.Success) {
                 cursor = maxOf(cursor ?: 0L, result.value.latestEventId)
                 startTail(url, slug)
+                applyPendingOpenTask(slug)
             }
         }
     }

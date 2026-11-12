@@ -82,6 +82,9 @@ class ChatLinks {
         AppLink.VoiceChat -> newChat(ComposeDraft(start = DraftStart.VoiceChat))
         is AppLink.Session -> open(link.id, title = null)
         is AppLink.Bot -> openBot(link.profile, label = null)
+        // Kanban and Scheduled links route through HeraldActivity's own handler to the KanbanLinks /
+        // ScheduledLinks buses; the chat bus stays chat-only (and the desktop app leaves them inert).
+        AppLink.Kanban, is AppLink.KanbanTask, AppLink.Scheduled, is AppLink.ScheduledJob, AppLink.Now -> Unit
     }
 
     /** Clears [link] once opened, unless a newer one came in meanwhile. */

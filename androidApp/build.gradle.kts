@@ -109,6 +109,16 @@ android {
             matchingFallbacks += listOf("release")
         }
     }
+
+    // The widget host tests run on the JVM against the merged manifest and resources (Robolectric).
+    // Robolectric's FileDescriptor interceptor reads jdk.internal.access.SharedSecrets, which JDK 25
+    // doesn't export by default (the SDK 35 sandbox touches it in ApplicationSharedMemory.create).
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = true
+            all { it.jvmArgs("--add-opens=java.base/jdk.internal.access=ALL-UNNAMED") }
+        }
+    }
 }
 
 dependencies {
@@ -127,4 +137,9 @@ dependencies {
     // The Pebble companion's link to Kyllene's Pebble watchapp (pebbleApp), through the Pebble phone app.
     implementation(libs.pebblekit2.client)
     debugImplementation(libs.compose.ui.tooling)
+
+    // The home-screen widgets' host tests: RemoteViews construction, intent wiring, refresh decisions.
+    testImplementation(libs.junit4)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.kotlinx.coroutines.test)
 }

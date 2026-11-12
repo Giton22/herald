@@ -135,6 +135,8 @@ import dev.hermeskotlin.core.chat.ChatHost
 import com.composables.icons.lucide.Inbox
 import dev.hermeskotlin.core.inbox.InboxLink
 import dev.hermeskotlin.core.inbox.InboxStore
+import dev.hermeskotlin.core.kanban.links.KanbanLink
+import dev.hermeskotlin.core.cron.ScheduledLink
 import dev.hermeskotlin.ui.inbox.InboxPage
 import dev.hermeskotlin.ui.inbox.ReportChat
 import androidx.compose.ui.focus.FocusDirection
@@ -353,6 +355,12 @@ fun SessionsSidebar(
     /** A tapped Inbox notification the app passed on: the Inbox opens, at its run; [onInboxLinkTaken] once it has. */
     inboxLink: InboxLink? = null,
     onInboxLinkTaken: (InboxLink) -> Unit = {},
+    /** A Kanban destination the app passed on (a widget tap, a `hermes://kanban` link): the page opens, a task's drawer with it. */
+    kanbanLink: KanbanLink? = null,
+    onKanbanLinkTaken: (KanbanLink) -> Unit = {},
+    /** A Scheduled destination the app passed on (a widget tap, a `hermes://scheduled` link): the list, one job's runs, or a bot's Routines. */
+    scheduledLink: ScheduledLink? = null,
+    onScheduledLinkTaken: (ScheduledLink) -> Unit = {},
     /** Opens a chat about an Inbox report: the run's own, or a new one in its profile with the report attached. */
     onOpenReportChat: (ReportChat) -> Unit = {},
     /** Where the pages show beside the docked sidebar on a desktop; null keeps them in the sidebar. */
@@ -443,6 +451,22 @@ fun SessionsSidebar(
     var pluginsOpen by remember { mutableStateOf(false) }
     var insightsOpen by remember { mutableStateOf(false) }
     var kanbanOpen by remember { mutableStateOf(false) }
+    // A Kanban or Scheduled destination the app passed on once the drawer was opening (D21): the page
+    // opens and takes the pending task/job/profile with it; the holder clears once the page reports it
+    // opened (a task or job the board no longer has clears there too, silently).
+    val pendingWidgetLinks = remember { PendingWidgetLinks() }
+    LaunchedEffect(kanbanLink) {
+        val link = kanbanLink ?: return@LaunchedEffect
+        pendingWidgetLinks.onKanbanLink(link)
+        kanbanOpen = true
+        onKanbanLinkTaken(link)
+    }
+    LaunchedEffect(scheduledLink) {
+        val link = scheduledLink ?: return@LaunchedEffect
+        pendingWidgetLinks.onScheduledLink(link)
+        scheduledOpen = true
+        onScheduledLinkTaken(link)
+    }
     /** The bot whose routines are showing. */
     var routinesOf by remember { mutableStateOf<Bot?>(null) }
     var actionTarget by remember { mutableStateOf<SessionSummary?>(null) }
@@ -678,6 +702,11 @@ fun SessionsSidebar(
                 onOpenRun = open,
                 onSessionExpired = onSessionExpired,
                 onPopOutRun = popOut.takeIf { isDesktop },
+                openJobId = pendingWidgetLinks.scheduledJob,
+                openProfile = pendingWidgetLinks.scheduledProfile,
+                onJobOpened = {
+                    pendingWidgetLinks.onScheduledJobOpened()
+                },
             )
             bot != null -> ScheduledPage(
                 gateway = gateway,
@@ -720,6 +749,9 @@ fun SessionsSidebar(
                 visible = pageVisible,
                 onBack = { kanbanOpen = false },
                 onSessionExpired = onSessionExpired,
+                openTaskBoard = pendingWidgetLinks.kanbanTask?.first?.takeIf { it.isNotEmpty() },
+                openTaskId = pendingWidgetLinks.kanbanTask?.second,
+                onTaskOpened = { pendingWidgetLinks.onKanbanTaskOpened() },
             )
         }
     }

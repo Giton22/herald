@@ -74,26 +74,6 @@ class KanbanViewModelTest {
         )
 
     @Test
-    fun staleUsesCreatedAgeExceptWhileRunning() {
-        val hour = 3600L
-        // Ready: amber 1h, red 24h (dashboard STALENESS).
-        assertEquals(KanbanStale.Amber, task("ready", createdAge = hour + 1).stale())
-        assertEquals(KanbanStale.None, task("ready", createdAge = hour - 1).stale())
-        assertEquals(KanbanStale.Red, task("ready", createdAge = 24 * hour).stale())
-        // Running: amber 10m, red 60m, on the started clock.
-        assertEquals(KanbanStale.Amber, task("running", startedAge = 10 * 60 + 1).stale())
-        assertEquals(KanbanStale.Red, task("running", startedAge = 60 * 60).stale())
-        assertEquals(KanbanStale.None, task("running", createdAge = 5 * hour, startedAge = 59).stale())
-        // Blocked: amber 1h, red 24h. Todo: amber 7d, red 30d.
-        assertEquals(KanbanStale.Amber, task("blocked", createdAge = hour + 1).stale())
-        assertEquals(KanbanStale.None, task("todo", createdAge = 6 * 24 * hour).stale())
-        assertEquals(KanbanStale.Amber, task("todo", createdAge = 7 * 24 * hour).stale())
-        // Any other status never tints.
-        assertEquals(KanbanStale.None, task("done", createdAge = 90 * 24 * hour).stale())
-        assertEquals(KanbanStale.None, task("ready", createdAge = null).stale())
-    }
-
-    @Test
     fun matchesIsTheDashboardsPredicate() {
         val t = task("ready", title = "APIs: the schedule", body = "Off the wire", tenant = "herald", assignee = "coder").copy(
             result = "All green",

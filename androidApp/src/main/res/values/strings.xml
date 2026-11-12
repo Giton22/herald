@@ -202,4 +202,116 @@
     <string name="phone_place_not_accepted">it wasn’t accepted</string>
     <string name="phone_place_no_reach">Kyllene couldn’t reach the gateway</string>
     <string name="phone_place_refused">the gateway refused it</string>
+
+    <!-- Home-screen widgets, as the widget picker lists them -->
+    <string name="widget_now_label">Now</string>
+    <string name="widget_now_description">Who needs you, what is running, and when everything is quiet</string>
+    <string name="widget_chats_label">Chats</string>
+    <string name="widget_chats_description">Recent and pinned conversations</string>
+    <string name="widget_kanban_label">Tasks</string>
+    <string name="widget_kanban_description">The selected board’s active tasks</string>
+    <string name="widget_scheduled_label">Scheduled</string>
+    <string name="widget_scheduled_description">Upcoming and problem scheduled jobs</string>
+
+    <!-- Home-screen widgets: shared header and states -->
+    <string name="widget_locked">Locked. Unlock to see details.</string>
+    <string name="widget_now_locked_counts">Needs you: %1$d · Running: %2$d</string>
+    <!-- %1$d: how many chats the widget holds; titles stay hidden until the app is unlocked -->
+    <string name="widget_chats_locked_counts">Chats: %1$d</string>
+    <string name="widget_kanban_locked_counts">Tasks: %1$d</string>
+    <string name="widget_scheduled_locked_counts">Jobs: %1$d</string>
+    <string name="widget_refresh_now">Refresh Now</string>
+    <string name="widget_refresh_chats">Refresh chats</string>
+    <string name="widget_refresh_kanban">Refresh tasks</string>
+    <string name="widget_refresh_scheduled">Refresh scheduled jobs</string>
+    <string name="widget_refreshing">Refreshing…</string>
+    <string name="widget_action_new_chat">New chat</string>
+    <string name="widget_action_dictate">Dictate a new chat</string>
+    <string name="widget_retry_detail">Check your connection and try again.</string>
+    <!-- %1$s: a clock time such as 09:30 -->
+    <string name="widget_saved_copy_at">Saved copy · %1$s</string>
+    <string name="widget_refresh_saved_at">Couldn’t refresh · Saved %1$s</string>
+
+    <!-- Home-screen widgets: Now -->
+    <string name="widget_needs_you">NEEDS YOU</string>
+    <string name="widget_running_eyebrow">RUNNING</string>
+    <string name="widget_all_quiet">All quiet</string>
+    <string name="widget_everything_quiet">Everything is quiet</string>
+    <!-- %1$s: the job’s name; %2$s: its next-run clock time -->
+    <string name="widget_next_job">Next: %1$s · %2$s</string>
+    <string name="widget_now_live_unavailable">Live status unavailable</string>
+    <string name="widget_now_open_to_refresh">Open Kyllene to refresh chat and bot status.</string>
+    <string name="widget_now_live_unavailable_notice">Live chat and bot status unavailable</string>
+    <string name="widget_now_couldnt_refresh">Couldn’t refresh Now</string>
+    <string name="widget_sign_in_now">Sign in to see Now</string>
+    <string name="widget_now_sign_in_detail">Your chats, bots, tasks, and schedules will appear here.</string>
+    <!-- %1$s: the first running item’s title; %2$d: how many more are running -->
+    <string name="widget_running_strip">Running: %1$s</string>
+    <string name="widget_running_strip_more">Running: %1$s +%2$d</string>
+    <string name="widget_now_kind_chat_turn">Chat turn</string>
+    <string name="widget_now_kind_bot_working">Bot working</string>
+    <string name="widget_now_kind_kanban_running">Kanban</string>
+    <string name="widget_now_kind_waiting">Waiting</string>
+    <string name="widget_now_kind_bot_trouble">Bot trouble</string>
+    <string name="widget_now_kind_routine_failed">Routine failed</string>
+    <string name="widget_now_kind_task_status">Task status</string>
+    <string name="widget_now_kind_scheduled_problem">Scheduled problem</string>
+    <!-- %1$d: how many more items need you -->
+    <plurals name="widget_more_need_you">
+        <item quantity="one">%1$d more needs you</item>
+        <item quantity="other">%1$d more need you</item>
+    </plurals>
+
+    <!-- Home-screen widgets: Chats -->
+    <string name="widget_chats_empty">No recent chats</string>
+    <string name="widget_chats_empty_detail">Start a conversation with New chat.</string>
+    <string name="widget_chats_no_cache_detail">No saved chats are available.</string>
+    <string name="widget_chats_couldnt_refresh">Couldn’t refresh chats</string>
+    <string name="widget_sign_in_chats">Sign in to see chats</string>
+    <string name="widget_chats_sign_in_detail">Your conversations will appear here.</string>
+    <string name="widget_unread">Unread</string>
+    <string name="widget_pinned">Pinned</string>
+    <string name="widget_open_chat">Open chat</string>
+
+    <!-- Home-screen widgets: Tasks (Kanban) -->
+    <string name="widget_running">Running</string>
+    <string name="widget_blocked">Blocked</string>
+    <string name="widget_review">Review</string>
+    <string name="widget_ready">Ready</string>
+    <string name="widget_unassigned">Unassigned</string>
+    <string name="widget_stale">Stale</string>
+    <string name="widget_stale_red">Stale!</string>
+    <!-- %1$d: the warning count -->
+    <string name="widget_warning_badge">⚠ %1$d</string>
+    <string name="widget_kanban_empty">No active tasks</string>
+    <string name="widget_kanban_empty_detail">This board has no blocked, review, running, ready, or to-do tasks.</string>
+    <string name="widget_kanban_no_board">No Kanban board</string>
+    <string name="widget_kanban_no_board_detail">Create or select a board in Kyllene.</string>
+    <string name="widget_kanban_couldnt_refresh">Couldn’t refresh tasks</string>
+    <string name="widget_sign_in_kanban">Sign in to see tasks</string>
+    <string name="widget_kanban_sign_in_detail">Your selected board will appear here.</string>
+    <string name="widget_open_task">Open task</string>
+
+    <!-- Home-screen widgets: Scheduled -->
+    <!-- %1$d: the problem count; %2$d: the active count -->
+    <plurals name="widget_scheduled_summary_problems">
+        <item quantity="one">%1$d problem · %2$d active</item>
+        <item quantity="other">%1$d problems · %2$d active</item>
+    </plurals>
+    <plurals name="widget_scheduled_summary_active">
+        <item quantity="one">%1$d active job</item>
+        <item quantity="other">%1$d active jobs</item>
+    </plurals>
+    <string name="widget_scheduled_no_active">No active jobs</string>
+    <string name="widget_scheduled_saved_copy">Saved copy</string>
+    <string name="widget_scheduled_empty">No scheduled jobs</string>
+    <string name="widget_scheduled_empty_detail">Jobs and bot routines will appear here.</string>
+    <string name="widget_scheduled_couldnt_refresh">Couldn’t refresh scheduled jobs</string>
+    <string name="widget_sign_in_scheduled">Sign in to see scheduled jobs</string>
+    <string name="widget_scheduled_sign_in_detail">Your jobs and routines will appear here.</string>
+    <string name="widget_failed">Failed</string>
+    <string name="widget_delivery_failed">Delivery failed</string>
+    <string name="widget_missed">Missed</string>
+    <string name="widget_paused">Paused</string>
+    <string name="widget_open_job">Open scheduled job</string>
 </resources>

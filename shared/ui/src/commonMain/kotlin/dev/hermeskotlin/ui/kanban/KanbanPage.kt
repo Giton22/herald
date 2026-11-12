@@ -29,6 +29,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -53,6 +54,8 @@ import com.composeunstyled.theme.Theme
 import dev.hermeskotlin.core.gateway.SavedGateway
 import dev.hermeskotlin.core.kanban.KanbanColumn
 import dev.hermeskotlin.core.kanban.KanbanTask
+import dev.hermeskotlin.core.kanban.KanbanStale
+import dev.hermeskotlin.core.kanban.stale
 import dev.hermeskotlin.designsystem.accentSoft
 import dev.hermeskotlin.designsystem.accentText
 import dev.hermeskotlin.designsystem.body
@@ -130,10 +133,45 @@ internal fun KanbanPage(
     visible: Boolean,
     onBack: () -> Unit,
     onSessionExpired: () -> Unit,
+    /** A task asked for from outside the page (a widget tap, a `hermes://kanban` link): opened once its board loads. */
+    openTaskBoard: String? = null,
+    openTaskId: String? = null,
+    /** Called once the drawer owns [openTaskId], or once the queue was consumed without it (a deleted task). */
+    onTaskOpened: () -> Unit = {},
     viewModel: KanbanViewModel = koinViewModel(),
 ) {
     val state = viewModel.state.collectAsStateWithLifecycle().value
+    val pendingTask by viewModel.pendingOpenTask.collectAsStateWithLifecycle()
     LaunchedEffect(gateway) { viewModel.bind(gateway) }
+    // A pending link is state handed into the page (D22), queued on the view model and applied by it after
+    // the board load — never before it, because openTask returns early with no board and bind resets state.
+    var taskQueued by rememberSaveable { mutableStateOf(false) }
+    var taskReported by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(openTaskId, openTaskBoard) {
+        val id = openTaskId ?: return@LaunchedEffect
+        if (taskReported) return@LaunchedEffect
+        if (state.openTaskId == id) {
+            taskReported = true
+            onTaskOpened()
+            return@LaunchedEffect
+        }
+        viewModel.queueOpenTask(openTaskBoard ?: "", id)
+        taskQueued = true
+    }
+    LaunchedEffect(state.openTaskId, pendingTask) {
+        if (openTaskId == null || taskReported || !taskQueued) return@LaunchedEffect
+        when {
+            state.openTaskId == openTaskId -> {
+                taskReported = true
+                onTaskOpened()
+            }
+            // The queue was consumed without the drawer opening: the board has no such task (deleted).
+            pendingTask == null -> {
+                taskReported = true
+                onTaskOpened()
+            }
+        }
+    }
     // Leaving the page stops every load and the events tail; coming back refreshes and re-tails.
     DisposableEffect(Unit) { onDispose { viewModel.stop() } }
     LaunchedEffect(state.sessionExpired) {

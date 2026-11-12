@@ -333,7 +333,8 @@ Agent tools that run on the phone: a gateway plugin registers them, Kyllene answ
 - [x] Web links in replies open in a Custom Tab in the app's colors, or the browser when there's none
 - [x] App lock (Settings → Privacy): fingerprint, face or screen lock on launch and after a minute away; content hidden in Recents
 - [ ] Tablet and foldable adaptive layout (list and detail side by side)
-- [ ] Home-screen widget and Quick Settings tile
+- [x] Home-screen widgets: four AppWidgetProviders — Now (who needs you, what is running, quiet states, the HeraldMark), Chats (recent and pinned rows with New chat, Dictate and Refresh), Tasks (the selected board's active tasks and column counts) and Scheduled (problem and missed-fire jobs first, then what's next) — rendered from precomputed snapshots (`WidgetDataAssembler` → `WidgetSnapshotStore`) so a refresh reads only what each widget needs; scrollable lists through a `RemoteViewsService`; App-locked variants show counts only; taps deep-link through `HeraldActivity` and the App-lock gate
+- [ ] Quick Settings tile
 - [x] Offline cache of sessions and messages: the chat list and the newest rows of the last 50 chats read are kept on the device (Room, rows encrypted with a Keystore-held key) and shown while the gateway can't be reached, marked "Saved copy"; signing out of a gateway forgets its chats
 - [ ] Send prompts typed offline once the gateway is back (an outbox)
 - [ ] iOS app

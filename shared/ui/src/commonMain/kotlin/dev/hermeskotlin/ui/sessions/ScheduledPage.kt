@@ -44,6 +44,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import dev.hermeskotlin.ui.CopyableOnDesktop
 import dev.hermeskotlin.ui.isDesktop
@@ -133,16 +134,36 @@ internal fun ScheduledPage(
     onOpenRun: (SessionSummary) -> Unit,
     onSessionExpired: () -> Unit,
     owner: RoutineOwner? = null,
+    /** A job asked for from outside the page (a widget tap, a `hermes://scheduled` link): opened once the first refresh lands. */
+    openJobId: String? = null,
+    /** A bot profile alone routes the page to that bot's Routines, the sidebar's `routinesOf` shape. */
+    openProfile: String? = null,
+    /** Called once the job's runs are loading, or once the pending id was consumed without it (a deleted job). */
+    onJobOpened: () -> Unit = {},
     /** Opens a run in a window of its own (a desktop's Ctrl+click or menu), where one can open. */
     onPopOutRun: ((SessionSummary) -> Unit)? = null,
     // Each bot's routines keep their own page state, apart from the full list's.
-    viewModel: ScheduledViewModel = koinViewModel(key = owner?.let { "routines-${it.profile}" }),
+    viewModel: ScheduledViewModel = koinViewModel(key = owner?.let { "routines-${it.profile}" } ?: openProfile?.let { "routines-$it" }),
 ) {
+    // A profile-only link is the Routines page for that bot; the label isn't carried by the link, so the
+    // profile name stands in (the sidebar's `routinesOf` passes the real label).
+    val effectiveOwner = owner ?: openProfile?.let { RoutineOwner(profile = it, label = it) }
     val state = viewModel.state.collectAsStateWithLifecycle().value
     val job = state.openJob
 
-    LaunchedEffect(gateway, owner) { viewModel.bind(gateway, owner) }
+    LaunchedEffect(gateway, effectiveOwner) { viewModel.bind(gateway, effectiveOwner) }
     LaunchedEffect(Unit) { viewModel.refresh() }
+    // A pending job link is applied after bind's first refresh, never before it (bind wipes state, D22);
+    // the view model waits out the refresh itself. A job the list doesn't have clears the pending id
+    // silently — the callback still runs, so the caller drops its copy.
+    var jobApplied by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(openJobId) {
+        val id = openJobId ?: return@LaunchedEffect
+        if (jobApplied) return@LaunchedEffect
+        jobApplied = true
+        viewModel.applyPendingOpenJob(id)
+        onJobOpened()
+    }
     // Consume before the callback: the route changes on it, and the view model outlives the screen,
     // so a stale flag must not bounce the next mount after a fresh sign-in.
     LaunchedEffect(state.sessionExpired) {
@@ -186,7 +207,7 @@ internal fun ScheduledPage(
                 onSetDeliver = viewModel::setDeliver,
                 onSave = viewModel::saveJob,
                 onClose = { leaveEditor {} },
-                routineOf = owner?.label,
+                routineOf = effectiveOwner?.label,
             )
         }
     }
@@ -202,7 +223,7 @@ internal fun ScheduledPage(
                     viewModel.lastOpenedRun = run.id
                     onOpenRun(run)
                 },
-                owner = owner,
+                owner = effectiveOwner,
                 editorPane = editorPane,
                 leaveEditor = leaveEditor,
                 onPopOutRun = onPopOutRun?.let { popOut ->
@@ -219,7 +240,7 @@ internal fun ScheduledPage(
         visible = leaving != null,
         onDismissRequest = { leaving = null },
         title = stringResource(Res.string.sessions_discard_changes_title),
-        message = stringResource(if (owner != null) Res.string.sessions_discard_routine_detail else Res.string.sessions_discard_job_detail),
+        message = stringResource(if (effectiveOwner != null) Res.string.sessions_discard_routine_detail else Res.string.sessions_discard_job_detail),
         actions = {
             Button(stringResource(Res.string.sessions_keep_editing), onClick = { leaving = null }, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
             Button(stringResource(Res.string.sessions_discard), onClick = {

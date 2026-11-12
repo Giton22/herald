@@ -32,13 +32,30 @@ import org.koin.core.qualifier.named
 import org.koin.dsl.module
 
 val uiModule = module {
-    viewModelOf(::AppViewModel)
+    // Spelled out so the widgets' snapshot store is injected: it goes with gateways and bots.
+    viewModel {
+        AppViewModel(
+            get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(),
+            cache = getOrNull(),
+            seen = getOrNull(),
+            inbox = getOrNull(),
+            certs = get(),
+            widgetStore = get(),
+        )
+    }
     viewModelOf(::ConnectViewModel)
     viewModelOf(::SignInViewModel)
     viewModelOf(::SessionsViewModel)
     // Handed the sidebar's list view model, whose list it reads.
     viewModel { params -> OtherChatsViewModel(params.get(), get(), get(), get()) }
-    viewModelOf(::BotsViewModel)
+    // Spelled out for the same widget-store injection.
+    viewModel {
+        BotsViewModel(
+            get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(),
+            cache = getOrNull(),
+            widgetStore = get(),
+        )
+    }
     viewModelOf(::RoomsViewModel)
     viewModelOf(::ScheduledViewModel)
     viewModel { InboxViewModel(get(), get(), get(), get(), get(), get(), getOrNull<InboxNotices>() ?: NoInboxNotices) }

@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Chats row (docs/WIDGETS-DESIGN.md §7.2): marker slot, title/preview, trailing status group.
+    The whole row is one fill-in target; WidgetViews.kt fills it from ChatWidgetRow.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:baselineAligned="false"
+    android:id="@+id/row_root"
+    android:layout_width="match_parent"
+    android:layout_height="@dimen/widget_chats_row_height"
+    android:gravity="center_vertical"
+    android:orientation="horizontal">
+
+    <FrameLayout
+        android:layout_width="@dimen/widget_marker_size"
+        android:layout_height="@dimen/widget_marker_size"
+        android:layout_marginEnd="@dimen/widget_gap_standard">
+
+        <ImageView
+            android:id="@+id/marker_pin"
+            android:layout_width="@dimen/widget_marker_size"
+            android:layout_height="@dimen/widget_marker_size"
+            android:contentDescription="@null"
+            android:src="@drawable/widget_ic_pin"
+            android:visibility="gone" />
+
+        <ImageView
+            android:id="@+id/marker_thread"
+            android:layout_width="@dimen/widget_marker_size"
+            android:layout_height="7dp"
+            android:layout_gravity="bottom"
+            android:contentDescription="@null"
+            android:src="@drawable/widget_ic_thread"
+            android:visibility="gone" />
+    </FrameLayout>
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/row_title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:includeFontPadding="false"
+            android:maxLines="1"
+            android:textColor="@color/widget_text"
+            android:textSize="@dimen/widget_text_row_title"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/row_subtitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:includeFontPadding="false"
+            android:maxLines="1"
+            android:textColor="@color/widget_text_tertiary"
+            android:textSize="@dimen/widget_text_metadata" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="@dimen/widget_gap_standard"
+        android:baselineAligned="false"
+        android:gravity="center_vertical|end"
+        android:orientation="horizontal">
+
+            <ImageView
+                android:id="@+id/row_unread"
+                android:layout_width="@dimen/widget_status_dot"
+                android:layout_height="@dimen/widget_status_dot"
+                android:layout_marginEnd="@dimen/widget_gap_related"
+                android:contentDescription="@string/widget_unread"
+                android:src="@drawable/widget_ic_dot"
+                android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/row_status"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:includeFontPadding="false"
+            android:maxLines="1"
+            android:textColor="@color/widget_text"
+            android:textSize="@dimen/widget_text_metadata"
+            android:visibility="gone" />
+
+
+            <TextView
+                android:id="@+id/row_age"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:includeFontPadding="false"
+                android:textColor="@color/widget_text_tertiary"
+                android:textSize="@dimen/widget_text_metadata" />
+    </LinearLayout>
+</LinearLayout>

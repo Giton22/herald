@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Scheduled row (docs/WIDGETS-DESIGN.md §9.2-9.3): problem glyph or the stable time column,
+    job name and schedule/routine line, trailing problem pill. The whole row is one fill-in
+    target; WidgetViews.kt fills it from ScheduledWidgetRow.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/row_root"
+    android:layout_width="match_parent"
+    android:layout_height="@dimen/widget_scheduled_row_height"
+    android:gravity="center_vertical"
+    android:orientation="horizontal">
+
+    <ImageView
+        android:id="@+id/problem_icon"
+        android:layout_width="@dimen/widget_glyph_slot_small"
+        android:layout_height="@dimen/widget_glyph_slot_small"
+        android:layout_marginEnd="@dimen/widget_gap_standard"
+        android:contentDescription="@null"
+        android:visibility="gone" />
+
+    <LinearLayout
+        android:id="@+id/time_column"
+        android:layout_width="@dimen/widget_time_column_width"
+        android:layout_height="wrap_content"
+        android:layout_marginEnd="@dimen/widget_gap_standard"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/time_primary"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:includeFontPadding="false"
+            android:maxLines="1"
+            android:textColor="@color/widget_text"
+            android:textSize="@dimen/widget_text_time_primary"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/time_secondary"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:includeFontPadding="false"
+            android:maxLines="1"
+            android:textColor="@color/widget_text_tertiary"
+            android:textSize="@dimen/widget_text_metadata" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/row_title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:includeFontPadding="false"
+            android:maxLines="1"
+            android:textColor="@color/widget_text"
+            android:textSize="@dimen/widget_text_row_title"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/row_subtitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:includeFontPadding="false"
+            android:maxLines="1"
+            android:textColor="@color/widget_text_secondary"
+            android:textSize="@dimen/widget_text_metadata" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/row_badge"
+        android:layout_width="wrap_content"
+        android:layout_height="@dimen/widget_count_pill_height"
+        android:layout_marginStart="@dimen/widget_gap_standard"
+        android:background="@drawable/widget_pill_danger"
+        android:ellipsize="end"
+        android:gravity="center"
+        android:includeFontPadding="false"
+        android:maxLines="1"
+        android:paddingHorizontal="@dimen/widget_pill_padding_horizontal"
+        android:textColor="@color/widget_danger"
+        android:textSize="@dimen/widget_text_metadata"
+        android:textStyle="bold"
+        android:visibility="gone" />
+</LinearLayout>

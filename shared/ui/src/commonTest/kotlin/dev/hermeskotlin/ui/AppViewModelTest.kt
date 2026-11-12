@@ -128,12 +128,16 @@ class AppViewModelTest {
     @AfterTest fun tearDown() = Dispatchers.resetMain()
 
     // The connection's retry loop runs in the test's background scope, so it stops with the test.
-    private fun TestScope.viewModel(callStore: SettingsStore? = null, certs: ClientCertAliases = ClientCertAliases()): AppViewModel {
+    private fun TestScope.viewModel(
+        callStore: SettingsStore? = null,
+        certs: ClientCertAliases = ClientCertAliases(),
+        widgetStore: dev.hermeskotlin.core.widget.WidgetSnapshotStore? = null,
+    ): AppViewModel {
         val connection = GatewayConnection(auth, openSocket = { _, _ -> botTransport ?: error("no socket in tests") }, scope = backgroundScope)
         val host = ChatHost(connection, SessionsApi(client), backgroundScope)
         callSettings = callStore ?: SettingsStore(store, backgroundScope)
         val push = PushSetup(PushApi(connection), NoPushKeys, connection, gateways, SettingsStore(store, backgroundScope), backgroundScope) { "Test" }
-        return AppViewModel(gateways, auth, connection, lastChats, host, ProfileStore(store), links, BotChats(if (botTransport == null) NoBotChats else dev.hermeskotlin.core.bots.BotsApi(connection)), push, access, callSettings, SessionsApi(client), BotsApi(connection), cache, seen, certs = certs)
+        return AppViewModel(gateways, auth, connection, lastChats, host, ProfileStore(store), links, BotChats(if (botTransport == null) NoBotChats else dev.hermeskotlin.core.bots.BotsApi(connection)), push, access, callSettings, SessionsApi(client), BotsApi(connection), cache, seen, certs = certs, widgetStore = widgetStore)
     }
 
     private val seen = SeenStore(store) { 1_000.0 }
@@ -591,6 +595,29 @@ class AppViewModelTest {
         assertEquals(listOf(home), gateways.all().gateways)
         assertFalse(auth.hasStoredSession(work.gatewayUrl))
         assertTrue(auth.hasStoredSession(home.gatewayUrl))
+    }
+
+    @Test
+    fun removingAGatewayClearsItsWidgetSnapshotsToo() = runTest {
+        gateways.save(home)
+        gateways.save(work)
+        signedIn(home)
+        signedIn(work)
+        val widgets = dev.hermeskotlin.core.widget.WidgetSnapshotStore(InMemoryKeyValueStore())
+        widgets.saveNow(dev.hermeskotlin.core.widget.NowWidgetSnapshot(work.gatewayUrl.value, null, savedAtEpochSeconds = 1))
+        widgets.saveChats(dev.hermeskotlin.core.widget.ChatsWidgetSnapshot(work.gatewayUrl.value, null, rows = emptyList(), savedAtEpochSeconds = 1))
+        widgets.saveKanban(dev.hermeskotlin.core.widget.KanbanWidgetSnapshot(work.gatewayUrl.value, "main", "Main", savedAtEpochSeconds = 1))
+        widgets.saveScheduled(dev.hermeskotlin.core.widget.ScheduledWidgetSnapshot(work.gatewayUrl.value, savedAtEpochSeconds = 1))
+        val vm = viewModel(widgetStore = widgets)
+        vm.awaitChat(work)
+
+        vm.removeGateway(work)
+
+        vm.awaitChat(home)
+        assertNull(widgets.readNow(work.gatewayUrl.value, null))
+        assertNull(widgets.readChats(work.gatewayUrl.value, null))
+        assertNull(widgets.readKanban(work.gatewayUrl.value, "main"))
+        assertNull(widgets.readScheduled(work.gatewayUrl.value))
     }
 
     @Test

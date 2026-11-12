@@ -17,6 +17,21 @@ sealed interface AppLink {
     /** `hermes://bot/<profile>`: that bot's permanent chat, the link Hermes Desktop uses for a bot. */
     data class Bot(val profile: String) : AppLink
 
+    /** `hermes://kanban`: the Kanban page, on the app's pinned board. */
+    data object Kanban : AppLink
+
+    /** `hermes://kanban/<board>/<taskId>`: that board, that task's detail drawer open. */
+    data class KanbanTask(val board: String, val taskId: String) : AppLink
+
+    /** `hermes://scheduled`: the Scheduled page. */
+    data object Scheduled : AppLink
+
+    /** `hermes://scheduled/<jobId>`: the Scheduled page with that job's runs open. */
+    data class ScheduledJob(val jobId: String) : AppLink
+
+    /** `hermes://now`: opens the app (the Now widget's body tap); no pending chat. */
+    data object Now : AppLink
+
     companion object {
         const val SCHEME = "hermes"
 
@@ -39,6 +54,19 @@ sealed interface AppLink {
                 "voice-chat" -> VoiceChat.takeIf { segments.isEmpty() }
                 "session" -> segments.singleOrNull()?.takeIf { it.isNotBlank() }?.let(::Session)
                 "bot" -> segments.singleOrNull()?.takeIf { it.isNotBlank() }?.let(::Bot)
+                // The two-segment kanban path is why these parse per-host instead of through singleOrNull.
+                // A board-only kanban link is deliberately not one: a board tap always carries its task id.
+                "kanban" -> when {
+                    segments.isEmpty() -> Kanban
+                    segments.size == 2 && segments.all { it.isNotBlank() } -> KanbanTask(segments[0], segments[1])
+                    else -> null
+                }
+                "scheduled" -> when {
+                    segments.isEmpty() -> Scheduled
+                    segments.size == 1 && segments[0].isNotBlank() -> ScheduledJob(segments[0])
+                    else -> null
+                }
+                "now" -> Now.takeIf { segments.isEmpty() }
                 else -> null
             }
         }
