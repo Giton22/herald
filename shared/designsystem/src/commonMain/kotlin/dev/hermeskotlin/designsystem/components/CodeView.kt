@@ -138,7 +138,8 @@ internal fun coloredLines(colored: AnnotatedString, lines: List<IntRange>): List
     val starts = IntArray(lines.size) { lines[it].first }
     val perLine = arrayOfNulls<MutableList<AnnotatedString.Range<SpanStyle>>>(lines.size)
     for (span in colored.spanStyles) {
-        var at = starts.binarySearch(span.start).let { if (it >= 0) it else -it - 2 }.coerceAtLeast(0)
+        // asList(): IntArray's own binarySearch is the JVM's only.
+        var at = starts.asList().binarySearch(span.start).let { if (it >= 0) it else -it - 2 }.coerceAtLeast(0)
         while (at < lines.size && lines[at].first < span.end) {
             val line = lines[at]
             val start = maxOf(span.start, line.first)

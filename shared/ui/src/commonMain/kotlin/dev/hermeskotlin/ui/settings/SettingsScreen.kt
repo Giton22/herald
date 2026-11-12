@@ -1,5 +1,7 @@
 package dev.hermeskotlin.ui.settings
 
+import dev.hermeskotlin.ui.appIconsShow
+import dev.hermeskotlin.ui.phoneToolsShow
 import dev.hermeskotlin.designsystem.components.Tooltip
 import dev.hermeskotlin.designsystem.components.handCursor
 
@@ -489,9 +491,11 @@ internal fun SettingsView(
                         )
                     }
                     Divider()
-                    // The launcher's icon is the phone's; the desktop keeps Herald's own.
-                    if (!isDesktop) NavRow(title = stringResource(Res.string.settings_app_icon), detail = stringResource(appIcon.labelRes), icon = Lucide.LayoutGrid, onClick = onOpenAppIcon)
-                    if (!isDesktop) Divider()
+                    // The launcher's icon is the phone's; the desktop keeps its own, and iOS has no others yet.
+                    if (appIconsShow) {
+                        NavRow(title = stringResource(Res.string.settings_app_icon), detail = stringResource(appIcon.labelRes), icon = Lucide.LayoutGrid, onClick = onOpenAppIcon)
+                        Divider()
+                    }
                     NavRow(
                         title = stringResource(Res.string.settings_language),
                         detail = language?.endonym ?: stringResource(Res.string.settings_language_system),
@@ -891,8 +895,8 @@ internal fun SettingsView(
                     }
                 }
 
-                // Both are the phone's own: its tools and its lock.
-                if (!isDesktop) Section(stringResource(Res.string.settings_section_phone)) {
+                // Android's own tools: not on the desktop or on iOS.
+                if (phoneToolsShow) Section(stringResource(Res.string.settings_section_phone)) {
                     NavRow(
                         title = stringResource(Res.string.settings_phone_tools),
                         detail = phoneToolsSummary(settings),

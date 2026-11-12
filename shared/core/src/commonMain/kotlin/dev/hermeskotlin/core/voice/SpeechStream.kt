@@ -163,8 +163,9 @@ internal fun parseSpeechFrame(text: String): SpeechStreamEvent? {
 }
 
 private val FENCE = Regex("```")
-// Whitespace as Char.isWhitespace has it (a no-break space too), so the regexes and the held-back word agree.
-private const val SPACE = """\s\p{Z}\x1C-\x1F"""
+// Whitespace as Char.isWhitespace has it (a no-break space too), so the regexes and the held-back word agree. The
+// Unicode spaces are spelled out: Kotlin/Native's regex doesn't know `\p{Z}`.
+private const val SPACE = "\\s\u00A0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000\u001C-\u001F"
 // The line's indent stays: it may already have been sent before the file came.
 private val MEDIA_LINE = Regex("""(?m)^([ \t]*)MEDIA:[^$SPACE]+[ \t]*\r?\n""")
 private val MEDIA_INLINE = Regex("""(?<![^$SPACE])MEDIA:[^$SPACE]+?(?=[.,;:!?)\]]*(?:[$SPACE]|$))""")

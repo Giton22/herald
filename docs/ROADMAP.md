@@ -13,7 +13,7 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 ## Tech stack
 
 - [x] Kotlin Multiplatform project: shared `core` / `designsystem` / `ui` modules plus `androidApp`
-- [ ] iOS targets (`iosArm64`/`iosSimulatorArm64`)
+- [x] iOS targets (`iosArm64`/`iosSimulatorArm64`): the shared modules build for iOS, and CI runs their tests on the iOS simulator
 - [x] A `jvm` desktop target and an experimental `desktopApp` (Windows, macOS, Linux): the shared screens in a window, signed in by the browser, with chats, files and settings. In-app PDF pages are verified on the Linux Flatpak; Windows/macOS runtime validation is pending. Not there yet: voice and phone tools
 - [x] Desktop app works like Hermes Desktop: keyboard shortcuts (Ctrl+K palette, Ctrl+N, Ctrl+Tab, Ctrl+1…9, Ctrl+F find in the chat, Ctrl+J, Ctrl+/ and more; typing anywhere goes to the composer; Escape closes the innermost thing), OS notifications for approvals, questions and finished replies, a tray icon with close-to-tray, one instance, the window's place remembered, quick entry (Ctrl+Shift+Space; on Linux the key the desktop grants through its global shortcut portal, in the Flatpak and the .deb), chats in windows of their own (Ctrl+click, Ctrl+Shift+N, or the row's right-click menu), a file rail beside the chat in a wide window, `@file:` / `@folder:` completion from the gateway, files dropped or pasted onto the chat attached, and a long paste sent as a text file
 - [x] Desktop look and feel: denser controls sized for a mouse, sheets shown as centred dialogs that keep their place while a search filters them, action lists as compact menus at the pointer, right-click menus on chats, threads, messages, bots and rooms (arrow keys move through them), the app's own text menu with Comment, Explain and Ask aside on selected reply text and Open link / Copy link on a link (one right-click moves any open menu to what was clicked), reasoning text to select and copy, tooltips on icon buttons, a focus ring while the keyboard is in use (not after a click), scrollbars on every long list, scrolling page and dialog and on wide code blocks (Shift+wheel scrolls them sideways), the first field focused on the connect, sign-in and new-bot pages, rename dialogs that open with the name selected and save on Enter, face and colour choices that wrap instead of scrolling, flat sidebar rows, the screens drawn up into the title bar, a section list beside Settings in a wide window that follows the scroll and marks the section in view, a model picker that searches as soon as it opens (Enter takes the best match), a Ctrl+K palette where the pointer and the arrow keys move one highlight, + opening the system's own file dialog straight away, Export saving through the system's Save dialog, and the phone-only settings, Inbox and voice buttons hidden. Sidebar pages (Scheduled, Insights, Capabilities, Plugins, Config) open in the main area beside the chat list; the sidebar docks from 600dp; the side rail opens by the chat pane's own width; rows don't archive on a mouse drag; the window has a minimum size and a chat popped out opens at the last one's size. Approvals take Enter (Allow once) and Esc (Deny); a question's answer, a password and new dialogs' fields take the focus as they open; Up and Down move through the `/` and `@` lists (Enter or Tab takes one) in chats and rooms, and Enter sends in a room. Sent prompts can be selected; right-click menus on scheduled jobs, gateways and project chips; a pointing hand on buttons and chips; scrollbars on file views, wide tables and the `/` list; desktop wording ("computer", not "phone"); and a busy system clipboard no longer shows an error box
@@ -27,7 +27,7 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [x] Compose Multiplatform UI built on **Compose Unstyled**, with our own design system (`HermesTheme` tokens + primitives), edge-to-edge
 - [x] Light/dark color schemes following the system, or forced from Settings, plus pure black
 - [x] Ktor client: OkHttp engine on Android, content negotiation, WebSockets plugin installed
-- [ ] Ktor Darwin engine (iOS)
+- [x] Ktor Darwin engine (iOS)
 - [x] kotlinx.serialization
 - [ ] Kotlin models generated from `gateway-contract.openrpc.json`
 - [x] Koin for dependency injection, androidx ViewModel (KMP), Coroutines/Flow
@@ -35,7 +35,7 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [x] Room KMP for the local cache
 - [ ] DataStore for settings
 - [x] Secure storage on Android (AES-GCM key in the Android Keystore) for the session cookie jar
-- [ ] Secure storage on iOS (Keychain)
+- [x] Secure storage on iOS (Keychain items that open after the first unlock and stay on the device)
 - [x] Markdown rendering (`multiplatform-markdown-renderer`)
 - [ ] Coil 3 for images
 - [x] Unit tests (Ktor `MockEngine`, coroutines-test)

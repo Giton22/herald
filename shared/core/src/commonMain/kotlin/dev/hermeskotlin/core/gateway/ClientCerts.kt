@@ -2,6 +2,7 @@ package dev.hermeskotlin.core.gateway
 
 import dev.hermeskotlin.core.storage.KeyValueStore
 import io.ktor.client.engine.HttpClientEngine
+import kotlin.concurrent.Volatile
 
 /**
  * Aliases picked for hosts whose gateway isn't saved yet: the Connect screen probes before saving, so a pick

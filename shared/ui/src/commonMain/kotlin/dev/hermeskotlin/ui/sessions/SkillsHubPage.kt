@@ -232,7 +232,9 @@ private fun HubLists(state: SkillsHubUiState, actions: SkillsHubActions) {
 internal fun officialGroups(skills: List<HubSkill>): Map<String, List<HubSkill>> =
     skills
         .groupBy { it.category?.trim()?.lowercase()?.takeIf(String::isNotEmpty) ?: OTHER_CATEGORY }
-        .toSortedMap(compareBy<String> { it == OTHER_CATEGORY }.thenBy { it })
+        // Sorted into a LinkedHashMap: toSortedMap is the JVM's only.
+        .entries.sortedWith(compareBy<Map.Entry<String, List<HubSkill>>> { it.key == OTHER_CATEGORY }.thenBy { it.key })
+        .associate { it.key to it.value }
 
 private val HubPadding = PaddingValues(start = 14.dp, end = 14.dp, top = 4.dp, bottom = 32.dp)
 

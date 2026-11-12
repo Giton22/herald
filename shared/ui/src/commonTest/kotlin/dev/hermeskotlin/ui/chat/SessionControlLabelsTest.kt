@@ -10,6 +10,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 /** The labels choose catalogue keys and their arguments; the words themselves are the catalogue's. */
 class SessionControlLabelsTest {
@@ -139,7 +140,7 @@ class SessionControlLabelsTest {
         val next = assertIs<Words.Of>(loopLine(due, use24Hour = false, nowMillis = 1791810000000L).last())
         assertEquals(Res.string.chat_loop_next, next.res)
         val time = next.args.single() as String
-        assert(time.contains("AM") || time.contains("PM")) { time }
+        assertTrue(time.contains("AM") || time.contains("PM"), time)
     }
 
     @Test

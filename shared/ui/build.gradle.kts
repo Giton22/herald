@@ -27,6 +27,16 @@ kotlin {
         compilerOptions { freeCompilerArgs.add("-Xlambdas=class") }
     }
 
+    listOf(iosArm64(), iosSimulatorArm64()).forEach {
+        it.binaries.framework {
+            baseName = "HeraldShared"
+            isStatic = true
+        }
+    }
+
+    // Asked for by name: a hand-made source set (jvmShared) otherwise turns it off, and iosMain with it.
+    applyDefaultHierarchyTemplate()
+
     sourceSets {
         // What Android and the desktop share: the selection menu, which reaches into Compose by JVM reflection.
         val jvmShared by creating { dependsOn(commonMain.get()) }

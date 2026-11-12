@@ -352,7 +352,9 @@ internal fun skillGroups(skills: List<Skill>, query: String): Map<String, List<S
     skills
         .filter { query.isEmpty() || listOfNotNull(it.name, it.description, it.category).any { f -> f.contains(query, ignoreCase = true) } }
         .groupBy { it.category?.trim()?.lowercase()?.takeIf(String::isNotEmpty) ?: OTHER_CATEGORY }
-        .toSortedMap(compareBy<String> { it == OTHER_CATEGORY }.thenBy { it })
+        .entries
+        .sortedWith(compareBy<Map.Entry<String, List<Skill>>> { it.key == OTHER_CATEGORY }.thenBy { it.key })
+        .associate { it.key to it.value }
 
 /** The group uncategorised skills go in, last. */
 internal const val OTHER_CATEGORY = "other"

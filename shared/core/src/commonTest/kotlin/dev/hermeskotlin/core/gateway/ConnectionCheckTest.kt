@@ -147,7 +147,7 @@ class ConnectionCheckTest {
 
     @Test
     fun aCertDemandingSocketFailsOnlyTheLiveStageWithACertFix() = runTest {
-        val failure = javax.net.ssl.SSLHandshakeException("Received fatal alert: bad_certificate")
+        val failure = SSLHandshakeException("Received fatal alert: bad_certificate")
         val report = check(openSocket = { _, _ -> throw failure }).run(url)
 
         assertIs<StageResult.Passed>(report.results[CheckStage.Server])

@@ -83,7 +83,7 @@ class GatewayProbeTest {
 
     @Test
     fun aServerDemandingAClientCertificateIsNamed() = runTest {
-        val engine = MockEngine { throw javax.net.ssl.SSLHandshakeException("Received fatal alert: certificate_required") }
+        val engine = MockEngine { throw SSLHandshakeException("Received fatal alert: certificate_required") }
         val result = assertIs<ProbeResult.ClientCertRequired>(probeWith(engine).probe(url))
         assertTrue(result.reason.contains("certificate_required"))
     }
@@ -93,7 +93,7 @@ class GatewayProbeTest {
         val engine = MockEngine {
             throw RuntimeException(
                 "handshake failed",
-                javax.net.ssl.SSLHandshakeException("Read error: Failure in SSL library: TLSV13_ALERT_CERTIFICATE_REQUIRED"),
+                SSLHandshakeException("Read error: Failure in SSL library: TLSV13_ALERT_CERTIFICATE_REQUIRED"),
             )
         }
         assertIs<ProbeResult.ClientCertRequired>(probeWith(engine).probe(url))
@@ -129,14 +129,14 @@ class GatewayProbeTest {
     @Test
     fun turningDownTheServersCertificateIsNotACertDemand() {
         // Raised by the app's own trust check: it names the alert, but the server never sent one.
-        assertFalse(isClientCertDemand(javax.net.ssl.SSLHandshakeException("certificate_unknown: no certificates for this host")))
-        assertFalse(isClientCertDemand(javax.net.ssl.SSLHandshakeException("Empty server certificate chain")))
+        assertFalse(isClientCertDemand(SSLHandshakeException("certificate_unknown: no certificates for this host")))
+        assertFalse(isClientCertDemand(SSLHandshakeException("Empty server certificate chain")))
     }
 
     @Test
     fun anUntrustedServerCertificateIsNotACertDemand() = runTest {
         val engine = MockEngine {
-            throw javax.net.ssl.SSLHandshakeException("PKIX path building failed: unable to find valid certification path")
+            throw SSLHandshakeException("PKIX path building failed: unable to find valid certification path")
         }
         assertIs<ProbeResult.Unreachable>(probeWith(engine).probe(url))
     }
@@ -144,6 +144,12 @@ class GatewayProbeTest {
     @Test
     fun aPlainTransportFailureIsNotACertDemand() = runTest {
         assertFalse(isClientCertDemand(IllegalStateException("Connection refused")))
-        assertFalse(isClientCertDemand(javax.net.ssl.SSLHandshakeException("Remote host terminated the handshake")))
+        assertFalse(isClientCertDemand(SSLHandshakeException("Remote host terminated the handshake")))
     }
 }
+
+/**
+ * Stands in for the JVM's javax.net.ssl one, which iOS doesn't have: [isClientCertDemand] goes by the class's
+ * name and message, not its type.
+ */
+internal class SSLHandshakeException(message: String) : Exception(message)
