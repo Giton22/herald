@@ -48,6 +48,11 @@
     <string name="voice_error_live_ended">La llamada en directo terminó.</string>
     <string name="voice_error_live_ended_because">La llamada en directo terminó: %1$s</string>
     <string name="voice_error_live_dropped">La llamada en directo se cortó.</string>
+    <string name="voice_said_unreachable">Perdona, no pude contactar con Hermes para esa solicitud.</string>
+    <string name="voice_said_questions_in_chat">Hermes tiene algunas preguntas para ti. Están esperando en el chat.</string>
+    <string name="watch_call_target_changed">El destino de llamada predeterminado ha cambiado. Toca Llamar otra vez.</string>
+    <string name="watch_call_not_live">La voz en directo ya no está configurada en tu Gateway. Toca para preguntar de una en una.</string>
+    <string name="watch_call_lost">Kyllene en tu teléfono ha perdido la llamada.</string>
     <string name="call_title">Llamada de Kyllene</string>
     <string name="call_answer">Responder</string>
     <string name="call_decline">Rechazar</string>

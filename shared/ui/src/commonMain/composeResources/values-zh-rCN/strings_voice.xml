@@ -48,6 +48,11 @@
     <string name="voice_error_live_ended">实时通话已结束。</string>
     <string name="voice_error_live_ended_because">实时通话已结束：%1$s</string>
     <string name="voice_error_live_dropped">实时通话已断开。</string>
+    <string name="voice_said_unreachable">抱歉，这条请求没能联系上 Hermes。</string>
+    <string name="voice_said_questions_in_chat">Hermes 有几个问题要问你，它们都在对话中等你。</string>
+    <string name="watch_call_target_changed">默认通话目标已更改，请再次点按“呼叫”。</string>
+    <string name="watch_call_not_live">你的网关已不再配置实时语音。点按可一次问一个问题。</string>
+    <string name="watch_call_lost">你手机上的 Kyllene 丢失了这次通话。</string>
     <string name="call_title">Kyllene 通话</string>
     <string name="call_answer">接听</string>
     <string name="call_decline">拒绝</string>

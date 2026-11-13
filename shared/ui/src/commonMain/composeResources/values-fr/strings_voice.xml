@@ -48,6 +48,11 @@
     <string name="voice_error_live_ended">L’appel en direct est terminé.</string>
     <string name="voice_error_live_ended_because">L’appel en direct est terminé : %1$s</string>
     <string name="voice_error_live_dropped">L’appel en direct a été coupé.</string>
+    <string name="voice_said_unreachable">Désolé, je n’ai pas pu joindre Hermes pour cette demande.</string>
+    <string name="voice_said_questions_in_chat">Hermes a quelques questions pour vous. Elles attendent dans le chat.</string>
+    <string name="watch_call_target_changed">La cible d’appel par défaut a changé. Touchez Appeler à nouveau.</string>
+    <string name="watch_call_not_live">La voix en direct n’est plus configurée sur votre Gateway. Touchez pour poser une question à la fois.</string>
+    <string name="watch_call_lost">Kyllene sur votre téléphone a perdu l’appel.</string>
     <string name="call_title">Appel Kyllene</string>
     <string name="call_answer">Répondre</string>
     <string name="call_decline">Refuser</string>
