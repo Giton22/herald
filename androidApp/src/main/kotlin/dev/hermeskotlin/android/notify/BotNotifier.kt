@@ -2,6 +2,7 @@ package dev.hermeskotlin.android.notify
 
 import android.content.Context
 import dev.hermeskotlin.core.bots.Bot
+import dev.hermeskotlin.core.bots.BotSession
 import dev.hermeskotlin.core.bots.BotsApi
 import dev.hermeskotlin.core.bots.forRoster
 import dev.hermeskotlin.core.chat.ChatHost
@@ -37,9 +38,16 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-/** Only what notifications and cold widgets need; no session previews are kept on disk. */
+/** Canonical chat IDs let cold widgets filter retitled bot chats; no session contents are kept on disk. */
 internal fun List<Bot>.forSavedRoster(): List<Bot> = map {
-    Bot(name = it.name, isDefault = it.isDefault, displayName = it.displayName, uiMeta = it.uiMeta, hasAvatar = it.hasAvatar)
+    Bot(
+        name = it.name,
+        isDefault = it.isDefault,
+        displayName = it.displayName,
+        canonicalSession = it.canonicalSession?.let { chat -> BotSession(id = chat.id, resolvedId = chat.resolvedId) },
+        uiMeta = it.uiMeta,
+        hasAvatar = it.hasAvatar,
+    )
 }
 
 /**

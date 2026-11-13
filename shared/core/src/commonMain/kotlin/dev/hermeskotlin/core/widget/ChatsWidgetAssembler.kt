@@ -21,8 +21,8 @@ object ChatsWidgetAssembler {
      *   the raw gateway flag alone.
      * @param waiting `AttentionTracker.waiting` by stored id (empty cold); the only source of waiting labels.
      * @param runningChats `AttentionTracker.running` by stored id (empty cold); never `SessionSummary.isActive`.
-     * @param botChatIds every stored id a warm bot roster's `canonicalSession` answers (`BotSession.isChat`);
-     *   empty cold, when the title rule below is the only exclusion.
+     * @param botChatIds every stored id a live or saved bot roster's `canonicalSession` answers
+     *   (`BotSession.isChat`); empty only when no roster was saved, leaving the title rule below.
      * @param threadIds stored ids the `ThreadsRepository` knows as threads (empty cold).
      * @param savedCopy true when the rows came from `OfflineCache`, not the live gateway.
      */
@@ -59,7 +59,7 @@ object ChatsWidgetAssembler {
         return ChatsWidgetSnapshot(gatewayUrl = gatewayUrl, profile = profile, rows = rows, savedAtEpochSeconds = nowSeconds)
     }
 
-    /** Bot chats belong to Now, not this list. Warm: the roster's canonical ids say so; cold: the gateway titles them exactly "Bot Chat". */
+    /** Bot chats belong to Now, not this list. Roster IDs recognize retitled chats; the title is the fallback. */
     private fun isBotChat(session: SessionSummary, botChatIds: Set<String>): Boolean =
         botChatIds.any { session.isChat(it) } || session.displayTitle == BOT_CHAT_TITLE
 
