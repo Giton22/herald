@@ -66,6 +66,7 @@ import dev.hermeskotlin.designsystem.components.BottomSheet
 import dev.hermeskotlin.designsystem.components.Button
 import dev.hermeskotlin.designsystem.components.ButtonVariant
 import dev.hermeskotlin.designsystem.components.Spinner
+import dev.hermeskotlin.ui.components.ProvideAppWords
 import dev.hermeskotlin.ui.resources.*
 import org.jetbrains.compose.resources.stringResource
 
@@ -131,6 +132,7 @@ internal fun CallTargetPicker(
         loading = false
     }
     BottomSheet(visible = true, onDismiss = onDismiss) {
+      ProvideAppWords {
         Column(
             Modifier.heightIn(max = 560.dp).verticalScroll(rememberScrollState()).padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -189,6 +191,7 @@ internal fun CallTargetPicker(
                 }
             }
         }
+      }
     }
 }
 

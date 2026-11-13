@@ -286,6 +286,7 @@ class AssistantPanelModel(
      * [expectScreenshot] say which parts the platform will send, so a quick question waits for them.
      */
     fun begin(expectText: Boolean, expectScreenshot: Boolean) {
+        shown = true
         voice.cancelDictation()
         composer.clearText()
         _includeScreen.value = false
@@ -308,8 +309,18 @@ class AssistantPanelModel(
     }
 
     /** Back after stepping aside (for Android's microphone prompt): the same chat and screen, listening again. */
-    fun resume() = _shows.update { it + 1 }
+    fun resume() {
+        shown = true
+        _shows.update { it + 1 }
+    }
 
+    /** Dismissal gives up the microphone, including a start waiting on target validation. */
+    fun hide() {
+        shown = false
+        voice.cancelDictation()
+    }
+
+    private var shown = false
     private var listenedOn = -1
 
     /**
@@ -317,7 +328,7 @@ class AssistantPanelModel(
      * (circling replaces it), and coming back from circling must not start listening, which sends.
      */
     fun claimListening(show: Int): Boolean {
-        if (show == listenedOn) return false
+        if (!shown || show != _shows.value || _phase.value != AssistantPhase.Ready || _targetUnavailable.value || show == listenedOn) return false
         listenedOn = show
         return true
     }
@@ -469,7 +480,7 @@ class AssistantPanelModel(
     fun storedSessionId(): String? = _session.value?.state?.value?.storedSessionId?.takeIf { _session.value?.state?.value?.hasConversation == true }
 
     fun close() {
-        voice.cancelDictation()
+        hide()
         _session.value?.stop()
         scope.cancel()
     }

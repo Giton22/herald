@@ -1328,7 +1328,7 @@ internal fun Divider() {
 private fun CallTargetRow(target: CallTarget, faces: BotFaces, onClick: () -> Unit) {
     val bot = target.profile?.let { name -> faces.bots.firstOrNull { it.name == name } ?: Bot(name = name, displayName = target.label) }
     val title = stringResource(Res.string.settings_call_target)
-    val label = bot?.label ?: target.label
+    val label = if (target.profile == null && target.sessionId == null) stringResource(Res.string.call_target_new_session) else bot?.label ?: target.label
     val detail = stringResource(Res.string.settings_call_target_detail)
     if (!settingShown(title, label, detail)) return
     Row(Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = onClick).padding(horizontal = 14.dp, vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {

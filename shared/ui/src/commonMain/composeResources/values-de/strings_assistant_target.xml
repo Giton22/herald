@@ -1,0 +1,10 @@
+<resources>
+    <string name="settings_assistant_target">Assistenten-Chat</string>
+    <string name="assistant_target_new">Neuer Chat</string>
+    <string name="assistant_target_new_detail">Bei jedem Aufruf des Handy-Assistenten einen neuen Chat beginnen.</string>
+    <string name="assistant_target_unavailable">Der gewählte Assistenten-Chat konnte nicht geöffnet werden. Prüfe die Verbindung oder wähle unter Einstellungen → Assistenten-Chat einen anderen Chat.</string>
+    <string name="assistant_target_account_error">Das angemeldete Konto konnte nicht bestätigt werden. Versuche es erneut.</string>
+    <string name="call_target_search_placeholder">ID oder Nachricht suchen</string>
+    <string name="call_target_search_detail">Suche nach ID-Anfang oder Nachrichtentext. Bis zu 30 Treffer.</string>
+    <string name="call_target_no_matches">Keine passenden Sitzungen.</string>
+</resources>

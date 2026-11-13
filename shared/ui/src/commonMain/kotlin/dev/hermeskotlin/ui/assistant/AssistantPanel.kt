@@ -1,5 +1,7 @@
 package dev.hermeskotlin.ui.assistant
 
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import dev.hermeskotlin.ui.imeVisible
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -204,7 +206,7 @@ private fun Panel(
             MessengerEdge(model, Modifier.fillMaxSize())
         } else {
             MessengerEdge(model, Modifier.fillMaxSize())
-            Card(model, microphoneAllowed, onOpenHerald, onAllowMicrophone, onOpenScreenSettings, onClose)
+            AssistantPanelCard(model, microphoneAllowed, onOpenHerald, onAllowMicrophone, onOpenScreenSettings, onClose)
         }
     }
 }
@@ -248,7 +250,7 @@ internal interface AssistantActions {
 }
 
 @Composable
-private fun Card(
+internal fun AssistantPanelCard(
     model: AssistantPanelModel,
     microphoneAllowed: Boolean,
     onOpenHerald: (String?) -> Unit,
@@ -269,10 +271,13 @@ private fun Card(
     val speaker by model.speaker.collectAsState()
 
     // Calling the assistant up is asking to talk: listen straight away, on every call-up, when the app may.
-    if (phase == AssistantPhase.Ready) {
-        LaunchedEffect(model, shows, microphoneAllowed) {
-            if (microphoneAllowed && !targetUnavailable && !dictation.active && model.claimListening(shows)) model.toggleDictation()
-        }
+    LaunchedEffect(model, shows, microphoneAllowed) {
+        if (!microphoneAllowed) return@LaunchedEffect
+        // Target validation and the previous recognizer can finish after this call-up was drawn.
+        combine(model.phase, model.targetUnavailable, model.voice.dictation) { ready, unavailable, speech ->
+            ready == AssistantPhase.Ready && !unavailable && !speech.active
+        }.first { it }
+        if (model.claimListening(shows)) model.toggleDictation()
     }
     val actions = remember(model) {
         object : AssistantActions {
