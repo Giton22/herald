@@ -7,7 +7,6 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonPrimitive
 
 /**
  * One stored session row as `GET /api/sessions` returns it (hermes_cli/web_routers/sessions.py,
@@ -200,14 +199,14 @@ private val IMAGE_PART_TYPES = setOf("image_url", "image", "input_image")
 
 private fun JsonElement?.stringOrNull(): String? = (this as? JsonPrimitive)?.takeIf { it.isString }?.contentOrNull
 
-/** Strings pass through; OpenAI-style parts arrays join their `text` parts; anything else is dropped. */
+/** Strings pass through; parts arrays join primitive text values and skip unsupported structured values. */
 private fun JsonElement?.plainText(): String = when (this) {
     null -> ""
     is JsonPrimitive -> if (isString) content else ""
     is JsonArray -> mapNotNull { part ->
         when (part) {
             is JsonPrimitive -> part.contentOrNull
-            is JsonObject -> part["text"]?.jsonPrimitive?.contentOrNull
+            is JsonObject -> (part["text"] as? JsonPrimitive)?.contentOrNull
             else -> null
         }
     }.joinToString("\n")
