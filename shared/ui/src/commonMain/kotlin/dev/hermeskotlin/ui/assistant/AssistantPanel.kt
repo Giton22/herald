@@ -39,6 +39,7 @@ import androidx.compose.foundation.text.selection.LocalTextSelectionColors
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.key
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -261,7 +262,9 @@ internal fun AssistantPanelCard(
     val phase by model.phase.collectAsState()
     val targetUnavailable by model.targetUnavailable.collectAsState()
     val session by model.session.collectAsState()
-    val chat by (session?.state ?: remember { emptyFlow() }).collectAsState(ChatState())
+    val chat by key(session) {
+        (session?.state ?: remember { emptyFlow() }).collectAsState(ChatState())
+    }
     val connection by model.connectionState.collectAsState()
     val screen by model.screen.collectAsState()
     val includeScreen by model.includeScreen.collectAsState()

@@ -3,6 +3,8 @@ package dev.hermeskotlin.ui.assistant
 import android.content.ComponentName
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import com.composeunstyled.theme.ColorScheme
 import dev.hermeskotlin.core.auth.AuthApi
@@ -62,14 +64,20 @@ class AssistantInvocationTest {
         settings.update { it.copy(assistantTargets = if (fixed) mapOf(gateway.url to mapOf("" to AssistantTarget("user", "picked"))) else emptyMap()) }
         var validation = CompletableDeferred<Unit>()
         var reads = 0
+        var missing = false
         val client = createHttpClient(MockEngine(MockEngineConfig().apply {
             dispatcher = Dispatchers.Unconfined
             addHandler { request ->
                 val body = when {
                     request.url.encodedPath.endsWith("ws-ticket") -> awaitCancellation()
                     request.url.encodedPath.endsWith("/auth/me") -> """{"user_id":"user"}"""
-                    request.url.encodedPath.endsWith("/picked") -> { reads++; validation.await(); "{}" }
-                    else -> """{"session_id":"picked","messages":[]}"""
+                    request.url.encodedPath.endsWith("/picked") -> {
+                        reads++
+                        validation.await()
+                        if (missing) return@addHandler respond("{}", HttpStatusCode.NotFound)
+                        "{}"
+                    }
+                    else -> """{"session_id":"picked","messages":[{"role":"user","content":"Scoped synthetic message"}]}"""
                 }
                 respond(body, HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
             }
@@ -136,6 +144,14 @@ class AssistantInvocationTest {
             compose.waitForIdle()
             assertFalse(model.voice.dictation.value.active)
             assertEquals(2, recognizer.starts)
+            if (fixed) {
+                compose.waitUntil(10_000) { compose.onAllNodesWithText("Scoped synthetic message").fetchSemanticsNodes().isNotEmpty() }
+                compose.runOnIdle { missing = true; model.begin(false, false) }
+                compose.waitUntil(10_000) { compose.waitForIdle(); model.targetUnavailable.value }
+                compose.onNodeWithText("Scoped synthetic message").assertDoesNotExist()
+                assertEquals(null, model.session.value)
+                assertEquals(2, recognizer.starts, "No recording for an unavailable target")
+            }
         } finally {
             validation.complete(Unit)
             recognizer.release.complete(Unit)

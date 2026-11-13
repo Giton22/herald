@@ -379,7 +379,10 @@ class AssistantPanelModel(
             val saved = gateway ?: return@launch
             if (invocation != callUp || _session.value !== session) return@launch
             if (gateways.current() != saved || profiles.get(saved.gatewayUrl) != profile) {
+                // Refreshing a stale send must not reopen a dismissed microphone.
+                val visible = shown
                 begin(false, false)
+                shown = visible
                 return@launch
             }
             val sent = session.send(prompt, attachments)
