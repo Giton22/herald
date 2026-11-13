@@ -89,13 +89,13 @@ class WidgetUpdater(
         kick.tryEmit(Unit)
     }
 
-    /** One refresh of every widget, rendered to every live instance. The providers call this in `goAsync()`. */
-    suspend fun refreshAndRender() {
+    /** One refresh of every widget. Provider broadcasts force the REST-only path; in-process signals may use live state. */
+    suspend fun refreshAndRender(cold: Boolean = false) {
         val locked = isWidgetLocked(settings, appLock)
         val target = currentGateway()
         val outcome = refresher.refresh(
             profile = null,
-            connected = connection.state.value is ConnectionState.Connected,
+            connected = !cold && connection.state.value is ConnectionState.Connected,
             savedNotice = ::savedNotice,
         )
         // A slow refresh can outlive the gateway it read: never push another scope's data, and a
@@ -105,9 +105,9 @@ class WidgetUpdater(
         render(outcome, locked)
     }
 
-    /** The gateway a pass would read: the current pick, else the primary. */
-    private fun currentGateway(): String? =
-        gateways.list.value.let { it.current ?: it.primary }?.gatewayUrl?.value
+    /** The gateway a pass would read: load the saved list before choosing the current pick or primary. */
+    private suspend fun currentGateway(): String? =
+        gateways.all().let { it.current ?: it.primary }?.gatewayUrl?.value
 
     /** Renders one refresh outcome to every instance of the four providers. */
     fun render(outcome: WidgetRefresher.Outcome, locked: Boolean) {

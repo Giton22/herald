@@ -251,11 +251,12 @@ object NowReducer {
         val knownBotNames = knownBots.map { it.name }.toSet()
         val chatIds = freshInputs.sessions.flatMap { listOf(it.id) + it.lineageIds.orEmpty() }.toSet()
         fun NowTarget.chatExists(): Boolean = storedSessionId == null || storedSessionId in chatIds
-        fun NowTarget.botExists(): Boolean = botProfile == null || botProfile in knownBotNames
+        fun NowTarget.botExists(): Boolean =
+            botProfile == null || knownBotNames.isEmpty() || botProfile in knownBotNames
 
         // A bot row's target also names the bot chat, which the Recent page never shows (bot chats are
         // machine-originated), so the roster is the only existence signal for it; a plain chat row is
-        // judged by the page alone.
+        // judged by the page alone. An empty saved roster supplies no evidence, so it keeps bot rows.
         fun NowTarget.exists(): Boolean = if (botProfile != null) botExists() else chatExists()
 
         val carriedNeedsYou = stored.needsYou

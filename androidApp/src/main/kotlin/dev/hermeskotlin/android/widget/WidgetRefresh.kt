@@ -14,7 +14,7 @@ internal fun BroadcastReceiver.goAsyncRefresh(context: Context) {
     val pending = goAsync()
     updater.scope.launch {
         try {
-            updater.refreshAndRender()
+            updater.refreshAndRender(cold = true)
         } finally {
             pending.finish()
         }

@@ -8,7 +8,7 @@ import org.robolectric.RobolectricTestRunner
 
 /** The D26 fallback chain: fresh snapshot wins, then the stored one with its notice, else error. */
 @RunWith(RobolectricTestRunner::class)
-@org.robolectric.annotation.Config(application = WidgetTestApp::class)
+@org.robolectric.annotation.Config(sdk = [35], application = WidgetTestApp::class)
 class WidgetRefresherDecideTest {
 
     private data class FakeSnapshot(val at: Long)

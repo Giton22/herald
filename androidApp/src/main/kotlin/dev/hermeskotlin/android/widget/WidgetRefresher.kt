@@ -38,7 +38,7 @@ class WidgetRefresher(
         val gatewayUrl: String?,
         val gatewayLabel: String?,
         val profile: String?,
-        /** True when the socket was down, so Now's renderer can mark cold-carried rows (§6.5). */
+        /** True for a REST-only pass, so Now's renderer can mark cold-carried rows (§6.5). */
         val nowCold: Boolean,
         val now: WidgetViews.UiState<NowWidgetSnapshot>,
         val chats: WidgetViews.UiState<ChatsWidgetSnapshot>,
@@ -57,7 +57,7 @@ class WidgetRefresher(
             ?: fallback(profile, savedNotice)
 
     private suspend fun refreshAttempt(profile: String?, connected: Boolean, savedNotice: (Long) -> String): Outcome {
-        val list = gateways.list.value
+        val list = gateways.all()
         val gateway = list.current ?: list.primary
             ?: return Outcome(
                 gatewayUrl = null, gatewayLabel = null, profile = profile, nowCold = true,
@@ -66,14 +66,17 @@ class WidgetRefresher(
             )
         val url = gateway.gatewayUrl
 
-        // Cold (REST-only) refreshes must not run the live Now pipeline: with empty socket maps it
-        // would wipe every carried socket-only row. The cold path merges the stored snapshot's rows
-        // across (D14), judging them against the known/saved roster so a bot the socket never listed
-        // in this process isn't dropped as unknown.
-        val nowSnapshot = runCatchingCancellable {
-            if (connected) assembler.refreshNow(url, profile)
-            else assembler.refreshNowCold(url, profile, knownBots = knownBots())
+        // A provider refresh is REST-only even if a stale socket still says Connected. The combined
+        // cold pipeline never asks BotsApi for a live roster, and it shares the saved roster between
+        // Now's carried-row merge and Chats' bot-chat filtering.
+        val cold = if (connected) null else runCatchingCancellable {
+            assembler.refreshAllCold(url, profile, knownBots = knownBots())
         }.getOrNull()
+        val nowSnapshot = if (connected) {
+            runCatchingCancellable { assembler.refreshNow(url, profile) }.getOrNull()
+        } else {
+            cold?.now
+        }
         val now = if (nowSnapshot != null) {
             WidgetViews.UiState.Content(nowSnapshot)
         } else {
@@ -81,7 +84,11 @@ class WidgetRefresher(
                 ?.let { WidgetViews.UiState.Content(it, savedNotice(it.savedAtEpochSeconds)) }
                 ?: WidgetViews.UiState.Error
         }
-        val chatsSnapshot = runCatchingCancellable { assembler.refreshChats(url, profile) }.getOrNull()
+        val chatsSnapshot = if (connected) {
+            runCatchingCancellable { assembler.refreshChats(url, profile) }.getOrNull()
+        } else {
+            cold?.chats
+        }
         val chats = if (chatsSnapshot != null) {
             WidgetViews.UiState.Content(chatsSnapshot)
         } else {
@@ -89,10 +96,19 @@ class WidgetRefresher(
                 ?.let { WidgetViews.UiState.Content(it, savedNotice(it.savedAtEpochSeconds)) }
                 ?: WidgetViews.UiState.Error
         }
-        val kanban = runCatchingCancellable { assembler.refreshKanban(url) }.getOrNull()
+        val kanbanSnapshot = if (connected) {
+            runCatchingCancellable { assembler.refreshKanban(url) }.getOrNull()
+        } else {
+            cold?.kanban
+        }
+        val kanban = kanbanSnapshot
             ?.let { WidgetViews.UiState.Content(it) }
             ?: WidgetViews.UiState.Error
-        val scheduledSnapshot = runCatchingCancellable { assembler.refreshScheduled(url, live = connected) }.getOrNull()
+        val scheduledSnapshot = if (connected) {
+            runCatchingCancellable { assembler.refreshScheduled(url, live = true) }.getOrNull()
+        } else {
+            cold?.scheduled
+        }
         val scheduled = if (scheduledSnapshot != null) {
             WidgetViews.UiState.Content(scheduledSnapshot)
         } else {
@@ -119,7 +135,7 @@ class WidgetRefresher(
      * the "Couldn't refresh · Saved HH:MM" notice — or its error state, never a loading spinner.
      */
     private suspend fun fallback(profile: String?, savedNotice: (Long) -> String): Outcome {
-        val list = gateways.list.value
+        val list = gateways.all()
         val gateway = list.current ?: list.primary
             ?: return Outcome(
                 gatewayUrl = null, gatewayLabel = null, profile = profile, nowCold = true,
