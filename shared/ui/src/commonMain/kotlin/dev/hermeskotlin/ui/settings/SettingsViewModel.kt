@@ -12,6 +12,8 @@ import kotlinx.coroutines.Job
 import dev.hermeskotlin.core.gateway.GatewayUrl
 import dev.hermeskotlin.core.gateway.ProbeResult
 import dev.hermeskotlin.core.gateway.SavedGateway
+import dev.hermeskotlin.core.network.map
+import dev.hermeskotlin.core.sessions.SessionPage
 import dev.hermeskotlin.core.network.ApiResult
 import dev.hermeskotlin.core.plugins.NextPromptApi
 import kotlinx.coroutines.CancellationException
@@ -132,8 +134,10 @@ class SettingsViewModel(
 
     suspend fun callProfiles(gateway: SavedGateway) = profilesApi.roster(gateway.gatewayUrl)
 
-    suspend fun callSessions(gateway: SavedGateway, offset: Int, profile: String? = null) =
-        sessionsApi.list(gateway.gatewayUrl, offset = offset, profile = profile)
+    suspend fun callSessions(gateway: SavedGateway, offset: Int, profile: String? = null, query: String = "") =
+        if (query.isBlank()) sessionsApi.list(gateway.gatewayUrl, offset = offset, profile = profile)
+        else sessionsApi.search(gateway.gatewayUrl, query.trim(), limit = 30, profile = profile)
+            .map { SessionPage(sessions = it) }
 
     suspend fun assistantUser(gateway: SavedGateway) = (auth.me(gateway.gatewayUrl) as? ApiResult.Success)?.value?.userId
 

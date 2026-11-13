@@ -1,6 +1,14 @@
 package dev.hermeskotlin.ui.settings
 
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.input.TextFieldState
+import androidx.compose.ui.text.input.ImeAction
+import com.composables.icons.lucide.Search
+import dev.hermeskotlin.designsystem.components.TextField
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.delay
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -73,33 +81,51 @@ internal fun CallTargetPicker(
     onSelect: (CallTarget, String?) -> Unit,
 ) {
     val prefs by viewModel.settings.collectAsStateWithLifecycle()
-    var userId by remember(gateway.url, profile) { mutableStateOf<String?>(null) }
-    LaunchedEffect(gateway.url, profile) { if (assistant) userId = viewModel.assistantUser(gateway) }
+    var userId by remember(gateway.url, profile, assistant) { mutableStateOf<String?>(null) }
     val selected = if (assistant) prefs.assistantTargets[gateway.url]?.get(profile.orEmpty())
         ?.takeIf { it.userId == userId }?.let { CallTarget(sessionId = it.sessionId, label = it.label) } ?: CallTarget()
         else (prefs.callTargets[gateway.url] ?: CallTarget()).takeIf { it.valid }
-    var mode by remember(gateway.url, profile) { mutableStateOf(0) }
-    var offset by remember(gateway.url, profile) { mutableStateOf(0) }
-    var profiles by remember { mutableStateOf<List<Profile>>(emptyList()) }
-    var page by remember { mutableStateOf(SessionPage()) }
-    var loading by remember { mutableStateOf(false) }
-    var error by remember { mutableStateOf<String?>(null) }
+    var mode by remember(gateway.url, profile, assistant) { mutableStateOf(0) }
+    val query = remember(gateway.url, profile, assistant, mode) { TextFieldState() }
+    val search = query.text.toString().trim()
+    var offset by remember(gateway.url, profile, assistant, search) { mutableStateOf(0) }
+    var profiles by remember(gateway.url, profile, assistant) { mutableStateOf<List<Profile>>(emptyList()) }
+    var page by remember(gateway.url, profile, assistant) { mutableStateOf(SessionPage()) }
     var retry by remember { mutableStateOf(0) }
+    var loading by remember(gateway.url, profile, assistant, mode, offset, search, retry) { mutableStateOf(mode != 0) }
+    var error by remember(gateway.url, profile, assistant, mode, offset, search, retry) { mutableStateOf<String?>(null) }
     val accountError = stringResource(Res.string.assistant_target_account_error)
-    LaunchedEffect(gateway.url, profile, mode, offset, retry) {
-        if (mode == 0) return@LaunchedEffect
+    LaunchedEffect(gateway.url, profile, assistant, mode, offset, search, retry) {
+        if (mode == 0) {
+            if (assistant) {
+                val user = viewModel.assistantUser(gateway)
+                currentCoroutineContext().ensureActive()
+                userId = user
+            }
+            return@LaunchedEffect
+        }
         loading = true
         error = null
         if (mode == 2) {
             val result = viewModel.callProfiles(gateway)
+            currentCoroutineContext().ensureActive()
             if (result is ApiResult.Success) profiles = result.value.profiles.filterNot { it.isDefault }
             else error = result.errorMessage
         } else {
-            if (assistant) userId = viewModel.assistantUser(gateway)
+            if (search.isNotEmpty()) delay(300)
+            if (assistant) {
+                val user = viewModel.assistantUser(gateway)
+                currentCoroutineContext().ensureActive()
+                userId = user
+            }
             if (assistant && userId == null) error = accountError
             else {
-                val result = viewModel.callSessions(gateway, offset, if (assistant) profile else null)
-                if (result is ApiResult.Success) page = result.value else error = result.errorMessage
+                val result = viewModel.callSessions(gateway, offset, if (assistant) profile else null, search)
+                currentCoroutineContext().ensureActive()
+                val sameAccount = !assistant || viewModel.assistantUser(gateway) == userId
+                currentCoroutineContext().ensureActive()
+                if (!sameAccount) error = accountError
+                else if (result is ApiResult.Success) page = result.value else error = result.errorMessage
             }
         }
         loading = false
@@ -113,6 +139,14 @@ internal fun CallTargetPicker(
                 Text(stringResource(if (assistant) Res.string.settings_assistant_target else Res.string.call_target_title), modifier = Modifier.weight(1f), style = Theme[typography][title], color = Theme[colors][text])
                 if (mode != 0) Button(stringResource(Res.string.common_back), variant = ButtonVariant.Ghost, onClick = { mode = 0; offset = 0 })
             }
+            if (mode == 1) TextField(
+                state = query,
+                placeholder = stringResource(Res.string.call_target_search_placeholder),
+                supportingText = stringResource(Res.string.call_target_search_detail),
+                leadingIcon = Lucide.Search,
+                clearable = true,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+            )
             when {
                 mode == 0 -> {
                     CallTargetCard(stringResource(if (assistant) Res.string.assistant_target_new else Res.string.call_target_new_session), stringResource(if (assistant) Res.string.assistant_target_new_detail else Res.string.call_target_new_session_detail), selected != null && selected.profile == null && selected.sessionId == null, { onSelect(CallTarget(), userId) }) {
@@ -140,14 +174,14 @@ internal fun CallTargetPicker(
                     }
                 }
                 else -> {
-                    if (page.sessions.isEmpty()) Text(stringResource(Res.string.call_target_no_sessions), color = Theme[colors][text])
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    if (page.sessions.isEmpty()) Text(stringResource(if (search.isEmpty()) Res.string.call_target_no_sessions else Res.string.call_target_no_matches), color = Theme[colors][text])
+                    if (search.isEmpty()) Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         if (offset > 0) Button(stringResource(Res.string.call_target_previous), variant = ButtonVariant.Ghost, onClick = { offset = (offset - 50).coerceAtLeast(0) })
                         // Pinned rows can be backfilled outside the requested 50-session window.
                         if (offset + 50 < page.total) Button(stringResource(Res.string.call_target_next), variant = ButtonVariant.Ghost, onClick = { offset += 50 })
                     }
                     page.sessions.forEach { session ->
-                        CallTargetCard(session.displayTitle, session.preview?.takeIf { it.isNotBlank() } ?: stringResource(Res.string.call_target_continue), selected?.sessionId == session.id, {
+                        CallTargetCard(session.displayTitle, (if (search.isNotEmpty()) session.snippet else session.preview)?.takeIf { it.isNotBlank() } ?: stringResource(Res.string.call_target_continue), selected?.sessionId == session.id, {
                             onSelect(CallTarget(sessionId = session.id, label = session.displayTitle), userId)
                         }) { UnstyledIcon(Lucide.MessagesSquare, contentDescription = null, tint = Theme[colors][textSecondary], modifier = Modifier.size(32.dp)) }
                     }

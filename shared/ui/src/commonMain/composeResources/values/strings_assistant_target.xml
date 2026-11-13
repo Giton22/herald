@@ -4,4 +4,7 @@
     <string name="assistant_target_new_detail">Start a new chat each time you call up the phone assistant.</string>
     <string name="assistant_target_unavailable">Couldn’t open the selected assistant chat. Check the connection or choose another chat in Settings → Digital assistant chat.</string>
     <string name="assistant_target_account_error">Couldn’t verify the signed-in account. Try again.</string>
+    <string name="call_target_search_placeholder">Search by ID or message</string>
+    <string name="call_target_search_detail">Search by ID prefix or message text. Up to 30 matches.</string>
+    <string name="call_target_no_matches">No matching sessions.</string>
 </resources>
