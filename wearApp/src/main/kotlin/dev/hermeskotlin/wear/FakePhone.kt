@@ -1,6 +1,9 @@
 package dev.hermeskotlin.wear
 
 import dev.hermeskotlin.wearlink.ChatListRequest
+import dev.hermeskotlin.wearlink.HistoryRequest
+import dev.hermeskotlin.wearlink.HistoryPage
+import dev.hermeskotlin.wearlink.HistoryMessage
 import dev.hermeskotlin.wearlink.WatchScope
 import dev.hermeskotlin.wearlink.ChatList
 import dev.hermeskotlin.wearlink.PhoneStatus
@@ -33,10 +36,20 @@ class FakePhone(private val scope: CoroutineScope, private val deliver: (String,
             path == WearPaths.ASK || path == WearPaths.BOT_ASK -> WearJson.decode<WatchAsk>(data)?.let { answer(it, heard = null) }
             WearPaths.isRecording(path) -> RecordedAsk.read(data)?.let { (ask, _) -> answer(ask, heard = SAMPLE_HEARD) }
             path == WearPaths.STOP -> WearJson.decode<WatchStop>(data)?.let { turn?.cancel() }
+            path == WearPaths.HISTORY -> WearJson.decode<HistoryRequest>(data)?.let { request ->
+                val end = (40 - request.offset).coerceAtLeast(0)
+                val rows = ((end - 20).coerceAtLeast(0) until end).map { index ->
+                    HistoryMessage("sample:$index", if (index % 2 == 0) "user" else "assistant",
+                        if (index % 2 == 0) "Question ${index / 2 + 1}: What should I pack for the walk?"
+                        else "Reply ${index / 2 + 1}: Take water and a light jacket.\n\nCheck the weather before leaving and choose a comfortable route.")
+                }
+                deliver(WearPaths.HISTORY, WearJson.encode(HistoryPage(request, request.botProfile?.let { "bot-$it" } ?: request.chatId,
+                    rows, (request.offset + 20).takeIf { end > 20 })))
+            }
             path == WearPaths.CHATS -> deliver(WearPaths.CHATS, WearJson.encode(ChatList(SAMPLE_CHATS, bots = SAMPLE_BOTS, requestId = WearJson.decode<ChatListRequest>(data)?.requestId, scope = SAMPLE_SCOPE)))
             path == WearPaths.STATUS -> {
                 val request = WearJson.decode<PhoneStatusRequest>(data)
-                deliver(WearPaths.STATUS, WearJson.encode(PhoneStatus(signedIn = true, connected = true, botChats = true,
+                deliver(WearPaths.STATUS, WearJson.encode(PhoneStatus(signedIn = true, connected = true, botChats = true, history = true,
                     botProfile = request?.botProfile, requestId = request?.requestId, profileSync = true,
                     activeScope = SAMPLE_SCOPE, scope = request?.scope ?: SAMPLE_SCOPE)))
             }
