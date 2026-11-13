@@ -60,6 +60,7 @@ import dev.hermeskotlin.ui.DesktopBack
 import dev.hermeskotlin.ui.LocalDesktopBack
 import dev.hermeskotlin.ui.LocalFocusHeld
 import dev.hermeskotlin.ui.QuickEntryHotkey
+import dev.hermeskotlin.ui.SystemColorScheme
 import dev.hermeskotlin.ui.keepFocusHeld
 import dev.hermeskotlin.ui.LocalShortcuts
 import dev.hermeskotlin.ui.Shortcut
@@ -120,6 +121,9 @@ fun main(args: Array<String>) {
     val flatpak = inFlatpak
     val restartWait = if (flatpak && args.contentEquals(arrayOf("--restart"))) 30_000L else 0L
     val instance = SingleInstance.claim(appDataDir, launchLink, restartWait) ?: exitProcess(if (restartWait > 0) 1 else 0)
+    // Linux's light or dark preference, which Compose reads only once there: this follows it as it changes. Asked
+    // for now, so the answer comes in while the storage and the settings are read.
+    val colorScheme = if (System.getProperty("os.name") == "Linux") LinuxColorScheme({ SystemColorScheme.dark = it }) else null
     val koin = startKoin {
         modules(sharedModules + desktopModule)
         if (!unlockDesktopStorage(
@@ -133,6 +137,8 @@ fun main(args: Array<String>) {
     // The read is a file's; were it ever stuck, the window opens in the system's language and switches once it's in.
     applyAppLanguage(runBlocking { withTimeoutOrNull(2_000) { settingsStore.settings.filterNotNull().first() } }?.language)
     useAppTextContextMenu()
+    // Waited for briefly, so the first frame is in the right theme; a desktop that can't say leaves it to Compose.
+    colorScheme?.awaitFirst(1_000)
     val links = koin.get<ChatLinks>()
     val saved = WindowMemory.read(koin.get())
     // The same mark as docs/logo.svg, for the title bar, the taskbar and the tray.
@@ -416,6 +422,6 @@ fun main(args: Array<String>) {
         )
     }
     // The windows are gone; Chromium's helper processes go with the app, not after it.
-    try { Jcef.shutdown() } finally { instance.close() }
+    try { Jcef.shutdown() } finally { instance.close(); colorScheme?.close() }
     exitProcess(0)
 }

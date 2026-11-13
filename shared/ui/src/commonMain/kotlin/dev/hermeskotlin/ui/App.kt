@@ -281,7 +281,7 @@ private fun isDark(settings: AppSettings, systemDark: Boolean): Boolean = when (
 }
 
 @Composable
-private fun isDark(settings: AppSettings): Boolean = isDark(settings, isSystemInDarkTheme())
+private fun isDark(settings: AppSettings): Boolean = isDark(settings, SystemColorScheme.dark ?: isSystemInDarkTheme())
 
 private fun schemeFor(settings: AppSettings, dark: Boolean): ColorScheme = when {
     !dark -> ColorScheme.Light
