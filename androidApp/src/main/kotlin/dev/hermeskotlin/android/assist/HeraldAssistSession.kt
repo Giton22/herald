@@ -132,7 +132,7 @@ class HeraldAssistSession(context: Context) :
 
     override fun onHide() {
         super.onHide()
-        model.voice.cancelDictation()
+        model.hide()
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_STOP)
     }
 
