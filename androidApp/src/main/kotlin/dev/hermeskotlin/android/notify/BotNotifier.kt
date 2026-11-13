@@ -37,6 +37,11 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
+/** Only what notifications and cold widgets need; no session previews are kept on disk. */
+internal fun List<Bot>.forSavedRoster(): List<Bot> = map {
+    Bot(name = it.name, isDefault = it.isDefault, displayName = it.displayName, uiMeta = it.uiMeta, hasAvatar = it.hasAvatar)
+}
+
 /**
  * Tells the user when a bot writes in its chat while Herald is out of sight, as a conversation
  * notification from that bot. Every bot is watched, not only the open chat ([ChatNotifier] covers that
@@ -97,9 +102,7 @@ class BotNotifier(
     }.orEmpty().also { if (it.isNotEmpty()) roster = it }
 
     private fun saveRoster(bots: List<Bot>) {
-        // Only what notifications need: no session previews kept on disk.
-        val slim = bots.map { Bot(name = it.name, isDefault = it.isDefault, displayName = it.displayName, uiMeta = it.uiMeta, hasAvatar = it.hasAvatar) }
-        rosterPrefs.edit().putString(KEY_ROSTER, HermesJson.encodeToString(ListSerializer(Bot.serializer()), slim)).apply()
+        rosterPrefs.edit().putString(KEY_ROSTER, HermesJson.encodeToString(ListSerializer(Bot.serializer()), bots.forSavedRoster())).apply()
     }
 
     fun start() {

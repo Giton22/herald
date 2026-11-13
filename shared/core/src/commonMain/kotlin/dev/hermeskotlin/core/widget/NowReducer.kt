@@ -21,6 +21,8 @@ import dev.hermeskotlin.core.sessions.SessionSummary
  */
 data class NowInputs(
     val sessions: List<SessionSummary>,
+    /** False when both the REST page and its offline fallback failed; an empty list then isn't deletion evidence. */
+    val sessionsKnown: Boolean = true,
     /** Null cold; when present, its `isUnread` semantics decide chat read state. */
     val seen: SeenChats?,
     /** `AttentionTracker.waiting` by stored id (empty cold). */

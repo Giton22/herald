@@ -34,8 +34,10 @@ class NowColdMergeTest {
         bots: List<Bot> = listOf(researcher),
         cronJobs: List<CronJob> = emptyList(),
         kanbanRows: List<KanbanTask> = emptyList(),
+        sessionsKnown: Boolean = true,
     ) = NowInputs(
         sessions = sessions,
+        sessionsKnown = sessionsKnown,
         seen = null,
         waiting = waiting,
         runningChats = emptyMap(),
@@ -218,6 +220,38 @@ class NowColdMergeTest {
         // No saved roster is no existence evidence, not proof that every bot was deleted.
         assertEquals(listOf("bc-r"), merged.needsYou.map { it.target.storedSessionId })
         assertEquals(listOf("bc-r"), merged.running.map { it.target.storedSessionId })
+        assertTrue(merged.needsYou.single().carried)
+        assertTrue(merged.running.single().carried)
+    }
+
+    @Test
+    fun anUnavailableSessionPageDoesNotDeleteCarriedChatRows() {
+        val stored = NowWidgetSnapshot(
+            gatewayUrl = gateway,
+            profile = null,
+            needsYou = listOf(waitingItem("s-carried")),
+            running = listOf(
+                NowRunningItem(
+                    kind = NowRunningKind.ChatTurn,
+                    title = "Chat s-carried",
+                    target = NowTarget(storedSessionId = "s-carried"),
+                ),
+            ),
+            savedAtEpochSeconds = 500,
+        )
+
+        val merged = NowReducer.mergeCold(
+            gateway,
+            null,
+            stored,
+            freshInputs(sessions = emptyList(), sessionsKnown = false),
+            knownBots = listOf(researcher),
+        )
+
+        // A failed REST read with no offline fallback is no existence evidence. A successful empty
+        // page still uses sessionsKnown = true and drops deleted chats, as the first test proves.
+        assertEquals(listOf("s-carried"), merged.needsYou.map { it.target.storedSessionId })
+        assertEquals(listOf("s-carried"), merged.running.map { it.target.storedSessionId })
         assertTrue(merged.needsYou.single().carried)
         assertTrue(merged.running.single().carried)
     }

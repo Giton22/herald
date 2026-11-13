@@ -180,6 +180,7 @@ class WidgetDataAssembler(
 
         val nowInputs = NowInputs(
             sessions = sessions,
+            sessionsKnown = sessionsPage != null || offlineSaved != null,
             seen = seen,
             waiting = live.waiting,
             runningChats = live.runningChats,
