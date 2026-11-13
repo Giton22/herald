@@ -48,6 +48,11 @@
     <string name="voice_error_live_ended">A chamada ao vivo terminou.</string>
     <string name="voice_error_live_ended_because">A chamada ao vivo terminou: %1$s</string>
     <string name="voice_error_live_dropped">A chamada ao vivo caiu.</string>
+    <string name="voice_said_unreachable">Desculpe, não consegui falar com o Hermes para esse pedido.</string>
+    <string name="voice_said_questions_in_chat">O Hermes tem algumas perguntas para você. Elas estão esperando na conversa.</string>
+    <string name="watch_call_target_changed">O destino de chamada padrão mudou. Toque em Ligar novamente.</string>
+    <string name="watch_call_not_live">A voz ao vivo não está mais configurada no seu Gateway. Toque para perguntar uma de cada vez.</string>
+    <string name="watch_call_lost">O Kyllene no seu celular perdeu a chamada.</string>
     <string name="call_title">Chamada do Kyllene</string>
     <string name="call_answer">Atender</string>
     <string name="call_decline">Recusar</string>

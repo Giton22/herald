@@ -48,6 +48,11 @@
     <string name="voice_error_live_ended">Az élő hívás véget ért.</string>
     <string name="voice_error_live_ended_because">Az élő hívás véget ért: %1$s</string>
     <string name="voice_error_live_dropped">Az élő hívás megszakadt.</string>
+    <string name="voice_said_unreachable">Sajnálom, nem értem el a Hermest ezzel a kéréssel.</string>
+    <string name="voice_said_questions_in_chat">A Hermesnek néhány kérdése van hozzád. A csevegésben várnak.</string>
+    <string name="watch_call_target_changed">Az alapértelmezett hívási cél megváltozott. Koppints újra a Hívás elemre.</string>
+    <string name="watch_call_not_live">Az élő hang már nincs beállítva a Gatewayen. Koppints, hogy egyszerre egy kérdést tegyél fel.</string>
+    <string name="watch_call_lost">A telefonodon lévő Kyllene elvesztette a hívást.</string>
     <string name="call_title">Kyllene-hívás</string>
     <string name="call_answer">Fogadás</string>
     <string name="call_decline">Elutasítás</string>

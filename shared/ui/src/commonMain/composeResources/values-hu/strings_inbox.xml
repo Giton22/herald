@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Hungarian: the Inbox and the assistant panel, as values/strings_inbox.xml. -->
 <resources>
+    <string name="inbox_then_detail">%1$s %2$s</string>
     <string name="inbox_title">Beérkezett üzenetek</string>
     <string name="inbox_all">Mind</string>
     <string name="inbox_other">Egyéb</string>
