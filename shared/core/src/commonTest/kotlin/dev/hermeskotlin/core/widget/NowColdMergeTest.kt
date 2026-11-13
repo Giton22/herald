@@ -195,4 +195,30 @@ class NowColdMergeTest {
         assertNull(merged.socketSavedAtEpochSeconds)
         assertNotNull(merged.quiet)
     }
+
+    @Test
+    fun anEmptySavedRosterDoesNotDeleteCarriedBotRows() {
+        val stored = NowWidgetSnapshot(
+            gatewayUrl = gateway,
+            profile = null,
+            needsYou = listOf(botAnswer("researcher", "bc-r")),
+            running = listOf(
+                NowRunningItem(
+                    kind = NowRunningKind.BotWorking,
+                    title = "Researcher",
+                    target = NowTarget(storedSessionId = "bc-r", botProfile = "researcher"),
+                    botProfile = "researcher",
+                ),
+            ),
+            savedAtEpochSeconds = 500,
+        )
+
+        val merged = NowReducer.mergeCold(gateway, null, stored, freshInputs(), knownBots = emptyList())
+
+        // No saved roster is no existence evidence, not proof that every bot was deleted.
+        assertEquals(listOf("bc-r"), merged.needsYou.map { it.target.storedSessionId })
+        assertEquals(listOf("bc-r"), merged.running.map { it.target.storedSessionId })
+        assertTrue(merged.needsYou.single().carried)
+        assertTrue(merged.running.single().carried)
+    }
 }

@@ -41,8 +41,25 @@ class WidgetRefresherDeadlineTest {
     ) : WidgetRefreshPipelines {
         var nowCalls = 0
         var nowColdCalls = 0
+        var allColdCalls = 0
         var chatsCalls = 0
         var coldKnownBots: List<Bot>? = null
+
+        override suspend fun refreshAllCold(
+            url: GatewayUrl,
+            profile: String?,
+            knownBots: List<Bot>,
+            threadIds: Set<String>,
+        ): WidgetDataAssembler.AllWidgets {
+            allColdCalls++
+            coldKnownBots = knownBots
+            return WidgetDataAssembler.AllWidgets(
+                now = now,
+                chats = ChatsWidgetSnapshot(url.value, profile, rows = emptyList(), savedAtEpochSeconds = 1),
+                kanban = null,
+                scheduled = ScheduledWidgetSnapshot(url.value, rows = emptyList(), savedAtEpochSeconds = 1),
+            )
+        }
 
         override suspend fun refreshNow(url: GatewayUrl, profile: String?, threadIds: Set<String>): NowWidgetSnapshot {
             nowCalls++
@@ -126,6 +143,7 @@ class WidgetRefresherDeadlineTest {
 
         assertEquals(WidgetViews.UiState.Content(fresh), outcome.now)
         assertEquals(0, fake.nowColdCalls)
+        assertEquals(0, fake.allColdCalls)
     }
 
     @Test
@@ -137,9 +155,11 @@ class WidgetRefresherDeadlineTest {
 
         val outcome = refresher.refresh(profile = null, connected = false) { "unused" }
 
-        // The cold path ran — with the roster a broadcast-started process can rely on (D14/B5)…
+        // The combined REST-only path ran with the saved roster; no live/socket pipeline ran.
         assertEquals(0, fake.nowCalls)
-        assertEquals(1, fake.nowColdCalls)
+        assertEquals(0, fake.nowColdCalls)
+        assertEquals(0, fake.chatsCalls)
+        assertEquals(1, fake.allColdCalls)
         assertEquals(roster, fake.coldKnownBots)
         // …and the carried BotAnswer survives with its socket stamp, for the "as of" line (§6.5).
         val now = outcome.now as WidgetViews.UiState.Content
@@ -147,5 +167,21 @@ class WidgetRefresherDeadlineTest {
         assertTrue(now.snapshot.needsYou.single().carried)
         assertTrue(now.snapshot.socketSavedAtEpochSeconds != null)
         assertTrue(outcome.nowCold)
+    }
+
+    @Test
+    fun coldRefreshLoadsTheSavedGatewayBeforeChoosingSignedOut() = runTest {
+        val storage = InMemoryKeyValueStore()
+        GatewayRepository(storage).save(SavedGateway(url = url.value))
+        // A broadcast-started process has a fresh repository whose StateFlow is still empty.
+        val coldGateways = GatewayRepository(storage)
+        val fake = FakePipelines(now = storedNow())
+        val refresher = WidgetRefresher(fake, WidgetSnapshotStore(InMemoryKeyValueStore()), coldGateways)
+
+        val outcome = refresher.refresh(profile = null, connected = false) { "unused" }
+
+        assertEquals(url.value, outcome.gatewayUrl)
+        assertEquals(WidgetViews.UiState.Content(storedNow()), outcome.now)
+        assertEquals(1, fake.allColdCalls)
     }
 }

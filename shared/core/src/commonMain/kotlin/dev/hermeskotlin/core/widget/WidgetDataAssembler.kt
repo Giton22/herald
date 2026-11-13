@@ -48,6 +48,14 @@ import kotlinx.coroutines.flow.first
  * the refresher's routing, deadline and fallback behaviour are testable without a gateway.
  */
 interface WidgetRefreshPipelines {
+    /** Every widget over REST alone (D14), with the saved roster for carried rows and bot-chat filtering. */
+    suspend fun refreshAllCold(
+        url: GatewayUrl,
+        profile: String?,
+        knownBots: List<Bot>,
+        threadIds: Set<String> = emptySet(),
+    ): WidgetDataAssembler.AllWidgets
+
     /** One widget's pipeline with the app process alive; only the reads that widget needs run (D26). */
     suspend fun refreshNow(url: GatewayUrl, profile: String?, threadIds: Set<String> = emptySet()): NowWidgetSnapshot
 
@@ -99,9 +107,13 @@ class WidgetDataAssembler(
         return refreshAll(url, profile, live = live, cold = false, threadIds = threadIds)
     }
 
-    /** D14: refresh every widget REST-only; Now merges its socket-only rows from the stored snapshot. */
-    suspend fun refreshAllCold(url: GatewayUrl, profile: String?, threadIds: Set<String> = emptySet()): AllWidgets =
-        refreshAll(url, profile, live = LiveMaps(), cold = true, threadIds = threadIds)
+    /** D14: refresh every widget REST-only, using the saved roster without opening a socket. */
+    override suspend fun refreshAllCold(
+        url: GatewayUrl,
+        profile: String?,
+        knownBots: List<Bot>,
+        threadIds: Set<String>,
+    ): AllWidgets = refreshAll(url, profile, live = LiveMaps(bots = knownBots), cold = true, threadIds = threadIds)
 
     /** One widget's pipeline with the app process alive; only the reads that widget needs run (D26). */
     override suspend fun refreshNow(url: GatewayUrl, profile: String?, threadIds: Set<String>): NowWidgetSnapshot =
