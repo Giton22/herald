@@ -80,6 +80,56 @@ class WidgetViewsRenderTest {
     }
 
     @Test
+    fun nowReapplyClearsPreviousStateAndOptionalViews() {
+        val host = FrameLayout(context)
+        val quiet = quietNow().copy(socketSavedAtEpochSeconds = 1_700_000_000L)
+        val view = WidgetViews.renderNow(
+            context,
+            WidgetViews.UiState.Content(quiet, savedNotice = "Couldn't refresh · Saved 10:00"),
+            locked = false, cold = false, colors, bots = null, 0,
+        ).apply(context, host)
+        assertEquals(View.VISIBLE, view.findViewById<View>(R.id.state_quiet).visibility)
+        assertEquals(View.VISIBLE, view.findViewById<View>(R.id.context).visibility)
+        assertEquals(View.VISIBLE, view.findViewById<View>(R.id.notice_warning).visibility)
+        assertEquals(View.VISIBLE, view.findViewById<View>(R.id.quiet_next).visibility)
+
+        val running = listOf(
+            NowRunningItem(
+                kind = NowRunningKind.KanbanRunning,
+                title = "Verify manual refresh",
+                target = NowTarget(kanbanBoard = "main", kanbanTaskId = "t-1"),
+            ),
+            NowRunningItem(
+                kind = NowRunningKind.KanbanRunning,
+                title = "Check widget rendering",
+                target = NowTarget(kanbanBoard = "main", kanbanTaskId = "t-2"),
+            ),
+        )
+        WidgetViews.renderNow(
+            context,
+            WidgetViews.UiState.Content(quietNow().copy(running = running, quiet = null)),
+            locked = false, cold = false, colors, bots = null, 0,
+        ).reapply(context, view)
+
+        assertEquals(View.VISIBLE, view.findViewById<View>(R.id.state_running).visibility)
+        assertEquals(View.VISIBLE, view.findViewById<View>(R.id.running_second).visibility)
+        listOf(
+            R.id.state_quiet, R.id.state_needs, R.id.state_fallback, R.id.state_loading, R.id.state_locked,
+            R.id.context, R.id.notice_info, R.id.notice_warning, R.id.quiet_next,
+            R.id.needs_second, R.id.running_strip, R.id.more,
+        ).forEach { id ->
+            assertEquals("stale Now view $id must be GONE", View.GONE, view.findViewById<View>(id).visibility)
+        }
+
+        WidgetViews.renderNow(
+            context,
+            WidgetViews.UiState.Content(quietNow().copy(running = running.take(1), quiet = null)),
+            locked = false, cold = false, colors, bots = null, 0,
+        ).reapply(context, view)
+        assertEquals(View.GONE, view.findViewById<View>(R.id.running_second).visibility)
+    }
+
+    @Test
     fun needsYouWithRunningShowsCombinedStrip() {
         val snapshot = quietNow().copy(
             needsYou = listOf(

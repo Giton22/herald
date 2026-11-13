@@ -97,6 +97,19 @@ object WidgetViews {
         R.id.fallback_new_chat, R.id.fallback_dictate,
     )
 
+    /**
+     * Now state + optional containers reset on every UNLOCKED content render. `RemoteViews` are
+     * re-applied onto the host view Android already inflated, so a container a previous render
+     * showed keeps `VISIBLE` unless explicitly hidden again — this is the unlocked half of the
+     * D16/D23 re-apply guard (the locked blanket is `nowContentIds`).
+     */
+    private val nowStateResetIds = listOf(
+        R.id.state_needs, R.id.state_running, R.id.state_quiet, R.id.state_fallback,
+        R.id.state_loading, R.id.state_locked,
+        R.id.notice_info, R.id.notice_warning, R.id.context, R.id.running_strip,
+        R.id.needs_second, R.id.running_second, R.id.more, R.id.quiet_next,
+    )
+
     /** The Chats layout's content containers, hidden wholesale on the locked variant (D16). */
     private val chatsContentIds = listOf(
         R.id.list, R.id.state_empty, R.id.saved_notice, R.id.context, R.id.action_new_chat, R.id.action_dictate,
@@ -160,6 +173,9 @@ object WidgetViews {
                     )
                     return@apply
                 }
+                // Unlocked content: reset every state/optional container first, so a re-applied
+                // render never leaks the previous state's views (```Views reapply semantics).
+                hideContent(nowStateResetIds)
                 setTextViewText(R.id.title, context.getString(R.string.widget_now_label))
                 val asOf = snapshot.socketSavedAtEpochSeconds
                 if (asOf != null) {
