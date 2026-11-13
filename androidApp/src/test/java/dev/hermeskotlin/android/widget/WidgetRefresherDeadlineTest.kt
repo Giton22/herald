@@ -6,6 +6,7 @@ import dev.hermeskotlin.core.gateway.GatewayUrl
 import dev.hermeskotlin.core.gateway.SavedGateway
 import dev.hermeskotlin.core.widget.ChatsWidgetSnapshot
 import dev.hermeskotlin.core.widget.KanbanWidgetSnapshot
+import dev.hermeskotlin.core.widget.WidgetDataAssembler
 import dev.hermeskotlin.core.widget.NowNeedsYouItem
 import dev.hermeskotlin.core.widget.NowNeedsYouKind
 import dev.hermeskotlin.core.widget.NowTarget
