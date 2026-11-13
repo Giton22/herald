@@ -268,6 +268,9 @@ fun SettingsScreen(
     var checkOpen by remember { mutableStateOf(false) }
     var phoneToolsOpen by remember { mutableStateOf(false) }
     var callTargetOpen by remember { mutableStateOf(false) }
+    var assistantTargetOpen by remember(gateway.url, profile) { mutableStateOf(false) }
+    var assistantUser by remember(gateway.url, profile) { mutableStateOf<String?>(null) }
+    LaunchedEffect(gateway.url, profile) { assistantUser = viewModel.assistantUser(gateway) }
     var appIconOpen by remember { mutableStateOf(false) }
     var startInstructionOpen by remember { mutableStateOf(false) }
     var sidebarPagesOpen by remember { mutableStateOf(false) }
@@ -279,10 +282,10 @@ fun SettingsScreen(
     val language = rememberLanguageChoice()
     val suggestions by viewModel.suggestions.collectAsStateWithLifecycle()
     LaunchedEffect(gateway, profile) { viewModel.bind(gateway, profile) }
-    PlatformBackHandler(enabled = !checkOpen && !phoneToolsOpen && !appIconOpen && !startInstructionOpen && !callTargetOpen && !languageOpen && !connectedDevicesOpen && !sidebarPagesOpen, onBack = onBack)
+    PlatformBackHandler(enabled = !checkOpen && !phoneToolsOpen && !appIconOpen && !startInstructionOpen && !callTargetOpen && !assistantTargetOpen && !languageOpen && !connectedDevicesOpen && !sidebarPagesOpen, onBack = onBack)
     // A page opened over Settings takes the keyboard from the search, so nothing typed there lands in a hidden query.
     val focus = LocalFocusManager.current
-    val pageOver = phoneToolsOpen || appIconOpen || startInstructionOpen || callTargetOpen || languageOpen || connectedDevicesOpen || sidebarPagesOpen
+    val pageOver = phoneToolsOpen || appIconOpen || startInstructionOpen || callTargetOpen || assistantTargetOpen || languageOpen || connectedDevicesOpen || sidebarPagesOpen
     LaunchedEffect(pageOver) { if (pageOver) focus.clearFocus() }
     // The desktop lists the sections beside the page; they say here where they start.
     val anchors = remember { mutableStateMapOf<String, Int>() }
@@ -309,6 +312,8 @@ fun SettingsScreen(
         onOpenPhoneTools = { phoneToolsOpen = true },
         botFaces = botFaces,
         onChooseCallTarget = { callTargetOpen = true },
+        assistantTarget = settings.assistantTargets[gateway.url]?.get(profile.orEmpty())?.takeIf { it.userId == assistantUser },
+        onChooseAssistantTarget = { assistantTargetOpen = true },
         appIcon = appIcons.current,
         onOpenAppIcon = { appIconOpen = true },
         language = appLanguage(language.picked),
@@ -320,9 +325,22 @@ fun SettingsScreen(
         onInstallSuggestions = viewModel::installSuggestions,
         onCheckSuggestions = viewModel::checkSuggestions,
     ) }
-    if (callTargetOpen) CallTargetPicker(gateway, viewModel, botFaces, onDismiss = { callTargetOpen = false }) { target ->
+    if (callTargetOpen) CallTargetPicker(gateway, viewModel, botFaces, onDismiss = { callTargetOpen = false }) { target, _ ->
         viewModel.update { it.copy(callTargets = it.callTargets + (gateway.url to target)) }
         callTargetOpen = false
+    }
+    if (assistantTargetOpen) key(gateway.url, profile) {
+        CallTargetPicker(gateway, viewModel, botFaces, onDismiss = { assistantTargetOpen = false }, assistant = true, profile = profile) { target, user ->
+            if (target.sessionId == null) {
+                viewModel.update { prefs -> prefs.copy(assistantTargets = prefs.assistantTargets +
+                    (gateway.url to (prefs.assistantTargets[gateway.url].orEmpty() - profile.orEmpty()))) }
+            } else if (user != null) {
+                viewModel.update { prefs -> prefs.copy(assistantTargets = prefs.assistantTargets +
+                    (gateway.url to (prefs.assistantTargets[gateway.url].orEmpty() +
+                        (profile.orEmpty() to dev.hermeskotlin.core.settings.AssistantTarget(user, target.sessionId, target.label))))) }
+            }
+            assistantTargetOpen = false
+        }
     }
     if (phoneToolsOpen) PhoneToolsScreen(onBack = { phoneToolsOpen = false })
     if (startInstructionOpen) {
@@ -417,6 +435,8 @@ internal fun SettingsView(
     onOpenPhoneTools: () -> Unit = {},
     botFaces: BotFaces = BotFaces(),
     onChooseCallTarget: () -> Unit = {},
+    assistantTarget: dev.hermeskotlin.core.settings.AssistantTarget? = null,
+    onChooseAssistantTarget: () -> Unit = {},
     appIcon: AppIcon = AppIcon.Blue,
     onOpenAppIcon: () -> Unit = {},
     /** The language picked in Settings › Language; null for System default. */
@@ -712,6 +732,15 @@ internal fun SettingsView(
                 }
 
                 if (hasVoice) Section(stringResource(Res.string.settings_section_voice)) {
+                    if (!isDesktop) {
+                        NavRow(
+                            title = stringResource(Res.string.settings_assistant_target),
+                            detail = assistantTarget?.sessionId?.let { assistantTarget.label } ?: stringResource(Res.string.assistant_target_new),
+                            icon = Lucide.MessagesSquare,
+                            onClick = onChooseAssistantTarget,
+                        )
+                        Divider()
+                    }
                     CallTargetRow(settings.callTargets[gatewayUrl] ?: CallTarget(), botFaces, onChooseCallTarget)
                     Divider()
                     SwitchRow(

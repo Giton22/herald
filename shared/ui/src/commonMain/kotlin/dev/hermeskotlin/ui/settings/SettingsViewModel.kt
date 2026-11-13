@@ -132,8 +132,10 @@ class SettingsViewModel(
 
     suspend fun callProfiles(gateway: SavedGateway) = profilesApi.roster(gateway.gatewayUrl)
 
-    suspend fun callSessions(gateway: SavedGateway, offset: Int) =
-        sessionsApi.list(gateway.gatewayUrl, offset = offset)
+    suspend fun callSessions(gateway: SavedGateway, offset: Int, profile: String? = null) =
+        sessionsApi.list(gateway.gatewayUrl, offset = offset, profile = profile)
+
+    suspend fun assistantUser(gateway: SavedGateway) = (auth.me(gateway.gatewayUrl) as? ApiResult.Success)?.value?.userId
 
     fun update(transform: (AppSettings) -> AppSettings) = store.update(transform)
 

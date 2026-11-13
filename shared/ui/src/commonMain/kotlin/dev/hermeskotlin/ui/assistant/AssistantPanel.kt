@@ -232,6 +232,7 @@ internal data class AssistantCardState(
     val includeScreen: Boolean = false,
     val circled: ScreenContext? = null,
     val dictation: DictationState = DictationState(),
+    val targetUnavailable: Boolean = false,
 )
 
 /** What the card does: [AssistantPanelModel]'s calls, or nothing in a preview. */
@@ -256,6 +257,7 @@ private fun Card(
     onClose: () -> Unit,
 ) {
     val phase by model.phase.collectAsState()
+    val targetUnavailable by model.targetUnavailable.collectAsState()
     val session by model.session.collectAsState()
     val chat by (session?.state ?: remember { emptyFlow() }).collectAsState(ChatState())
     val connection by model.connectionState.collectAsState()
@@ -269,7 +271,7 @@ private fun Card(
     // Calling the assistant up is asking to talk: listen straight away, on every call-up, when the app may.
     if (phase == AssistantPhase.Ready) {
         LaunchedEffect(model, shows, microphoneAllowed) {
-            if (microphoneAllowed && !chat.hasConversation && !dictation.active && model.claimListening(shows)) model.toggleDictation()
+            if (microphoneAllowed && !targetUnavailable && !dictation.active && model.claimListening(shows)) model.toggleDictation()
         }
     }
     val actions = remember(model) {
@@ -288,7 +290,7 @@ private fun Card(
     ProvideReplySpeaker(speaker) {
         AssistantCard(
             state = AssistantCardState(
-                phase, chat, connection is ConnectionState.Connected, connectionLabel(connection), screen, includeScreen, circled, dictation,
+                phase, chat, connection is ConnectionState.Connected, connectionLabel(connection), screen, includeScreen, circled, dictation, targetUnavailable,
             ),
             actions = actions,
             microphoneAllowed = microphoneAllowed,
@@ -441,7 +443,7 @@ private fun ColumnScope.Ready(
             Text(currentAction(chat), style = Theme[typography][caption], color = Theme[colors][textSecondary], maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
-    (chat.error ?: state.dictation.error?.let(::briefError))?.let {
+    (if (state.targetUnavailable) stringResource(Res.string.assistant_target_unavailable) else chat.error ?: state.dictation.error?.let(::briefError))?.let {
         Text(it, style = Theme[typography][bodySmall], color = Theme[colors][danger], modifier = Modifier.padding(start = 6.dp, end = 6.dp, bottom = 10.dp))
     }
 
@@ -500,8 +502,8 @@ private fun Composer(
     val screen = state.screen
     val circled = state.circled
     val dictation = state.dictation
-    // The whole screen goes with the first question only.
-    val includeScreen = state.includeScreen && !chat.hasConversation
+    // Each invocation offers only its current capture; sending clears the opt-in.
+    val includeScreen = state.includeScreen
     val hasText = actions.composer.text.isNotBlank()
     val shape = RoundedCornerShape(Theme[radii][radiusXLarge])
     var focused by remember { mutableStateOf(false) }
@@ -512,8 +514,8 @@ private fun Composer(
     LaunchedEffect(keyboardUp) { if (!keyboardUp && focused) focusManager.clearFocus() }
     val tray: (@Composable () -> Unit)? = when {
         circled != null -> { { CircledChip(circled, onCircleAgain = actions::startCircling, onRemove = actions::dropCircled) } }
-        !chat.hasConversation && screen.missed -> { { ScreenUnavailable(onOpenScreenSettings) } }
-        !chat.hasConversation && !(screen.context.isEmpty && screen.pending == 0) -> {
+        screen.missed -> { { ScreenUnavailable(onOpenScreenSettings) } }
+        !(screen.context.isEmpty && screen.pending == 0) -> {
             { ScreenChip(screen, included = state.includeScreen, onIncluded = actions::setIncludeScreen) }
         }
         else -> null

@@ -16,6 +16,20 @@ import kotlin.test.assertTrue
 class SettingsStoreTest {
 
     @Test
+    fun assistantTargetsPersistByGatewayAndProfileWithoutChangingCallTargets() = runTest {
+        val disk = InMemoryKeyValueStore()
+        val settings = SettingsStore(disk, backgroundScope)
+        settings.settings.filterNotNull().first()
+        val targets = mapOf("https://example.com" to mapOf("" to AssistantTarget("user", "chat"), "work" to AssistantTarget("user", "work-chat")))
+        settings.update { it.copy(assistantTargets = targets) }
+        advanceUntilIdle()
+        val restored = SettingsStore(disk, backgroundScope).settings.filterNotNull().first()
+        assertEquals(targets, restored.assistantTargets)
+        assertTrue(restored.callTargets.isEmpty())
+        assertTrue(AppSettings().assistantTargets.isEmpty())
+    }
+
+    @Test
     fun callTargetsSurviveLoadingAndSavingAlongsideOtherPreferences() = runTest {
         val disk = InMemoryKeyValueStore()
         disk.put("settings.v1", """{"theme":"Dark","callTargets":{"https://home.example":{"profile":"sample_bot","sessionId":"r1","label":"Sample · Planning"}}}""")

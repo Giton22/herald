@@ -68,18 +68,25 @@ internal fun CallTargetPicker(
     viewModel: SettingsViewModel,
     faces: BotFaces,
     onDismiss: () -> Unit,
-    onSelect: (CallTarget) -> Unit,
+    assistant: Boolean = false,
+    profile: String? = null,
+    onSelect: (CallTarget, String?) -> Unit,
 ) {
     val prefs by viewModel.settings.collectAsStateWithLifecycle()
-    val selected = (prefs.callTargets[gateway.url] ?: CallTarget()).takeIf { it.valid }
-    var mode by remember(gateway.url) { mutableStateOf(0) }
-    var offset by remember(gateway.url) { mutableStateOf(0) }
+    var userId by remember(gateway.url, profile) { mutableStateOf<String?>(null) }
+    LaunchedEffect(gateway.url, profile) { if (assistant) userId = viewModel.assistantUser(gateway) }
+    val selected = if (assistant) prefs.assistantTargets[gateway.url]?.get(profile.orEmpty())
+        ?.takeIf { it.userId == userId }?.let { CallTarget(sessionId = it.sessionId, label = it.label) } ?: CallTarget()
+        else (prefs.callTargets[gateway.url] ?: CallTarget()).takeIf { it.valid }
+    var mode by remember(gateway.url, profile) { mutableStateOf(0) }
+    var offset by remember(gateway.url, profile) { mutableStateOf(0) }
     var profiles by remember { mutableStateOf<List<Profile>>(emptyList()) }
     var page by remember { mutableStateOf(SessionPage()) }
     var loading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var retry by remember { mutableStateOf(0) }
-    LaunchedEffect(gateway.url, mode, offset, retry) {
+    val accountError = stringResource(Res.string.assistant_target_account_error)
+    LaunchedEffect(gateway.url, profile, mode, offset, retry) {
         if (mode == 0) return@LaunchedEffect
         loading = true
         error = null
@@ -88,8 +95,12 @@ internal fun CallTargetPicker(
             if (result is ApiResult.Success) profiles = result.value.profiles.filterNot { it.isDefault }
             else error = result.errorMessage
         } else {
-            val result = viewModel.callSessions(gateway, offset)
-            if (result is ApiResult.Success) page = result.value else error = result.errorMessage
+            if (assistant) userId = viewModel.assistantUser(gateway)
+            if (assistant && userId == null) error = accountError
+            else {
+                val result = viewModel.callSessions(gateway, offset, if (assistant) profile else null)
+                if (result is ApiResult.Success) page = result.value else error = result.errorMessage
+            }
         }
         loading = false
     }
@@ -99,18 +110,18 @@ internal fun CallTargetPicker(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text(stringResource(Res.string.call_target_title), modifier = Modifier.weight(1f), style = Theme[typography][title], color = Theme[colors][text])
+                Text(stringResource(if (assistant) Res.string.settings_assistant_target else Res.string.call_target_title), modifier = Modifier.weight(1f), style = Theme[typography][title], color = Theme[colors][text])
                 if (mode != 0) Button(stringResource(Res.string.common_back), variant = ButtonVariant.Ghost, onClick = { mode = 0; offset = 0 })
             }
             when {
                 mode == 0 -> {
-                    CallTargetCard(stringResource(Res.string.call_target_new_session), stringResource(Res.string.call_target_new_session_detail), selected != null && selected.profile == null && selected.sessionId == null, { onSelect(CallTarget()) }) {
+                    CallTargetCard(stringResource(if (assistant) Res.string.assistant_target_new else Res.string.call_target_new_session), stringResource(if (assistant) Res.string.assistant_target_new_detail else Res.string.call_target_new_session_detail), selected != null && selected.profile == null && selected.sessionId == null, { onSelect(CallTarget(), userId) }) {
                         UnstyledIcon(Lucide.MessageSquarePlus, contentDescription = null, tint = Theme[colors][accentText], modifier = Modifier.size(32.dp))
                     }
                     CallTargetCard(stringResource(Res.string.call_target_existing), stringResource(Res.string.call_target_existing_detail), selected?.sessionId != null, { mode = 1 }) {
                         UnstyledIcon(Lucide.MessagesSquare, contentDescription = null, tint = Theme[colors][accentText], modifier = Modifier.size(32.dp))
                     }
-                    CallTargetCard(stringResource(Res.string.call_target_bot), stringResource(Res.string.call_target_bot_detail), selected?.profile != null, { mode = 2 }) {
+                    if (!assistant) CallTargetCard(stringResource(Res.string.call_target_bot), stringResource(Res.string.call_target_bot_detail), selected?.profile != null, { mode = 2 }) {
                         BotAvatar(Bot(name = Bot.DEFAULT), null, size = 40.dp)
                     }
                 }
@@ -124,7 +135,7 @@ internal fun CallTargetPicker(
                     profiles.forEach { profile ->
                         val bot = faces.bots.firstOrNull { it.name == profile.name } ?: Bot(name = profile.name, displayName = profile.label)
                         CallTargetCard(bot.label, null, selected?.profile == bot.name, {
-                            onSelect(CallTarget(profile = bot.name, label = bot.label))
+                            onSelect(CallTarget(profile = bot.name, label = bot.label), null)
                         }) { BotAvatar(bot, faces.picture(bot), size = 40.dp) }
                     }
                 }
@@ -137,7 +148,7 @@ internal fun CallTargetPicker(
                     }
                     page.sessions.forEach { session ->
                         CallTargetCard(session.displayTitle, session.preview?.takeIf { it.isNotBlank() } ?: stringResource(Res.string.call_target_continue), selected?.sessionId == session.id, {
-                            onSelect(CallTarget(sessionId = session.id, label = session.displayTitle))
+                            onSelect(CallTarget(sessionId = session.id, label = session.displayTitle), userId)
                         }) { UnstyledIcon(Lucide.MessagesSquare, contentDescription = null, tint = Theme[colors][textSecondary], modifier = Modifier.size(32.dp)) }
                     }
 
