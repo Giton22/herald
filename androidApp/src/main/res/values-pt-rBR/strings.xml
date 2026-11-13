@@ -22,7 +22,7 @@
     <string name="channel_inbox_failed_name">Tarefas com falha</string>
     <string name="channel_inbox_failed_description">Uma execução de tarefa agendada falhou.</string>
     <string name="channel_voice_name">Conversa por voz</string>
-    <string name="channel_voice_description">Aparece enquanto uma conversa por voz continua com a tela desligada ou em outro app.</string>
+    <string name="channel_voice_description">Aparece enquanto um chat de voz ou uma resposta lida em voz alta continua com a tela apagada ou outro app aberto.</string>
     <string name="channel_calls_name">Chamadas para responder</string>
     <string name="channel_calls_description">Uma aprovação ou pergunta toca como uma chamada (Configurações → Ferramentas do telefone → Chamadas).</string>
     <string name="channel_phone_tools_name">Ferramentas do telefone</string>
@@ -37,6 +37,9 @@
     <string name="notification_voice_title">Conversa por voz</string>
     <string name="notification_voice_text">Falando com o Hermes</string>
     <string name="notification_voice_end">Encerrar</string>
+    <string name="notification_read_aloud_title">Lendo em voz alta</string>
+    <string name="notification_read_aloud_text">Lendo uma resposta</string>
+    <string name="notification_read_aloud_stop">Parar</string>
 
     <string name="notification_approve_title">Permitir este comando?</string>
     <string name="notification_question_title">Hermes tem uma pergunta</string>

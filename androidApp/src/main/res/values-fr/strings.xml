@@ -22,7 +22,7 @@
     <string name="channel_inbox_failed_name">Tâches en échec</string>
     <string name="channel_inbox_failed_description">L’exécution d’une tâche planifiée a échoué.</string>
     <string name="channel_voice_name">Conversation vocale</string>
-    <string name="channel_voice_description">Affichée pendant une conversation vocale, écran éteint ou dans une autre app.</string>
+    <string name="channel_voice_description">Affichée pendant une conversation vocale ou la lecture à voix haute d’une réponse, écran éteint ou dans une autre app.</string>
     <string name="channel_calls_name">Appels pour une réponse</string>
     <string name="channel_calls_description">Une approbation ou une question sonne comme un appel (Paramètres → Outils du téléphone → Appels).</string>
     <string name="channel_phone_tools_name">Outils du téléphone</string>
@@ -37,6 +37,9 @@
     <string name="notification_voice_title">Conversation vocale</string>
     <string name="notification_voice_text">En ligne avec Hermes</string>
     <string name="notification_voice_end">Terminer</string>
+    <string name="notification_read_aloud_title">Lecture à voix haute</string>
+    <string name="notification_read_aloud_text">Lecture d’une réponse</string>
+    <string name="notification_read_aloud_stop">Arrêter</string>
 
     <string name="notification_approve_title">Autoriser cette commande ?</string>
     <string name="notification_question_title">Hermes a une question</string>

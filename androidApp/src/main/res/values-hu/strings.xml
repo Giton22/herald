@@ -22,7 +22,7 @@
     <string name="channel_inbox_failed_name">Sikertelen feladatok</string>
     <string name="channel_inbox_failed_description">Egy ütemezett feladat futása sikertelen volt.</string>
     <string name="channel_voice_name">Hangos csevegés</string>
-    <string name="channel_voice_description">Látható, amíg egy hangos csevegés kikapcsolt képernyővel vagy egy másik alkalmazás mellett folytatódik.</string>
+    <string name="channel_voice_description">Addig látszik, amíg egy hangos csevegés vagy egy felolvasott válasz kikapcsolt képernyővel vagy másik alkalmazás mellett is folytatódik.</string>
     <string name="channel_calls_name">Válaszra váró hívások</string>
     <string name="channel_calls_description">Egy jóváhagyás vagy kérdés hívásként csörög (Beállítások → Telefonos eszközök → Hívások).</string>
     <string name="channel_phone_tools_name">Telefonos eszközök</string>
@@ -37,6 +37,9 @@
     <string name="notification_voice_title">Hangos csevegés</string>
     <string name="notification_voice_text">Beszélgetés a Hermesszel</string>
     <string name="notification_voice_end">Befejezés</string>
+    <string name="notification_read_aloud_title">Felolvasás</string>
+    <string name="notification_read_aloud_text">Egy válasz felolvasása</string>
+    <string name="notification_read_aloud_stop">Leállítás</string>
 
     <string name="notification_approve_title">Engedélyezed ezt a parancsot?</string>
     <string name="notification_question_title">Hermesnek kérdése van</string>

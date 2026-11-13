@@ -58,6 +58,7 @@ val uiModule = module {
             // Only Android says whether the phone is locked.
             deviceLock = getOrNull() ?: DeviceLock.None,
             nextPromptApi = get(),
+            readAloudKeepAlive = getOrNull(),
         )
     }
     // A chat in a window of its own (the desktop's Open in new window), with the host it's handed: the app's one
@@ -72,6 +73,7 @@ val uiModule = module {
             readAloudVoices = getOrNull(),
             deviceLock = getOrNull() ?: DeviceLock.None,
             nextPromptApi = get(),
+            readAloudKeepAlive = getOrNull(),
         )
     }
     viewModelOf(::SettingsViewModel)

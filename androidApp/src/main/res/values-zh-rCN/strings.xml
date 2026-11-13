@@ -22,7 +22,7 @@
     <string name="channel_inbox_failed_name">失败的任务</string>
     <string name="channel_inbox_failed_description">定时任务的一次运行失败了。</string>
     <string name="channel_voice_name">语音对话</string>
-    <string name="channel_voice_description">在屏幕关闭或打开其他应用时，语音对话仍在进行时显示。</string>
+    <string name="channel_voice_description">在屏幕关闭或其他应用位于前台时，语音对话或朗读回复仍在进行时显示。</string>
     <string name="channel_calls_name">需要回答的来电</string>
     <string name="channel_calls_description">批准请求或问题会像来电一样响铃（设置 → 手机工具 → 通话）。</string>
     <string name="channel_phone_tools_name">手机工具</string>
@@ -37,6 +37,9 @@
     <string name="notification_voice_title">语音对话</string>
     <string name="notification_voice_text">正在与 Hermes 通话</string>
     <string name="notification_voice_end">结束</string>
+    <string name="notification_read_aloud_title">正在朗读</string>
+    <string name="notification_read_aloud_text">正在朗读一条回复</string>
+    <string name="notification_read_aloud_stop">停止</string>
 
     <string name="notification_approve_title">允许此命令？</string>
     <string name="notification_question_title">Hermes 有个问题</string>
