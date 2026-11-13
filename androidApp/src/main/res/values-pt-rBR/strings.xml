@@ -40,6 +40,8 @@
     <string name="notification_read_aloud_title">Lendo em voz alta</string>
     <string name="notification_read_aloud_text">Lendo uma resposta</string>
     <string name="notification_read_aloud_stop">Parar</string>
+    <string name="notification_read_aloud_pause">Pausar</string>
+    <string name="notification_read_aloud_resume">Retomar</string>
 
     <string name="notification_approve_title">Permitir este comando?</string>
     <string name="notification_question_title">Hermes tem uma pergunta</string>

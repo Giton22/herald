@@ -40,6 +40,8 @@
     <string name="notification_read_aloud_title">Felolvasás</string>
     <string name="notification_read_aloud_text">Egy válasz felolvasása</string>
     <string name="notification_read_aloud_stop">Leállítás</string>
+    <string name="notification_read_aloud_pause">Szünet</string>
+    <string name="notification_read_aloud_resume">Folytatás</string>
 
     <string name="notification_approve_title">Engedélyezed ezt a parancsot?</string>
     <string name="notification_question_title">Hermesnek kérdése van</string>

@@ -252,6 +252,8 @@ import com.composables.icons.lucide.TriangleAlert
 import com.composables.icons.lucide.Users
 import com.composables.icons.lucide.Plus
 import com.composables.icons.lucide.RefreshCw
+import com.composables.icons.lucide.Pause
+import com.composables.icons.lucide.Play
 import com.composables.icons.lucide.Square
 import com.composables.icons.lucide.Volume2
 import com.composables.icons.lucide.SquarePen
@@ -1112,6 +1114,7 @@ internal fun ChatView(
                                     readUpTo = readUpTo,
                                     onReadLatest = onReadLatest,
                                     reading = readAloud.key,
+                                    readingPaused = readAloud.paused,
                                     // The voice chat and dictation have the speaker and the microphone.
                                     canReadAloud = hasSpeechPlayback && !voiceOn && !dictation.active,
                                     found = found,
@@ -1881,6 +1884,8 @@ private fun Messages(
     onReadLatest: (() -> Unit)? = null,
     /** The reply being read aloud, by its key. */
     reading: String? = null,
+    /** The reply being read is held where it is. */
+    readingPaused: Boolean = false,
     /** Replies offer Read aloud. */
     canReadAloud: Boolean = true,
     /** The message Find in chat is on, by its key, marked with an outline. */
@@ -2125,8 +2130,11 @@ private fun Messages(
                                     last = message.key == lastReply,
                                     unservable = unservable,
                                     reading = message.key == reading,
+                                    readingPaused = readingPaused,
                                     onReadAloud = if (canReadAloud) ({ text -> actions.readAloud(message.key, text) }) else null,
                                     onStopReading = actions::stopReading,
+                                    onPauseReading = actions::pauseReading,
+                                    onResumeReading = actions::resumeReading,
                                 )
                             }
                             // An answer to another bot's message folds under it; never while it's still being written.
@@ -2803,9 +2811,13 @@ internal fun AssistantReply(
     unservable: List<GeneratedImage> = emptyList(),
     /** This reply is being read aloud: Stop shows in place of Read aloud. */
     reading: Boolean = false,
+    /** This reply's reading is held where it is: Resume shows in place of Pause. */
+    readingPaused: Boolean = false,
     /** Reads the reply's text, as shown, aloud; null when it can't be now. */
     onReadAloud: ((String) -> Unit)? = null,
     onStopReading: () -> Unit = {},
+    onPauseReading: () -> Unit = {},
+    onResumeReading: () -> Unit = {},
 ) {
     val settings = LocalAppSettings.current
     val showReasoning = settings.showReasoning && message.reasoning.isNotBlank()
@@ -2830,6 +2842,8 @@ internal fun AssistantReply(
     val regenerateLabel = stringResource(Res.string.chat_regenerate)
     val branchLabel = stringResource(Res.string.chat_branch_here)
     val stopReadingLabel = stringResource(Res.string.chat_stop_reading)
+    val pauseReadingLabel = stringResource(Res.string.chat_pause_reading)
+    val resumeReadingLabel = stringResource(Res.string.chat_resume_reading)
     val readAloudLabel = stringResource(Res.string.chat_read_aloud)
     if (canMenu) {
         RowContextMenu(contextMenuOpen, onDismiss = { contextMenuOpen = false }) {
@@ -2837,6 +2851,8 @@ internal fun AssistantReply(
                 RowMenuItem(copyLabel, Lucide.Copy) { scope.launch { clipboard.setClipEntry(plainTextClipEntry(text)) } },
                 onRegenerate?.let { RowMenuItem(regenerateLabel, Lucide.RefreshCw, run = it) },
                 onBranch?.let { RowMenuItem(branchLabel, Lucide.GitBranch, run = it) },
+                if (reading) RowMenuItem(if (readingPaused) resumeReadingLabel else pauseReadingLabel, if (readingPaused) Lucide.Play else Lucide.Pause, run = if (readingPaused) onResumeReading else onPauseReading)
+                else null,
                 if (reading) RowMenuItem(stopReadingLabel, Lucide.Square, run = onStopReading)
                 else onReadAloud?.let { read -> RowMenuItem(readAloudLabel, Lucide.Volume2) { read(text) } },
             )
@@ -2952,7 +2968,11 @@ internal fun AssistantReply(
                     onBranch?.let { ReplyAction(Lucide.GitBranch, branchLabel, it, action) }
                     onRegenerate?.let { ReplyAction(Lucide.RefreshCw, regenerateLabel, it, action) }
                     when {
-                        reading -> ReplyAction(Lucide.Square, stopReadingLabel, onStopReading, action)
+                        reading -> {
+                            if (readingPaused) ReplyAction(Lucide.Play, resumeReadingLabel, onResumeReading, action)
+                            else ReplyAction(Lucide.Pause, pauseReadingLabel, onPauseReading, action)
+                            ReplyAction(Lucide.Square, stopReadingLabel, onStopReading, action)
+                        }
                         speakable && onReadAloud != null -> ReplyAction(Lucide.Volume2, readAloudLabel, { onReadAloud(text) }, action)
                     }
                     CopyButton(text, Modifier.trimEndTop(end = 16.dp, top = 4.dp).size(MinTouchTarget))

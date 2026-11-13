@@ -45,6 +45,8 @@
     <string name="notification_read_aloud_title">Reading aloud</string>
     <string name="notification_read_aloud_text">Reading a reply</string>
     <string name="notification_read_aloud_stop">Stop</string>
+    <string name="notification_read_aloud_pause">Pause</string>
+    <string name="notification_read_aloud_resume">Resume</string>
 
     <!-- Approvals, questions, passwords -->
     <string name="notification_approve_title">Approve this command?</string>

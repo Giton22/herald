@@ -137,6 +137,10 @@ interface ChatActions {
 
     fun stopReading() {}
 
+    fun pauseReading() {}
+
+    fun resumeReading() {}
+
     fun dismissReadAloudError() {}
 }
 

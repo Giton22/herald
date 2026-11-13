@@ -21,6 +21,7 @@ import dev.hermeskotlin.core.voice.DeviceDictationUnavailable
 import dev.hermeskotlin.core.voice.LiveCalls
 import dev.hermeskotlin.core.voice.ReadAloudVoices
 import dev.hermeskotlin.core.voice.InMemoryReadAloudVoices
+import dev.hermeskotlin.core.voice.ReadAloudControls
 import dev.hermeskotlin.core.voice.ReadAloudKeepAlive
 import dev.hermeskotlin.core.voice.VoiceKeepAlive
 import dev.hermeskotlin.core.voice.Recording
@@ -114,6 +115,8 @@ data class ReadAloudState(
     val key: String? = null,
     /** Why the last reply couldn't be read. */
     val error: String? = null,
+    /** The reply is held where it is, to go on from there. */
+    val paused: Boolean = false,
 )
 
 /**
@@ -182,6 +185,14 @@ class VoiceController(
     private var readingJob: Job? = null
     /** The reading in progress is held up by [readAloudKeepAlive], so it carries on out of sight. */
     private var readingHeld = false
+    /** What the platform's controls do to the reading in progress. */
+    private val readAloudControls = object : ReadAloudControls {
+        override fun pause() = pauseReading()
+
+        override fun resume() = resumeReading()
+
+        override fun stop() = stopReading()
+    }
     /** The recognizer the dictation in progress listens with; null when the gateway transcribes it. */
     private var dictating: DeviceDictation? = null
     /**
@@ -1123,7 +1134,7 @@ class VoiceController(
         _reading.value = ReadAloudState(key)
         // Held now, on the tap: Android only lets a service start from the foreground.
         readingHeld = readAloudKeepAlive?.hold(
-            onStop = ::stopReading,
+            controls = readAloudControls,
             onLost = {
                 readingHeld = false
                 // Refused after the app already went away: it can't go on from there.
@@ -1141,6 +1152,7 @@ class VoiceController(
                 // Stopped, or another reply started: that one keeps its own state.
                 if (readingJob === coroutineContext.job) {
                     readingJob = null
+                    letGoOfPause()
                     releaseReading()
                     _reading.value = ReadAloudState(error = error)
                 }
@@ -1154,8 +1166,31 @@ class VoiceController(
     fun stopReading() {
         readingJob?.cancel()
         readingJob = null
+        letGoOfPause()
         releaseReading()
         _reading.value = ReadAloudState()
+    }
+
+    /** Holds the reply being read where it is, until [resumeReading]. */
+    fun pauseReading() {
+        val state = _reading.value
+        if (state.key == null || state.paused || !player.hold(true)) return
+        _reading.value = state.copy(paused = true)
+        if (readingHeld) readAloudKeepAlive?.paused(true)
+    }
+
+    /** Goes on with the reply [pauseReading] held. */
+    fun resumeReading() {
+        val state = _reading.value
+        if (!state.paused) return
+        player.hold(false)
+        _reading.value = state.copy(paused = false)
+        if (readingHeld) readAloudKeepAlive?.paused(false)
+    }
+
+    /** The player holds across replies; a reading that ends paused must not leave the next one waiting. */
+    private fun letGoOfPause() {
+        if (_reading.value.paused) player.hold(false)
     }
 
     /** Lets the hold go if this controller took it: the keep-alive is the app's, and another screen's reading may hold it. */

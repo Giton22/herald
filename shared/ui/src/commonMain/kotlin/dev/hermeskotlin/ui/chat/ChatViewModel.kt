@@ -1452,6 +1452,10 @@ class ChatViewModel(
 
     override fun stopReading() = voice.stopReading()
 
+    override fun pauseReading() = voice.pauseReading()
+
+    override fun resumeReading() = voice.resumeReading()
+
     override fun dismissReadAloudError() = voice.dismissReadAloudError()
 
     fun showTitle(title: String?) = session.value?.showTitle(title)

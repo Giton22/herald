@@ -8,8 +8,11 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.AudioAttributes
+import android.graphics.drawable.Icon
 import android.media.RingtoneManager
+import android.media.session.MediaSession
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -267,17 +270,39 @@ class ChatNotifications(
         .addAction(0, str(R.string.notification_voice_end), end)
         .build()
 
-    /** The ongoing notification of a reply read aloud kept up like music ([ReadAloudService]): back to it, or [stop] it. */
-    fun readAloud(stop: PendingIntent): Notification = base(CHANNEL_VOICE)
-        .setContentTitle(str(R.string.notification_read_aloud_title))
-        .setContentText(str(R.string.notification_read_aloud_text))
-        .setCategory(NotificationCompat.CATEGORY_TRANSPORT)
-        .setOngoing(true)
-        .setAutoCancel(false)
-        .setSilent(true)
-        .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
-        .addAction(0, str(R.string.notification_read_aloud_stop), stop)
-        .build()
+    /**
+     * The ongoing notification of a reply read aloud kept up like music ([ReadAloudService]): a media notification of
+     * [session], so the lock screen shows it with Pause or Resume ([toggle]) and [stop]. It says nothing of the reply.
+     */
+    fun readAloud(session: MediaSession.Token, paused: Boolean, toggle: PendingIntent, stop: PendingIntent): Notification {
+        val builder = Notification.Builder(context, CHANNEL_VOICE)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setColor(ContextCompat.getColor(context, R.color.notification_accent))
+            .setContentIntent(openApp(null, null))
+            .setContentTitle(str(R.string.notification_read_aloud_title))
+            .setContentText(str(R.string.notification_read_aloud_text))
+            .setCategory(Notification.CATEGORY_TRANSPORT)
+            .setVisibility(Notification.VISIBILITY_PUBLIC)
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .addAction(
+                Notification.Action.Builder(
+                    Icon.createWithResource(context, if (paused) android.R.drawable.ic_media_play else android.R.drawable.ic_media_pause),
+                    str(if (paused) R.string.notification_read_aloud_resume else R.string.notification_read_aloud_pause),
+                    toggle,
+                ).build(),
+            )
+            .addAction(
+                Notification.Action.Builder(
+                    Icon.createWithResource(context, android.R.drawable.ic_menu_close_clear_cancel),
+                    str(R.string.notification_read_aloud_stop),
+                    stop,
+                ).build(),
+            )
+            .setStyle(Notification.MediaStyle().setMediaSession(session).setShowActionsInCompactView(0, 1))
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) builder.setForegroundServiceBehavior(Notification.FOREGROUND_SERVICE_IMMEDIATE)
+        return builder.build()
+    }
 
     fun postOngoing(connection: ConnectionState, pushAnywhere: Boolean = false) =
         post(null, WORKING_ID, ongoing(connection, pushAnywhere))

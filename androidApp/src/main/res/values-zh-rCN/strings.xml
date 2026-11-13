@@ -40,6 +40,8 @@
     <string name="notification_read_aloud_title">正在朗读</string>
     <string name="notification_read_aloud_text">正在朗读一条回复</string>
     <string name="notification_read_aloud_stop">停止</string>
+    <string name="notification_read_aloud_pause">暂停</string>
+    <string name="notification_read_aloud_resume">继续</string>
 
     <string name="notification_approve_title">允许此命令？</string>
     <string name="notification_question_title">Hermes 有个问题</string>
