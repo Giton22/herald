@@ -108,6 +108,24 @@ class ChatSessionTest {
     }
 
     @Test
+    fun openingAChatSkipsStructuredTextPartsWithoutLosingTheTranscript() = runTest {
+        history = """{"session_id":"stored-1","messages":[
+            {"id":1,"role":"user","content":[{"text":"Hello"},{"text":{"value":"unsupported"}}]},
+            {"id":2,"role":"assistant","content":"Raw","display_content":[{"text":[]},{"text":"Welcome"}]}
+        ]}"""
+        val (connection, _) = setup(
+            backgroundScope,
+            mapOf("session.resume" to """{"session_id":"rt1","running":false}"""),
+        )
+        val chat = ChatSession(url, "stored-1", "Greeting", connection, SessionsApi(client()), backgroundScope)
+        chat.start()
+
+        val opened = chat.state.first { it.historyLoaded && it.runtimeSessionId == "rt1" }
+        assertNull(opened.historyError)
+        assertEquals(listOf("Hello", "Welcome"), opened.messages.map { it.textOf() })
+    }
+
+    @Test
     fun resumesStoredSessionAndStreamsItsTurn() = runTest {
         val (connection, transport) = setup(backgroundScope, mapOf("session.resume" to """{"session_id":"rt1","running":false,"info":{"model":"m1"}}"""))
         val chat = ChatSession(url, "stored-1", "Greeting", connection, SessionsApi(client()), backgroundScope)
