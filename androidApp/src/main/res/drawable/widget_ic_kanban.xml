@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="@dimen/widget_action_glyph"
+    android:height="@dimen/widget_action_glyph"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:pathData="M5,4h4v16H5z M10.5,4h4v10h-4z M16,4h4v7h-4z"
+        android:fillColor="#FFFFFFFF" />
+</vector>

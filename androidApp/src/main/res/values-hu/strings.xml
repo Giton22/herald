@@ -166,4 +166,115 @@
     <string name="phone_place_not_accepted">nem fogadták el</string>
     <string name="phone_place_no_reach">A Kyllene nem érte el a Gateway-t</string>
     <string name="phone_place_refused">a Gateway elutasította</string>
+
+    <!-- Home-screen widgets, as the widget picker lists them -->
+    <string name="widget_now_label">Most</string>
+    <string name="widget_now_description">Kinek van szüksége rád, mi fut éppen, és mikor minden csendes</string>
+    <string name="widget_chats_label">Chatek</string>
+    <string name="widget_chats_description">Legutóbbi és kitűzött beszélgetések</string>
+    <string name="widget_kanban_label">Feladatok</string>
+    <string name="widget_kanban_description">A kiválasztott tábla aktív feladatai</string>
+    <string name="widget_scheduled_label">Ütemezett</string>
+    <string name="widget_scheduled_description">Közelgő és problémás ütemezett feladatok</string>
+
+    <!-- Home-screen widgets: shared header and states -->
+    <string name="widget_locked">Zárolva. Oldd fel a részletek megtekintéséhez.</string>
+    <string name="widget_now_locked_counts">Rád vár: %1$d · Fut: %2$d</string>
+    <string name="widget_chats_locked_counts">Chatek: %1$d</string>
+    <string name="widget_kanban_locked_counts">Feladatok: %1$d</string>
+    <string name="widget_scheduled_locked_counts">Ütemezettek: %1$d</string>
+    <string name="widget_refresh_now">Most frissítése</string>
+    <string name="widget_refresh_chats">Chatek frissítése</string>
+    <string name="widget_refresh_kanban">Feladatok frissítése</string>
+    <string name="widget_refresh_scheduled">Ütemezett feladatok frissítése</string>
+    <string name="widget_refreshing">Frissítés…</string>
+    <string name="widget_action_new_chat">Új chat</string>
+    <string name="widget_action_dictate">Új chat diktálása</string>
+    <string name="widget_retry_detail">Ellenőrizd a kapcsolatot, és próbáld újra.</string>
+    <!-- %1$s: a clock time such as 09:30 -->
+    <string name="widget_saved_copy_at">Mentett másolat · %1$s</string>
+    <string name="widget_refresh_saved_at">A frissítés nem sikerült · Mentve %1$s</string>
+
+    <!-- Home-screen widgets: Now -->
+    <string name="widget_needs_you">RÁD VÁRNAK</string>
+    <string name="widget_running_eyebrow">FUT</string>
+    <string name="widget_all_quiet">Minden csendes</string>
+    <string name="widget_everything_quiet">Minden csendes</string>
+    <!-- %1$s: the job’s name; %2$s: its next-run clock time -->
+    <string name="widget_next_job">Következő: %1$s · %2$s</string>
+    <string name="widget_now_live_unavailable">Élő állapot nem érhető el</string>
+    <string name="widget_now_open_to_refresh">Nyisd meg a Kyllenét a chat- és botállapot frissítéséhez.</string>
+    <string name="widget_now_live_unavailable_notice">A chat- és botállapot élőben nem érhető el</string>
+    <string name="widget_now_couldnt_refresh">A Most frissítése nem sikerült</string>
+    <string name="widget_sign_in_now">Jelentkezz be a Most megtekintéséhez</string>
+    <string name="widget_now_sign_in_detail">A chateid, botjaid, feladataid és ütemeseid itt jelennek meg.</string>
+    <!-- %1$s: the first running item’s title; %2$d: how many more are running -->
+    <string name="widget_running_strip">Fut: %1$s</string>
+    <string name="widget_running_strip_more">Fut: %1$s +%2$d</string>
+    <string name="widget_now_kind_chat_turn">Chatválasz</string>
+    <string name="widget_now_kind_bot_working">Bot dolgozik</string>
+    <string name="widget_now_kind_kanban_running">Kanban</string>
+    <string name="widget_now_kind_waiting">Várakozik</string>
+    <string name="widget_now_kind_bot_trouble">Botprobléma</string>
+    <string name="widget_now_kind_routine_failed">Elbukott rutin</string>
+    <string name="widget_now_kind_task_status">Feladat állapota</string>
+    <string name="widget_now_kind_scheduled_problem">Ütemezési probléma</string>
+    <!-- %1$d: how many more items need you -->
+    <plurals name="widget_more_need_you">
+        <item quantity="one">Még %1$d ember vár rád</item>
+        <item quantity="other">Még %1$d ember vár rád</item>
+    </plurals>
+
+    <!-- Home-screen widgets: Chats -->
+    <string name="widget_chats_empty">Nincsenek legutóbbi chatek</string>
+    <string name="widget_chats_empty_detail">Kezdj beszélgetést az Új chat gombbal.</string>
+    <string name="widget_chats_no_cache_detail">Nem érhető el mentett chat.</string>
+    <string name="widget_chats_couldnt_refresh">A chatek frissítése nem sikerült</string>
+    <string name="widget_sign_in_chats">Jelentkezz be a chatek megtekintéséhez</string>
+    <string name="widget_chats_sign_in_detail">A beszélgetéseid itt jelennek meg.</string>
+    <string name="widget_unread">Olvasatlan</string>
+    <string name="widget_pinned">Kitűzve</string>
+    <string name="widget_open_chat">Chat megnyitása</string>
+
+    <!-- Home-screen widgets: Tasks (Kanban) -->
+    <string name="widget_running">Fut</string>
+    <string name="widget_blocked">Blokkolva</string>
+    <string name="widget_review">Átnézés alatt</string>
+    <string name="widget_ready">Kész</string>
+    <string name="widget_unassigned">Nincs felelős</string>
+    <string name="widget_stale">Elavult</string>
+    <string name="widget_stale_red">Elavult!</string>
+    <!-- %1$d: the warning count -->
+    <string name="widget_warning_badge">⚠ %1$d</string>
+    <string name="widget_kanban_empty">Nincs aktív feladat</string>
+    <string name="widget_kanban_empty_detail">Ez a tábla nem tartalmaz blokkolt, átnézés alatt lévő, futó, kész vagy teendő feladatot.</string>
+    <string name="widget_kanban_no_board">Nincs Kanban-tábla</string>
+    <string name="widget_kanban_no_board_detail">Hozz létre vagy válassz táblát a Kyllenében.</string>
+    <string name="widget_kanban_couldnt_refresh">A feladatok frissítése nem sikerült</string>
+    <string name="widget_sign_in_kanban">Jelentkezz be a feladatok megtekintéséhez</string>
+    <string name="widget_kanban_sign_in_detail">A kiválasztott táblád itt jelenik meg.</string>
+    <string name="widget_open_task">Feladat megnyitása</string>
+
+    <!-- Home-screen widgets: Scheduled -->
+    <!-- %1$d: the problem count; %2$d: the active count -->
+    <plurals name="widget_scheduled_summary_problems">
+        <item quantity="one">%1$d probléma · %2$d aktív</item>
+        <item quantity="other">%1$d probléma · %2$d aktív</item>
+    </plurals>
+    <plurals name="widget_scheduled_summary_active">
+        <item quantity="one">%1$d aktív feladat</item>
+        <item quantity="other">%1$d aktív feladat</item>
+    </plurals>
+    <string name="widget_scheduled_no_active">Nincs aktív feladat</string>
+    <string name="widget_scheduled_saved_copy">Mentett másolat</string>
+    <string name="widget_scheduled_empty">Nincsenek ütemezett feladatok</string>
+    <string name="widget_scheduled_empty_detail">A feladatok és a botrutinok itt jelennek meg.</string>
+    <string name="widget_scheduled_couldnt_refresh">Az ütemezett feladatok frissítése nem sikerült</string>
+    <string name="widget_sign_in_scheduled">Jelentkezz be az ütemezett feladatok megtekintéséhez</string>
+    <string name="widget_scheduled_sign_in_detail">A feladataid és rutinjaid itt jelennek meg.</string>
+    <string name="widget_failed">Sikertelen</string>
+    <string name="widget_delivery_failed">Kézbesítés sikertelen</string>
+    <string name="widget_missed">Elmaradt</string>
+    <string name="widget_paused">Szünetel</string>
+    <string name="widget_open_job">Ütemezett feladat megnyitása</string>
 </resources>

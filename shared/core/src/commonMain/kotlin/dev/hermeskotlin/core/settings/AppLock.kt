@@ -20,6 +20,13 @@ class AppLockTimer(private val timeoutMillis: Long = DEFAULT_TIMEOUT_MILLIS) {
     private var leftAt: Long? = null
 
     /**
+     * Whether [onLaunch] ever ran in this process. The widget path reads it: a broadcast-started
+     * process never created the activity, so an enabled App lock that nothing unlocked stays locked
+     * until the user opens the app (D16's cold default).
+     */
+    val hasLaunched: Boolean get() = started
+
+    /**
      * The app's screen was created; [fresh] when it was opened anew rather than recreated (a rotation, a
      * theme change). Locked from the first frame when the lock is on and the process just started, or the
      * app was opened again after being closed (swiped from Recents, backed out of), which leaves the

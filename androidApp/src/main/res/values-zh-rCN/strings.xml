@@ -164,4 +164,112 @@
     <string name="phone_place_not_accepted">未被接受</string>
     <string name="phone_place_no_reach">Kyllene 无法连接到网关</string>
     <string name="phone_place_refused">网关拒绝了它</string>
+
+    <!-- Home-screen widgets, as the widget picker lists them -->
+    <string name="widget_now_label">现在</string>
+    <string name="widget_now_description">谁需要你、正在运行什么、以及什么时候一切安静</string>
+    <string name="widget_chats_label">聊天</string>
+    <string name="widget_chats_description">最近和置顶对话</string>
+    <string name="widget_kanban_label">任务</string>
+    <string name="widget_kanban_description">所选看板的活跃任务</string>
+    <string name="widget_scheduled_label">已排程</string>
+    <string name="widget_scheduled_description">即将运行和出问题的定时任务</string>
+
+    <!-- Home-screen widgets: shared header and states -->
+    <string name="widget_locked">已锁定。解锁后查看详情。</string>
+    <string name="widget_now_locked_counts">需要你：%1$d · 运行中：%2$d</string>
+    <string name="widget_chats_locked_counts">聊天：%1$d</string>
+    <string name="widget_kanban_locked_counts">任务：%1$d</string>
+    <string name="widget_scheduled_locked_counts">已计划：%1$d</string>
+    <string name="widget_refresh_now">刷新"现在"</string>
+    <string name="widget_refresh_chats">刷新聊天</string>
+    <string name="widget_refresh_kanban">刷新任务</string>
+    <string name="widget_refresh_scheduled">刷新定时任务</string>
+    <string name="widget_refreshing">正在刷新…</string>
+    <string name="widget_action_new_chat">新建聊天</string>
+    <string name="widget_action_dictate">语音新建聊天</string>
+    <string name="widget_retry_detail">检查连接后重试。</string>
+    <!-- %1$s: a clock time such as 09:30 -->
+    <string name="widget_saved_copy_at">已保存副本 · %1$s</string>
+    <string name="widget_refresh_saved_at">刷新失败 · 已保存 %1$s</string>
+
+    <!-- Home-screen widgets: Now -->
+    <string name="widget_needs_you">需要你</string>
+    <string name="widget_running_eyebrow">运行中</string>
+    <string name="widget_all_quiet">一切安静</string>
+    <string name="widget_everything_quiet">一切都安静</string>
+    <!-- %1$s: the job’s name; %2$s: its next-run clock time -->
+    <string name="widget_next_job">下一个：%1$s · %2$s</string>
+    <string name="widget_now_live_unavailable">实时状态不可用</string>
+    <string name="widget_now_open_to_refresh">打开 Kyllene 以刷新聊天和 Bot 状态。</string>
+    <string name="widget_now_live_unavailable_notice">聊天和 Bot 实时状态不可用</string>
+    <string name="widget_now_couldnt_refresh">无法刷新"现在"</string>
+    <string name="widget_sign_in_now">登录后查看"现在"</string>
+    <string name="widget_now_sign_in_detail">你的聊天、Bot、任务和日程会显示在这里。</string>
+    <!-- %1$s: the first running item’s title; %2$d: how many more are running -->
+    <string name="widget_running_strip">运行中：%1$s</string>
+    <string name="widget_running_strip_more">运行中：%1$s 等 %2$d 项</string>
+    <string name="widget_now_kind_chat_turn">聊天回复</string>
+    <string name="widget_now_kind_bot_working">Bot 运行中</string>
+    <string name="widget_now_kind_kanban_running">Kanban</string>
+    <string name="widget_now_kind_waiting">等待中</string>
+    <string name="widget_now_kind_bot_trouble">Bot 故障</string>
+    <string name="widget_now_kind_routine_failed">例行任务失败</string>
+    <string name="widget_now_kind_task_status">任务状态</string>
+    <string name="widget_now_kind_scheduled_problem">计划任务问题</string>
+    <!-- %1$d: how many more items need you -->
+    <plurals name="widget_more_need_you">
+        <item quantity="other">还有 %1$d 项需要你</item>
+    </plurals>
+
+    <!-- Home-screen widgets: Chats -->
+    <string name="widget_chats_empty">没有最近聊天</string>
+    <string name="widget_chats_empty_detail">通过"新建聊天"开始一段对话。</string>
+    <string name="widget_chats_no_cache_detail">没有可用的已保存聊天。</string>
+    <string name="widget_chats_couldnt_refresh">无法刷新聊天</string>
+    <string name="widget_sign_in_chats">登录后查看聊天</string>
+    <string name="widget_chats_sign_in_detail">你的对话会显示在这里。</string>
+    <string name="widget_unread">未读</string>
+    <string name="widget_pinned">已置顶</string>
+    <string name="widget_open_chat">打开聊天</string>
+
+    <!-- Home-screen widgets: Tasks (Kanban) -->
+    <string name="widget_running">运行中</string>
+    <string name="widget_blocked">已阻塞</string>
+    <string name="widget_review">待评审</string>
+    <string name="widget_ready">就绪</string>
+    <string name="widget_unassigned">未分配</string>
+    <string name="widget_stale">已过期</string>
+    <string name="widget_stale_red">已过期！</string>
+    <!-- %1$d: the warning count -->
+    <string name="widget_warning_badge">⚠ %1$d</string>
+    <string name="widget_kanban_empty">没有活跃任务</string>
+    <string name="widget_kanban_empty_detail">此看板没有已阻塞、待评审、运行中、就绪或待办的任务。</string>
+    <string name="widget_kanban_no_board">没有 Kanban 看板</string>
+    <string name="widget_kanban_no_board_detail">在 Kyllene 中创建或选择一个看板。</string>
+    <string name="widget_kanban_couldnt_refresh">无法刷新任务</string>
+    <string name="widget_sign_in_kanban">登录后查看任务</string>
+    <string name="widget_kanban_sign_in_detail">你所选的看板会显示在这里。</string>
+    <string name="widget_open_task">打开任务</string>
+
+    <!-- Home-screen widgets: Scheduled -->
+    <!-- %1$d: the problem count; %2$d: the active count -->
+    <plurals name="widget_scheduled_summary_problems">
+        <item quantity="other">%1$d 个问题 · %2$d 个活跃</item>
+    </plurals>
+    <plurals name="widget_scheduled_summary_active">
+        <item quantity="other">%1$d 个活跃任务</item>
+    </plurals>
+    <string name="widget_scheduled_no_active">没有活跃任务</string>
+    <string name="widget_scheduled_saved_copy">已保存副本</string>
+    <string name="widget_scheduled_empty">没有定时任务</string>
+    <string name="widget_scheduled_empty_detail">任务和 Bot 例程会显示在这里。</string>
+    <string name="widget_scheduled_couldnt_refresh">无法刷新定时任务</string>
+    <string name="widget_sign_in_scheduled">登录后查看定时任务</string>
+    <string name="widget_scheduled_sign_in_detail">你的任务和例程会显示在这里。</string>
+    <string name="widget_failed">失败</string>
+    <string name="widget_delivery_failed">投递失败</string>
+    <string name="widget_missed">错过</string>
+    <string name="widget_paused">已暂停</string>
+    <string name="widget_open_job">打开定时任务</string>
 </resources>

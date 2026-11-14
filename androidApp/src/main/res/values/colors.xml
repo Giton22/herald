@@ -7,4 +7,20 @@
     <!-- The brand mark keeps its own blue, as the design's herald-logo.svg does. -->
     <color name="launcher_background">#0053FD</color>
     <color name="notification_accent">#2F6BF5</color>
+
+    <!-- Home-screen widgets (docs/WIDGETS-DESIGN.md §3): widgets don't inherit the app theme, so every
+         role exists in both schemes; the accent roles are resolved per render from AccentPalette. -->
+    <color name="widget_surface">#FFFFFFFF</color>
+    <color name="widget_surface_2">#FFF1F1F5</color>
+    <color name="widget_well">#FFF3F3F7</color>
+    <color name="widget_text">#FF0A0A0C</color>
+    <color name="widget_text_secondary">#FF27272A</color>
+    <color name="widget_text_tertiary">#FF6B6B75</color>
+    <color name="widget_stroke">#140A0A1E</color>
+    <color name="widget_danger">#FFCF222E</color>
+    <color name="widget_warning">#FF895200</color>
+    <color name="widget_success">#FF16702F</color>
+    <color name="widget_danger_soft">#17CF222E</color>
+    <color name="widget_warning_soft">#1A895200</color>
+    <color name="widget_success_soft">#1916702F</color>
 </resources>

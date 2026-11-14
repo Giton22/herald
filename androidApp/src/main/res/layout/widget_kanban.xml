@@ -1,0 +1,341 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Tasks (Kanban) widget (docs/WIDGETS-DESIGN.md §8, §10.1): board name header, the signature
+    four-count strip, then a ListView over widget_kanban_row. WidgetViews.kt owns all visibility
+    and colors; the XML default state is the loading placeholder.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_background"
+    android:orientation="vertical"
+    android:paddingHorizontal="@dimen/widget_content_padding_horizontal"
+    android:paddingVertical="@dimen/widget_content_padding_vertical">
+
+    <LinearLayout
+        android:baselineAligned="false"
+        android:id="@+id/header"
+        android:layout_width="match_parent"
+        android:layout_height="@dimen/widget_header_height"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/title"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:fontFamily="sans-serif"
+                android:includeFontPadding="false"
+                android:maxLines="1"
+                android:text="@string/widget_kanban_label"
+                android:textColor="@color/widget_text"
+                android:textSize="@dimen/widget_text_title"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/context"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:includeFontPadding="false"
+                android:maxLines="1"
+                android:text="@string/widget_kanban_label"
+                android:textColor="@color/widget_text_tertiary"
+                android:textSize="@dimen/widget_text_context"
+                android:visibility="gone" />
+        </LinearLayout>
+
+        <FrameLayout
+            android:id="@+id/refresh"
+            android:layout_width="@dimen/widget_action_size"
+            android:layout_height="@dimen/widget_action_size"
+            android:background="@android:color/transparent">
+
+            <ImageView
+                android:id="@+id/refresh_icon"
+                android:layout_width="@dimen/widget_action_glyph"
+                android:layout_height="@dimen/widget_action_glyph"
+                android:layout_gravity="center"
+                android:contentDescription="@string/widget_refresh_kanban"
+                android:src="@drawable/widget_ic_refresh" />
+        </FrameLayout>
+    </LinearLayout>
+
+    <ProgressBar
+        android:id="@+id/refresh_progress"
+        style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="match_parent"
+        android:layout_height="2dp"
+        android:indeterminate="true"
+        android:visibility="gone" />
+
+    <!-- The signature four-beat count strip (§8.1); zero counts stay visible. Each pill is a
+         count and a whole-string label; WidgetViews.kt tints the running pill per accent. -->
+    <LinearLayout
+        android:baselineAligned="false"
+        android:id="@+id/count_strip"
+        android:layout_width="match_parent"
+        android:layout_height="@dimen/widget_count_strip_height"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:id="@+id/count_running"
+            android:layout_width="0dp"
+            android:layout_height="@dimen/widget_count_pill_height"
+            android:layout_marginEnd="@dimen/widget_pill_gap"
+            android:layout_weight="1"
+            android:background="@drawable/widget_pill_neutral"
+            android:gravity="center"
+            android:orientation="horizontal"
+            android:paddingHorizontal="@dimen/widget_pill_padding_horizontal">
+
+            <TextView
+                android:id="@+id/count_running_n"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:includeFontPadding="false"
+                android:textColor="@color/widget_text"
+                android:textSize="@dimen/widget_text_metadata"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="@dimen/widget_gap_related"
+                android:ellipsize="end"
+                android:includeFontPadding="false"
+                android:maxLines="1"
+                android:text="@string/widget_running"
+                android:textColor="@color/widget_text"
+                android:textSize="@dimen/widget_text_metadata" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/count_blocked"
+            android:layout_width="0dp"
+            android:layout_height="@dimen/widget_count_pill_height"
+            android:layout_marginEnd="@dimen/widget_pill_gap"
+            android:layout_weight="1"
+            android:background="@drawable/widget_pill_danger"
+            android:gravity="center"
+            android:orientation="horizontal"
+            android:paddingHorizontal="@dimen/widget_pill_padding_horizontal">
+
+            <TextView
+                android:id="@+id/count_blocked_n"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:includeFontPadding="false"
+                android:textColor="@color/widget_danger"
+                android:textSize="@dimen/widget_text_metadata"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="@dimen/widget_gap_related"
+                android:ellipsize="end"
+                android:includeFontPadding="false"
+                android:maxLines="1"
+                android:text="@string/widget_blocked"
+                android:textColor="@color/widget_danger"
+                android:textSize="@dimen/widget_text_metadata" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/count_review"
+            android:layout_width="0dp"
+            android:layout_height="@dimen/widget_count_pill_height"
+            android:layout_marginEnd="@dimen/widget_pill_gap"
+            android:layout_weight="1"
+            android:background="@drawable/widget_pill_warning"
+            android:gravity="center"
+            android:orientation="horizontal"
+            android:paddingHorizontal="@dimen/widget_pill_padding_horizontal">
+
+            <TextView
+                android:id="@+id/count_review_n"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:includeFontPadding="false"
+                android:textColor="@color/widget_warning"
+                android:textSize="@dimen/widget_text_metadata"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="@dimen/widget_gap_related"
+                android:ellipsize="end"
+                android:includeFontPadding="false"
+                android:maxLines="1"
+                android:text="@string/widget_review"
+                android:textColor="@color/widget_warning"
+                android:textSize="@dimen/widget_text_metadata" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/count_ready"
+            android:layout_width="0dp"
+            android:layout_height="@dimen/widget_count_pill_height"
+            android:layout_weight="1"
+            android:background="@drawable/widget_pill_success"
+            android:gravity="center"
+            android:orientation="horizontal"
+            android:paddingHorizontal="@dimen/widget_pill_padding_horizontal">
+
+            <TextView
+                android:id="@+id/count_ready_n"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:includeFontPadding="false"
+                android:textColor="@color/widget_success"
+                android:textSize="@dimen/widget_text_metadata"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="@dimen/widget_gap_related"
+                android:ellipsize="end"
+                android:includeFontPadding="false"
+                android:maxLines="1"
+                android:text="@string/widget_ready"
+                android:textColor="@color/widget_success"
+                android:textSize="@dimen/widget_text_metadata" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- Reserved strip for "Couldn't refresh · Saved HH:MM" (§8.3). -->
+    <FrameLayout
+        android:id="@+id/saved_notice"
+        android:layout_width="match_parent"
+        android:layout_height="@dimen/widget_saved_notice_height"
+        android:visibility="gone">
+
+        <ImageView
+            android:layout_width="@dimen/widget_marker_size"
+            android:layout_height="@dimen/widget_marker_size"
+            android:layout_gravity="center_vertical"
+            android:id="@+id/saved_notice_icon"
+            android:contentDescription="@null"
+            android:src="@drawable/widget_ic_cloud_off" />
+
+        <TextView
+            android:id="@+id/saved_notice_text"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:layout_marginStart="@dimen/widget_gap_related"
+            android:ellipsize="end"
+            android:gravity="center_vertical"
+            android:includeFontPadding="false"
+            android:maxLines="1"
+            android:textColor="@color/widget_warning"
+            android:textSize="@dimen/widget_text_metadata" />
+    </FrameLayout>
+
+    <ImageView
+        android:layout_width="match_parent"
+        android:layout_height="@dimen/widget_header_divider_height"
+        android:background="@color/widget_stroke" android:importantForAccessibility="no" />
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <ListView
+            android:id="@+id/list"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:divider="@color/widget_stroke"
+            android:dividerHeight="@dimen/widget_header_divider_height"
+            android:visibility="gone" />
+
+        <LinearLayout
+            android:id="@+id/state_empty"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <ImageView
+                android:id="@+id/empty_icon"
+                android:layout_width="@dimen/widget_empty_icon"
+                android:layout_height="@dimen/widget_empty_icon"
+                android:contentDescription="@null" />
+
+            <TextView
+                android:id="@+id/empty_title"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/widget_gap_standard"
+                android:ellipsize="end"
+                android:gravity="center"
+                android:includeFontPadding="false"
+                android:maxLines="1"
+                android:textColor="@color/widget_text"
+                android:textSize="@dimen/widget_text_row_title"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/empty_detail"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/widget_gap_related"
+                android:ellipsize="end"
+                android:gravity="center"
+                android:includeFontPadding="false"
+                android:maxLines="2"
+                android:textColor="@color/widget_text_secondary"
+                android:textSize="@dimen/widget_text_metadata" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/state_locked"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:text="@string/widget_locked"
+            android:textColor="@color/widget_text_secondary"
+            android:textSize="@dimen/widget_text_row_title"
+            android:visibility="gone" />
+
+        <LinearLayout
+            android:id="@+id/state_loading"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:includeFontPadding="false"
+                android:text="@string/widget_refreshing"
+                android:textColor="@color/widget_text_tertiary"
+                android:textSize="@dimen/widget_text_context" />
+
+            <ImageView
+                android:layout_width="match_parent"
+                android:layout_height="@dimen/widget_placeholder_row_height"
+                android:layout_marginTop="@dimen/widget_gap_related"
+                android:background="@drawable/widget_surface2_background" android:importantForAccessibility="no" />
+
+            <ImageView
+                android:layout_width="match_parent"
+                android:layout_height="@dimen/widget_placeholder_row_height"
+                android:layout_marginTop="@dimen/widget_gap_related"
+                android:background="@drawable/widget_surface2_background" android:importantForAccessibility="no" />
+        </LinearLayout>
+    </FrameLayout>
+</LinearLayout>

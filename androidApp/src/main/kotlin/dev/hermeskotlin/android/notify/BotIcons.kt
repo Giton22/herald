@@ -58,6 +58,13 @@ object BotIcons {
         return IconCompat.createWithBitmap(bitmap)
     }
 
+    /**
+     * The drawn face for a home-screen widget row: the same face the launcher icon and notifications
+     * draw, at the pixel size the widget asks for (32 or 40dp). Never tinted; a caller with avatar
+     * bytes already on disk overlays those itself (docs/WIDGETS-DESIGN.md §4.2).
+     */
+    fun face(bot: Bot, size: Int = 160): Bitmap = drawn(bot, size)
+
     /** The drawn face on a soft disc of its colour, with room for a round crop. */
     private fun framed(face: Bitmap, bot: Bot, size: Int = 192): Bitmap {
         val look = botLook(bot)

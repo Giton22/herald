@@ -108,6 +108,10 @@ import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
 import dev.hermeskotlin.core.inbox.InboxLink
 import dev.hermeskotlin.core.inbox.InboxLinks
+import dev.hermeskotlin.core.kanban.links.KanbanLink
+import dev.hermeskotlin.core.kanban.links.KanbanLinks
+import dev.hermeskotlin.core.cron.ScheduledLink
+import dev.hermeskotlin.core.cron.ScheduledLinks
 import dev.hermeskotlin.core.rooms.RoomLinks
 import org.koin.compose.koinInject
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -565,6 +569,32 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
             shownInboxLink = link
         }
     }
+    // A Kanban or Scheduled destination asked for from outside the screens (a widget tap, a `hermes://`
+    // link): same hand-off as the Inbox link above — the drawer opens here, the sidebar takes it once open.
+    val kanbanLinks = koinInject<KanbanLinks>()
+    val kanbanLink by kanbanLinks.pending.collectAsStateWithLifecycle()
+    var shownKanbanLink by remember { mutableStateOf<KanbanLink?>(null) }
+    LaunchedEffect(kanbanLink) {
+        val link = kanbanLink ?: return@LaunchedEffect
+        app.cancelPendingCall()
+        try {
+            sidebar.open()
+        } finally {
+            shownKanbanLink = link
+        }
+    }
+    val scheduledLinks = koinInject<ScheduledLinks>()
+    val scheduledLink by scheduledLinks.pending.collectAsStateWithLifecycle()
+    var shownScheduledLink by remember { mutableStateOf<ScheduledLink?>(null) }
+    LaunchedEffect(scheduledLink) {
+        val link = scheduledLink ?: return@LaunchedEffect
+        app.cancelPendingCall()
+        try {
+            sidebar.open()
+        } finally {
+            shownScheduledLink = link
+        }
+    }
     // A room asked for from outside the screens (a tapped notification) opens over the chat.
     val roomLinks = koinInject<RoomLinks>()
     val roomLink by roomLinks.pending.collectAsStateWithLifecycle()
@@ -780,6 +810,16 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
                     // A newer link may be handed on already: it is left for the sidebar to take.
                     if (shownInboxLink == link) shownInboxLink = null
                     inboxLinks.consume(link)
+                },
+                kanbanLink = shownKanbanLink,
+                onKanbanLinkTaken = { link ->
+                    if (shownKanbanLink == link) shownKanbanLink = null
+                    kanbanLinks.consume(link)
+                },
+                scheduledLink = shownScheduledLink,
+                onScheduledLinkTaken = { link ->
+                    if (shownScheduledLink == link) shownScheduledLink = null
+                    scheduledLinks.consume(link)
                 },
                 onOpenReportChat = { chat ->
                     if (app.openReportChat(chat, launch = profileRoster?.takeIf { it.launchKnown }?.launch)) closeDrawerToChat()

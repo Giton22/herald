@@ -20,6 +20,7 @@ import com.composables.icons.lucide.Gauge
 import com.composables.icons.lucide.Globe
 import com.composables.icons.lucide.History
 import com.composables.icons.lucide.Inbox
+import com.composables.icons.lucide.Kanban
 import com.composables.icons.lucide.Keyboard
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.MessageSquare
@@ -153,6 +154,7 @@ private val PAGE_ICONS = listOf(
     SidebarPage.Config to Lucide.SlidersHorizontal,
     SidebarPage.Plugins to Lucide.Puzzle,
     SidebarPage.Insights to Lucide.ChartColumn,
+    SidebarPage.Kanban to Lucide.Kanban,
 )
 
 /** Ctrl+/: every shortcut, by what it's for. */

@@ -23,6 +23,9 @@ import dev.hermeskotlin.core.capabilities.SkillsHubApi
 import dev.hermeskotlin.core.plugins.NextPromptApi
 import dev.hermeskotlin.core.plugins.PluginsApi
 import dev.hermeskotlin.core.cron.CronApi
+import dev.hermeskotlin.core.kanban.GatewayKanbanEvents
+import dev.hermeskotlin.core.kanban.KanbanEvents
+import dev.hermeskotlin.core.kanban.KanbanApi
 import dev.hermeskotlin.core.insights.InsightsApi
 import dev.hermeskotlin.core.config.ConfigApi
 import dev.hermeskotlin.core.connection.GatewayConnection
@@ -59,6 +62,11 @@ import dev.hermeskotlin.core.projects.ProjectsApi
 import dev.hermeskotlin.core.threads.ThreadsApi
 import dev.hermeskotlin.core.threads.ThreadsRepository
 import dev.hermeskotlin.core.bots.SidebarModeStore
+import dev.hermeskotlin.core.widget.WidgetDataAssembler
+import dev.hermeskotlin.core.widget.WidgetRefreshPipelines
+import dev.hermeskotlin.core.widget.WidgetSnapshotStore
+import dev.hermeskotlin.core.kanban.links.KanbanLinks
+import dev.hermeskotlin.core.cron.ScheduledLinks
 import dev.hermeskotlin.core.rooms.RoomLinks
 import dev.hermeskotlin.core.rooms.RoomSeenStore
 import dev.hermeskotlin.core.rooms.RoomsApi
@@ -71,6 +79,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import org.koin.core.module.Module
 import org.koin.core.qualifier.named
+import org.koin.dsl.bind
 import org.koin.dsl.module
 
 private const val OUTSIDE_CLIENT = "outside"
@@ -101,6 +110,8 @@ val coreModule = module {
     single { SkillsHubApi(get()) }
     single { PluginsApi(get()) }
     single { NextPromptApi(get(), get(), get()) }
+    single { KanbanApi(get()) }
+    single { GatewayKanbanEvents(get<HttpClient>(), get<AuthApi>()) } bind KanbanEvents::class
     single { InsightsApi(get()) }
     single { ConfigApi(get()) }
     single { LastChatStore(get()) }
@@ -159,4 +170,23 @@ val coreModule = module {
     single { PushApi(get()) }
     single { InboxStore(get()) }
     single { InboxLinks() }
+    // Home-screen widget snapshots and the two non-chat link buses (D7, D20): consumed by screens and,
+    // on Android, the widget providers (W-C2) — never the other way round.
+    single { WidgetSnapshotStore(get()) }
+    single { KanbanLinks() }
+    single { ScheduledLinks() }
+    single {
+        WidgetDataAssembler(
+            sessionsApi = get(),
+            cronApi = get(),
+            kanbanApi = get(),
+            botsApi = get(),
+            attention = get(),
+            botHealth = get(),
+            seenStore = get(),
+            offline = get(),
+            settings = get(),
+            snapshotStore = get(),
+        )
+    } bind WidgetRefreshPipelines::class
 }
