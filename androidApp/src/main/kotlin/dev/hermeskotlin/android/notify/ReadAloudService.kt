@@ -3,6 +3,9 @@ package dev.hermeskotlin.android.notify
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.media.AudioAttributes
+import android.media.AudioFocusRequest
+import android.media.AudioManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
@@ -15,6 +18,7 @@ import android.util.Log
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import dev.hermeskotlin.android.R
+import dev.hermeskotlin.core.voice.FocusPause
 import dev.hermeskotlin.core.voice.ReadAloudControls
 import dev.hermeskotlin.core.voice.ReadAloudKeepAlive
 import org.koin.android.ext.android.inject
@@ -28,6 +32,31 @@ class ReadAloudService : Service() {
     private val notifications: ChatNotifications by inject()
     private val keeper: ReadAloudKeeper by inject()
     private var session: MediaSession? = null
+    private var focusRequest: AudioFocusRequest? = null
+
+    /** The keeper's controls, for the focus changes that pause the reading and let it go on. */
+    private val focusPause = FocusPause(
+        object : ReadAloudControls {
+            override fun pause() = keeper.pause()
+
+            override fun resume() = keeper.resume()
+
+            override fun stop() = keeper.stop()
+        },
+        paused = { keeper.paused },
+    )
+
+    private val focusChanged = AudioManager.OnAudioFocusChangeListener { change ->
+        when (change) {
+            AudioManager.AUDIOFOCUS_LOSS -> {
+                // Music started in another app: the speaker isn't asked for again until the person resumes.
+                focusPause.lostForGood()
+                abandonFocus()
+            }
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT, AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> focusPause.lostForAMoment()
+            AudioManager.AUDIOFOCUS_GAIN -> focusPause.regained()
+        }
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -80,13 +109,52 @@ class ReadAloudService : Service() {
             return START_NOT_STICKY
         }
         // The reading ended while it was starting: it was left to stop here.
-        if (!keeper.started()) stopSelf()
+        if (!keeper.started()) {
+            stopSelf()
+            return START_NOT_STICKY
+        }
+        if (!keeper.paused) requestFocus()
         return START_NOT_STICKY
+    }
+
+    /**
+     * The speaker, exclusively and for a while: music and the like pause under it and go on when it's done (or when it
+     * is paused), and audio that starts in another app takes it back, which pauses the reading. Asked for to duck
+     * instead, the other app would only be turned down by the system, believe it still had the speaker, and never ask
+     * again when its playback starts. Not getting it doesn't stop the reading, as a call or another app may hold it
+     * and Read aloud always played over them.
+     */
+    private fun requestFocus() {
+        if (focusRequest != null) return
+        val request = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
+            .setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_ASSISTANT)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                    .build(),
+            )
+            .setOnAudioFocusChangeListener(focusChanged)
+            .build()
+        if (getSystemService(AudioManager::class.java).requestAudioFocus(request) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED) focusRequest = request
+    }
+
+    private fun abandonFocus() {
+        val request = focusRequest ?: return
+        focusRequest = null
+        getSystemService(AudioManager::class.java).abandonAudioFocusRequest(request)
     }
 
     /** The reading was paused or went on: the session and the notification say so. */
     internal fun render(paused: Boolean) {
         val mediaSession = session ?: return
+        if (paused) {
+            // Paused for a moment of other audio, it waits for the speaker to come back; paused by the person, it lets
+            // the music under it go on.
+            if (!focusPause.waiting) abandonFocus()
+        } else {
+            focusPause.resumedByPerson()
+            requestFocus()
+        }
         mediaSession.setPlaybackState(state(paused))
         getSystemService(NotificationManager::class.java).notify(ChatNotifications.READ_ALOUD_ID, notification(mediaSession, paused))
     }
@@ -108,6 +176,7 @@ class ReadAloudService : Service() {
         .build()
 
     override fun onDestroy() {
+        abandonFocus()
         session?.release()
         session = null
         keeper.service = null
