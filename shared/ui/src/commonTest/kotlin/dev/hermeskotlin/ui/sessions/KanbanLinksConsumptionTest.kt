@@ -8,7 +8,7 @@ import kotlin.test.assertNull
 /**
  * T11 (`docs/WIDGETS-SPEC.md` §11): the sidebar's Kanban-link effect opens the page (the composable's
  * `kanbanOpen` flag) and forwards board+task; the taken callback consumes the bus; the holder clears
- * once the drawer reports opened.
+ * once the main view reports opened.
  */
 class KanbanLinksConsumptionTest {
 

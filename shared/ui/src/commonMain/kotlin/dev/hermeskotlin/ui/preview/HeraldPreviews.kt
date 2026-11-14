@@ -1,5 +1,6 @@
 package dev.hermeskotlin.ui.preview
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -127,12 +128,15 @@ import dev.hermeskotlin.ui.update.LocalRenameOffer
 import dev.hermeskotlin.ui.update.RenameOffer
 import androidx.compose.ui.tooling.preview.Preview
 import com.composeunstyled.theme.ColorScheme
+import com.composeunstyled.theme.Theme
 import dev.hermeskotlin.core.chat.ChatState
 import dev.hermeskotlin.core.models.PickerScope
 import dev.hermeskotlin.core.settings.AppSettings
 import dev.hermeskotlin.core.settings.DEFAULT_ACCENT
 import dev.hermeskotlin.designsystem.AccentPalette
 import dev.hermeskotlin.designsystem.LocalAccentPalette
+import dev.hermeskotlin.designsystem.background
+import dev.hermeskotlin.designsystem.colors
 import dev.hermeskotlin.designsystem.hermesTheme
 import dev.hermeskotlin.ui.LocalAppSettings
 import dev.hermeskotlin.ui.chat.ChatView
@@ -532,24 +536,24 @@ fun HeraldPreview(scene: PreviewScene, dark: Boolean = true, accent: String = DE
                 PreviewScene.Plugins -> OpenSidebar {
                     SidebarPage { PluginsView(PluginsUiState(plugins = PageSamples.plugins), onBack = {}, onOpenPlugin = {}, onRetry = {}) }
                 }
-                PreviewScene.Kanban -> OpenSidebar {
-                    SidebarPage {
-                        KanbanView(
-                            PageSamples.kanban(),
-                            remember { TextFieldState("") },
-                            onBack = {},
-                            onSelectBoard = {},
-                            onSearch = {},
-                            onTenant = {},
-                            onAssignee = {},
-                            onIncludeArchived = {},
-                            onOpenTask = {},
-                            onCloseTask = {},
-                            onRetry = {},
-                            onReloadDetail = {},
-                            onReloadLog = {},
-                        )
-                    }
+                PreviewScene.Kanban -> Box(
+                    Modifier.fillMaxSize().background(Theme[colors][background]).windowInsetsPadding(WindowInsets.safeDrawing),
+                ) {
+                    KanbanView(
+                        PageSamples.kanban(),
+                        remember { TextFieldState("") },
+                        onBack = {},
+                        onSelectBoard = {},
+                        onSearch = {},
+                        onTenant = {},
+                        onAssignee = {},
+                        onIncludeArchived = {},
+                        onOpenTask = {},
+                        onCloseTask = {},
+                        onRetry = {},
+                        onReloadDetail = {},
+                        onReloadLog = {},
+                    )
                 }
                 PreviewScene.Scheduled, PreviewScene.ScheduledJob -> OpenSidebar {
                     SidebarPage {

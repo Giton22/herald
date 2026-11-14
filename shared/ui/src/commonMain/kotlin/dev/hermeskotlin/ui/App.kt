@@ -493,6 +493,10 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
     // On a desktop, the sidebar's pages open in the chat's place while it's docked beside it.
     val mainPage = remember { MainPageSlot() }
     mainPage.enabled = isDesktop && sidebar.docked
+    // Kanban uses the content area on phones and narrow windows too, not the drawer's page area.
+    LaunchedEffect(mainPage.content) {
+        if (mainPage.content != null && !sidebar.docked) sidebar.close()
+    }
 
     /** Whatever the sidebar opened next (a chat, a room) takes the place of a page beside it. */
     fun closeDrawer() {
@@ -564,19 +568,15 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
             shownInboxLink = link
         }
     }
-    // A Kanban or Scheduled destination asked for from outside the screens (a widget tap, a `hermes://`
-    // link): same hand-off as the Inbox link above — the drawer opens here, the sidebar takes it once open.
+    // A Kanban destination asked for from outside the screens (a widget tap, a `hermes://` link): the
+    // main view takes it directly, without opening and closing the drawer first. Scheduled stays a drawer page.
     val kanbanLinks = koinInject<KanbanLinks>()
     val kanbanLink by kanbanLinks.pending.collectAsStateWithLifecycle()
     var shownKanbanLink by remember { mutableStateOf<KanbanLink?>(null) }
     LaunchedEffect(kanbanLink) {
         val link = kanbanLink ?: return@LaunchedEffect
         app.cancelPendingCall()
-        try {
-            sidebar.open()
-        } finally {
-            shownKanbanLink = link
-        }
+        shownKanbanLink = link
     }
     val scheduledLinks = koinInject<ScheduledLinks>()
     val scheduledLink by scheduledLinks.pending.collectAsStateWithLifecycle()
@@ -827,7 +827,12 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
             val page = mainPage.content
             when {
                 // A list a desktop window would stretch past reading stays a page's width, in the middle.
-                page != null -> Box(Modifier.fillMaxSize().background(Theme[colors][background]), contentAlignment = Alignment.TopCenter) {
+                page != null -> Box(
+                    Modifier.fillMaxSize().background(Theme[colors][background]).then(
+                        if (isDesktop) Modifier else Modifier.windowInsetsPadding(WindowInsets.safeDrawing),
+                    ),
+                    contentAlignment = Alignment.TopCenter,
+                ) {
                     // By its kind alone: a bot's routines are "routines", not the bot's name.
                     key(mainPage.key) { TimeOpening(mainPage.key?.substringBefore(':') ?: "page") }
                     Box(Modifier.widthIn(max = if (mainPage.wide) WIDE_PAGE_WIDTH else MAIN_PAGE_WIDTH).fillMaxSize()) { page() }

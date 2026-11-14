@@ -3,8 +3,11 @@ package dev.hermeskotlin.ui.sessions
 import dev.hermeskotlin.core.settings.AppSettings
 import dev.hermeskotlin.core.settings.withSidebarPage
 import dev.hermeskotlin.ui.SidebarPage
+import dev.hermeskotlin.ui.showInMain
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class NavPagesTest {
 
@@ -24,6 +27,14 @@ class NavPagesTest {
         assertEquals(phonePages, shownNavPages(AppSettings(), desktop = false))
         // Before the settings are read, the sidebar doesn't flash without them.
         assertEquals(phonePages, shownNavPages(null, desktop = false))
+    }
+
+    @Test
+    fun kanbanIsAMainViewEvenWhereOtherPagesStayInTheDrawer() {
+        assertTrue(showInMain(desktopPages = false, pageKey = "kanban"))
+        assertFalse(showInMain(desktopPages = false, pageKey = null))
+        assertFalse(showInMain(desktopPages = false, pageKey = "inbox"))
+        assertTrue(showInMain(desktopPages = true, pageKey = null))
     }
 
     @Test

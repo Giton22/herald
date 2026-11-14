@@ -124,8 +124,9 @@ private fun columnHelp(status: String): String? = when (status) {
 }
 
 /**
- * The sidebar's Kanban page: the gateway's Kanban boards and, inside one, its columns of cards. Read-only —
- * nothing here moves, edits or creates a card. The Plugins page keeps its WebView entry for the same board.
+ * The main Kanban view: the gateway's Kanban boards and, inside one, its columns of cards. Read-only —
+ * nothing here moves, edits or creates a card. The sidebar's navigation button opens it in the content area;
+ * the Plugins page keeps its WebView entry for the same board.
  */
 @Composable
 internal fun KanbanPage(
@@ -136,7 +137,7 @@ internal fun KanbanPage(
     /** A task asked for from outside the page (a widget tap, a `hermes://kanban` link): opened once its board loads. */
     openTaskBoard: String? = null,
     openTaskId: String? = null,
-    /** Called once the drawer owns [openTaskId], or once the queue was consumed without it (a deleted task). */
+    /** Called once the main view owns [openTaskId], or once the queue was consumed without it (a deleted task). */
     onTaskOpened: () -> Unit = {},
     viewModel: KanbanViewModel = koinViewModel(),
 ) {

@@ -116,6 +116,7 @@ import androidx.compose.ui.layout.Layout
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.rememberUpdatedState
 import dev.hermeskotlin.ui.MainPageSlot
+import dev.hermeskotlin.ui.showInMain
 import androidx.compose.ui.semantics.selected
 import dev.hermeskotlin.designsystem.components.verticalScrollWithBar
 import androidx.compose.foundation.text.input.placeCursorAtEnd
@@ -515,8 +516,20 @@ fun SessionsSidebar(
         viewModel.query.clearText()
     }
 
-    // The pages open beside a docked sidebar on the desktop, where it stays the list: any one opened puts the last away.
-    val pageInMain = mainPage?.enabled == true
+    val pageKey = when {
+        inboxOpen -> "inbox"
+        scheduledOpen -> "scheduled"
+        routinesOf != null -> "routines:${routinesOf?.name}"
+        capabilitiesOpen -> "capabilities"
+        configOpen -> "config"
+        pluginsOpen -> "plugins"
+        insightsOpen -> "insights"
+        kanbanOpen -> "kanban"
+        else -> null
+    }
+    // The pages open beside a docked sidebar on the desktop. Only Kanban takes the main area where the
+    // sidebar is a drawer; the app closes that drawer once Kanban takes over the content area.
+    val pageInMain = mainPage != null && showInMain(mainPage.enabled, pageKey)
     fun closePages() {
         scheduledOpen = false
         inboxOpen = false
@@ -669,17 +682,6 @@ fun SessionsSidebar(
         )
     }
 
-    val pageKey = when {
-        inboxOpen -> "inbox"
-        scheduledOpen -> "scheduled"
-        routinesOf != null -> "routines:${routinesOf?.name}"
-        capabilitiesOpen -> "capabilities"
-        configOpen -> "config"
-        pluginsOpen -> "plugins"
-        insightsOpen -> "insights"
-        kanbanOpen -> "kanban"
-        else -> null
-    }
     // Beside the sidebar, a page stays live while the sidebar is folded away.
     val pageVisible = visible || pageInMain
     val pageView: @Composable () -> Unit = {
