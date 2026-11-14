@@ -22,7 +22,7 @@
     <string name="channel_inbox_failed_name">Fehlgeschlagene Jobs</string>
     <string name="channel_inbox_failed_description">Ein Lauf eines geplanten Jobs ist fehlgeschlagen.</string>
     <string name="channel_voice_name">Sprachchat</string>
-    <string name="channel_voice_description">Wird angezeigt, während ein Sprachchat bei ausgeschaltetem Bildschirm oder in einer anderen App weiterläuft.</string>
+    <string name="channel_voice_description">Wird angezeigt, solange ein Sprachchat oder eine vorgelesene Antwort bei ausgeschaltetem Bildschirm oder mit einer anderen App im Vordergrund weiterläuft.</string>
     <string name="channel_calls_name">Anrufe für eine Antwort</string>
     <string name="channel_calls_description">Eine Freigabe oder eine Frage klingelt wie ein Anruf (Einstellungen → Telefon-Tools → Anrufe).</string>
     <string name="channel_phone_tools_name">Telefon-Tools</string>
@@ -37,6 +37,11 @@
     <string name="notification_voice_title">Sprachchat</string>
     <string name="notification_voice_text">Im Gespräch mit Hermes</string>
     <string name="notification_voice_end">Beenden</string>
+    <string name="notification_read_aloud_title">Wird vorgelesen</string>
+    <string name="notification_read_aloud_text">Eine Antwort wird vorgelesen</string>
+    <string name="notification_read_aloud_stop">Stopp</string>
+    <string name="notification_read_aloud_pause">Pause</string>
+    <string name="notification_read_aloud_resume">Fortsetzen</string>
 
     <string name="notification_approve_title">Diesen Befehl erlauben?</string>
     <string name="notification_question_title">Hermes hat eine Frage</string>

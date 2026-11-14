@@ -481,6 +481,8 @@
     <string name="chat_regenerate">Gerar de novo</string>
     <string name="chat_read_aloud">Ler em voz alta</string>
     <string name="chat_stop_reading">Parar de ler</string>
+    <string name="chat_pause_reading">Pausar leitura</string>
+    <string name="chat_resume_reading">Retomar leitura</string>
     <string name="chat_message_actions">Ações da mensagem</string>
     <string name="chat_queued">Na fila · enviada depois desta tarefa</string>
     <string name="chat_editing_in_composer">Editando na caixa de texto</string>

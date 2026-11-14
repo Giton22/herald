@@ -58,6 +58,7 @@ import dev.hermeskotlin.ui.pet.PetController
 import dev.hermeskotlin.ui.journey.JourneyController
 import dev.hermeskotlin.core.voice.AudioApi
 import dev.hermeskotlin.core.voice.LiveCalls
+import dev.hermeskotlin.core.voice.ReadAloudKeepAlive
 import dev.hermeskotlin.core.voice.VoiceKeepAlive
 import dev.hermeskotlin.core.voice.SpeechPlayer
 import dev.hermeskotlin.core.voice.SpeechStreams
@@ -221,6 +222,8 @@ class ChatViewModel(
     deviceLock: DeviceLock = DeviceLock.None,
     /** The Next Prompt plugin's suggestions; none without it. */
     nextPromptApi: NextPromptApi? = null,
+    /** Keeps Read aloud going with the screen off; without it, leaving the app stops the reading. */
+    readAloudKeepAlive: ReadAloudKeepAlive? = null,
 ) : ViewModel(), ChatActions {
 
     /** Dictation, voice chat and Read aloud for the open chat. */
@@ -230,6 +233,7 @@ class ChatViewModel(
         deviceLock = deviceLock,
         liveCalls = liveCalls,
         readAloudVoices = readAloudVoices ?: InMemoryReadAloudVoices(),
+        readAloudKeepAlive = readAloudKeepAlive,
     )
 
     /** The profile's pet and its gallery. */
@@ -1447,6 +1451,10 @@ class ChatViewModel(
     }
 
     override fun stopReading() = voice.stopReading()
+
+    override fun pauseReading() = voice.pauseReading()
+
+    override fun resumeReading() = voice.resumeReading()
 
     override fun dismissReadAloudError() = voice.dismissReadAloudError()
 

@@ -8,8 +8,11 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.AudioAttributes
+import android.graphics.drawable.Icon
 import android.media.RingtoneManager
+import android.media.session.MediaSession
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -266,6 +269,40 @@ class ChatNotifications(
         .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
         .addAction(0, str(R.string.notification_voice_end), end)
         .build()
+
+    /**
+     * The ongoing notification of a reply read aloud kept up like music ([ReadAloudService]): a media notification of
+     * [session], so the lock screen shows it with Pause or Resume ([toggle]) and [stop]. It says nothing of the reply.
+     */
+    fun readAloud(session: MediaSession.Token, paused: Boolean, toggle: PendingIntent, stop: PendingIntent): Notification {
+        val builder = Notification.Builder(context, CHANNEL_VOICE)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setColor(ContextCompat.getColor(context, R.color.notification_accent))
+            .setContentIntent(openApp(null, null))
+            .setContentTitle(str(R.string.notification_read_aloud_title))
+            .setContentText(str(R.string.notification_read_aloud_text))
+            .setCategory(Notification.CATEGORY_TRANSPORT)
+            .setVisibility(Notification.VISIBILITY_PUBLIC)
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .addAction(
+                Notification.Action.Builder(
+                    Icon.createWithResource(context, if (paused) android.R.drawable.ic_media_play else android.R.drawable.ic_media_pause),
+                    str(if (paused) R.string.notification_read_aloud_resume else R.string.notification_read_aloud_pause),
+                    toggle,
+                ).build(),
+            )
+            .addAction(
+                Notification.Action.Builder(
+                    Icon.createWithResource(context, android.R.drawable.ic_menu_close_clear_cancel),
+                    str(R.string.notification_read_aloud_stop),
+                    stop,
+                ).build(),
+            )
+            .setStyle(Notification.MediaStyle().setMediaSession(session).setShowActionsInCompactView(0, 1))
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) builder.setForegroundServiceBehavior(Notification.FOREGROUND_SERVICE_IMMEDIATE)
+        return builder.build()
+    }
 
     fun postOngoing(connection: ConnectionState, pushAnywhere: Boolean = false) =
         post(null, WORKING_ID, ongoing(connection, pushAnywhere))
@@ -826,7 +863,7 @@ class ChatNotifications(
         unreadBotMessages.clear()
         unreadRoomLines.clear()
         // A call stays: Herald starting behind its full screen isn't the user looking ([hangUp] is).
-        manager.activeNotifications.filter { it.id != WORKING_ID && it.id != VOICE_ID && it.id != CALL_ID }.forEach { manager.cancel(it.tag, it.id) }
+        manager.activeNotifications.filter { it.id != WORKING_ID && it.id != VOICE_ID && it.id != READ_ALOUD_ID && it.id != CALL_ID }.forEach { manager.cancel(it.tag, it.id) }
     }
 
     /** Herald is in front: every call ringing is answered by looking, and posts no notification later. */
@@ -883,6 +920,7 @@ class ChatNotifications(
         /** With [EXTRA_OPEN_INBOX] on an Inbox notification's Mark read, and in its extras: the gateway the run is of. */
         const val EXTRA_INBOX_GATEWAY = "inbox_gateway"
         const val CALL_ID = 9
+        const val READ_ALOUD_ID = 10
 
         /** On an Answer's launch intent: the request whose call was answered. */
         const val EXTRA_ANSWERED_CALL = "answered_call"

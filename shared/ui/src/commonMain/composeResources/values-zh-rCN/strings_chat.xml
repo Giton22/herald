@@ -468,6 +468,8 @@
     <string name="chat_regenerate">重新生成</string>
     <string name="chat_read_aloud">朗读</string>
     <string name="chat_stop_reading">停止朗读</string>
+    <string name="chat_pause_reading">暂停朗读</string>
+    <string name="chat_resume_reading">继续朗读</string>
     <string name="chat_message_actions">消息操作</string>
     <string name="chat_queued">已排队 · 此任务完成后发送</string>
     <string name="chat_editing_in_composer">正在输入框中编辑</string>

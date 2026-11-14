@@ -151,6 +151,7 @@ enum class PreviewScene(val label: String) {
     Voice("Voice chat"),
     VoiceCutIn("A reply read in the voice chat, talking over it on"),
     ReadAloud("A reply being read aloud"),
+    ReadAloudPaused("A reply being read aloud, paused"),
     ReadAloudFailed("A reply the gateway couldn't voice"),
     NewChat("A new chat"),
     Sidebar("The sessions sidebar"),
@@ -257,6 +258,7 @@ fun HeraldPreview(scene: PreviewScene, dark: Boolean = true, accent: String = DE
                 PreviewScene.Voice -> SampleChat(ChatSamples.voice, voiceChat = ChatSamples.listening)
                 PreviewScene.VoiceCutIn -> SampleChat(ChatSamples.voice, voiceChat = ChatSamples.speakingCutIn)
                 PreviewScene.ReadAloud -> SampleChat(ChatSamples.reply, readAloud = ReadAloudState(key = "a1"))
+                PreviewScene.ReadAloudPaused -> SampleChat(ChatSamples.reply, readAloud = ReadAloudState(key = "a1", paused = true))
                 PreviewScene.ReadAloudFailed -> SampleChat(ChatSamples.reply, readAloud = ReadAloudState(error = "Speech synthesis failed"))
                 PreviewScene.NewChat -> SampleChat(ChatSamples.empty, placeholder = "What are we building?", places = samplePlaces, cwd = "/srv/site")
                 PreviewScene.Sidebar -> OpenSidebar {

@@ -25,7 +25,7 @@
     <string name="channel_inbox_failed_name">Failed jobs</string>
     <string name="channel_inbox_failed_description">A scheduled job’s run failed.</string>
     <string name="channel_voice_name">Voice chat</string>
-    <string name="channel_voice_description">Shown while a voice chat goes on with the screen off or another app open.</string>
+    <string name="channel_voice_description">Shown while a voice chat or a reply read aloud goes on with the screen off or another app open.</string>
     <string name="channel_calls_name">Calls for an answer</string>
     <string name="channel_calls_description">An approval or a question rings like a call (Settings → Phone tools → Calls).</string>
     <string name="channel_phone_tools_name">Phone tools</string>
@@ -42,6 +42,11 @@
     <string name="notification_voice_title">Voice chat</string>
     <string name="notification_voice_text">Talking with Hermes</string>
     <string name="notification_voice_end">End</string>
+    <string name="notification_read_aloud_title">Reading aloud</string>
+    <string name="notification_read_aloud_text">Reading a reply</string>
+    <string name="notification_read_aloud_stop">Stop</string>
+    <string name="notification_read_aloud_pause">Pause</string>
+    <string name="notification_read_aloud_resume">Resume</string>
 
     <!-- Approvals, questions, passwords -->
     <string name="notification_approve_title">Approve this command?</string>

@@ -481,6 +481,8 @@
     <string name="chat_regenerate">Újragenerálás</string>
     <string name="chat_read_aloud">Felolvasás</string>
     <string name="chat_stop_reading">Felolvasás leállítása</string>
+    <string name="chat_pause_reading">Felolvasás szüneteltetése</string>
+    <string name="chat_resume_reading">Felolvasás folytatása</string>
     <string name="chat_message_actions">Üzenetműveletek</string>
     <string name="chat_queued">Sorban · a feladat után megy el</string>
     <string name="chat_editing_in_composer">Szerkesztés a beviteli mezőben</string>
