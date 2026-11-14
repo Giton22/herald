@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import dev.hermeskotlin.ui.resources.*
@@ -142,6 +143,19 @@ class ScheduledViewModel(
     override fun openJob(jobId: String) {
         _state.update { it.copy(openJobId = jobId, runs = emptyList(), runsError = null) }
         loadRuns(jobId)
+    }
+
+    /**
+     * Applies a pending job link (D22, `docs/WIDGETS-SPEC.md`): waits for the first refresh after
+     * [bind], then opens the job's runs; a job the list doesn't have (deleted) reports false so the
+     * caller drops the link silently. The pending id lives with the caller until this runs, so
+     * [bind]'s state reset can't drop it.
+     */
+    suspend fun applyPendingOpenJob(jobId: String): Boolean {
+        state.first { !it.loading }
+        if (_state.value.jobs.none { it.id == jobId }) return false
+        openJob(jobId)
+        return true
     }
 
     override fun closeJob() {

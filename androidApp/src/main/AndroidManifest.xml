@@ -136,7 +136,9 @@
             <!--
                 hermes://new-chat and new-chat-voice start a chat; voice-chat starts a voice conversation;
                 session/<id> opens a stored chat;
-                bot/<profile> opens that bot's chat, the link Hermes Desktop uses for a bot.
+                bot/<profile> opens that bot's chat, the link Hermes Desktop uses for a bot;
+                kanban[/board/task] opens Tasks, scheduled[/job] the Scheduled page, now just the app (the
+                widgets' body and header taps build these links).
             -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
@@ -148,6 +150,9 @@
                 <data android:host="voice-chat" />
                 <data android:host="session" />
                 <data android:host="bot" />
+                <data android:host="kanban" />
+                <data android:host="scheduled" />
+                <data android:host="now" />
             </intent-filter>
             <!--
                 The browser sign-in ends at <applicationId>:/signed-in (LoopbackHttpReceiver): it closes the browser
@@ -457,6 +462,66 @@
                 <action android:name="android.speech.RecognitionService" />
             </intent-filter>
         </service>
+
+        <!--
+            The four home-screen widgets (docs/WIDGETS-SPEC.md D24-D25): one AppWidgetProvider each, the
+            provider info under res/xml, and the RemoteViewsService backing the three scrollable lists.
+            The refresh buttons send the explicit ACTION_REFRESH_* broadcasts the providers listen for.
+            exported="true" is required: the launcher fires the refresh PendingIntent, and a non-exported
+            receiver is skipped for that broadcast (the refresh button silently did nothing).
+        -->
+        <receiver
+            android:name=".widget.NowWidgetProvider"
+            android:exported="true"
+            android:label="@string/widget_now_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="dev.herald.android.widget.action.REFRESH_NOW" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_now_info" />
+        </receiver>
+        <receiver
+            android:name=".widget.ChatsWidgetProvider"
+            android:exported="true"
+            android:label="@string/widget_chats_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="dev.herald.android.widget.action.REFRESH_CHATS" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_chats_info" />
+        </receiver>
+        <receiver
+            android:name=".widget.KanbanWidgetProvider"
+            android:exported="true"
+            android:label="@string/widget_kanban_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="dev.herald.android.widget.action.REFRESH_KANBAN" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_kanban_info" />
+        </receiver>
+        <receiver
+            android:name=".widget.ScheduledWidgetProvider"
+            android:exported="true"
+            android:label="@string/widget_scheduled_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="dev.herald.android.widget.action.REFRESH_SCHEDULED" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_scheduled_info" />
+        </receiver>
+        <service
+            android:name=".widget.WidgetViewsService"
+            android:exported="false"
+            android:permission="android.permission.BIND_REMOTEVIEWS" />
 
         <!-- Lets the camera app write a photo for the composer into our cache (AttachmentPicker). -->
         <provider

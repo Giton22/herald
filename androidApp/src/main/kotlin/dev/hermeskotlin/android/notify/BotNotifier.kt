@@ -2,6 +2,7 @@ package dev.hermeskotlin.android.notify
 
 import android.content.Context
 import dev.hermeskotlin.core.bots.Bot
+import dev.hermeskotlin.core.bots.BotSession
 import dev.hermeskotlin.core.bots.BotsApi
 import dev.hermeskotlin.core.bots.forRoster
 import dev.hermeskotlin.core.chat.ChatHost
@@ -21,6 +22,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.collectLatest
@@ -33,6 +37,18 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+
+/** Canonical chat IDs let cold widgets filter retitled bot chats; no session contents are kept on disk. */
+internal fun List<Bot>.forSavedRoster(): List<Bot> = map {
+    Bot(
+        name = it.name,
+        isDefault = it.isDefault,
+        displayName = it.displayName,
+        canonicalSession = it.canonicalSession?.let { chat -> BotSession(id = chat.id, resolvedId = chat.resolvedId) },
+        uiMeta = it.uiMeta,
+        hasAvatar = it.hasAvatar,
+    )
+}
 
 /**
  * Tells the user when a bot writes in its chat while Herald is out of sight, as a conversation
@@ -64,6 +80,10 @@ class BotNotifier(
     private val pictures = mutableMapOf<String, ByteArray>()
     private var roster: List<Bot> = emptyList()
 
+    /** Bumps whenever the roster or a bot's avatar changes: WidgetUpdater re-renders the Now widget's faces. */
+    private val _rosterChanges = MutableStateFlow(0)
+    val rosterChanges: StateFlow<Int> = _rosterChanges.asStateFlow()
+
     /** The bot whose permanent chat [storedSessionId] is, as the last roster read knew it. */
     fun botWithChat(storedSessionId: String): Bot? =
         roster.firstOrNull { bot -> bot.canonicalSession?.let { storedSessionId == it.id || storedSessionId == it.openId } == true }
@@ -76,6 +96,13 @@ class BotNotifier(
      */
     fun knownBot(name: String): Bot? = (roster.ifEmpty { savedRoster() }).firstOrNull { it.name == name }
 
+    /**
+     * The roster a background refresh may rely on (docs/WIDGETS-SPEC.md D14): the live list when the
+     * process reached the gateway, else the saved one — so a cold widget merge never drops a carried
+     * bot row just because `profiles.list` never ran in this process.
+     */
+    fun knownRoster(): List<Bot> = roster.ifEmpty { savedRoster() }
+
     private val rosterPrefs by lazy { context.getSharedPreferences("bot_roster", Context.MODE_PRIVATE) }
 
     private fun savedRoster(): List<Bot> = rosterPrefs.getString(KEY_ROSTER, null)?.let {
@@ -83,9 +110,7 @@ class BotNotifier(
     }.orEmpty().also { if (it.isNotEmpty()) roster = it }
 
     private fun saveRoster(bots: List<Bot>) {
-        // Only what notifications need: no session previews kept on disk.
-        val slim = bots.map { Bot(name = it.name, isDefault = it.isDefault, displayName = it.displayName, uiMeta = it.uiMeta, hasAvatar = it.hasAvatar) }
-        rosterPrefs.edit().putString(KEY_ROSTER, HermesJson.encodeToString(ListSerializer(Bot.serializer()), slim)).apply()
+        rosterPrefs.edit().putString(KEY_ROSTER, HermesJson.encodeToString(ListSerializer(Bot.serializer()), bots.forSavedRoster())).apply()
     }
 
     fun start() {
@@ -188,6 +213,7 @@ class BotNotifier(
             return@withLock
         }
         roster = bots
+        _rosterChanges.value += 1
         if (watch) {
             saveRoster(bots)
             bots.forEach { bot -> scope.launch { runCatching { api.watch(bot.name) } } }
@@ -232,7 +258,7 @@ class BotNotifier(
 
     private suspend fun loadPictures(bots: List<Bot>) {
         bots.filter { it.hasAvatar && it.name !in pictures }.forEach { bot ->
-            runCatching { api.avatar(bot.name) }.getOrNull()?.let { pictures[bot.name] = it }
+            runCatching { api.avatar(bot.name) }.getOrNull()?.let { pictures[bot.name] = it; _rosterChanges.value += 1 }
         }
     }
 

@@ -9,6 +9,7 @@ import dev.hermeskotlin.ui.resources.*
 import org.jetbrains.compose.resources.getString
 import dev.hermeskotlin.core.bots.Bot
 import dev.hermeskotlin.core.cache.OfflineCache
+import dev.hermeskotlin.core.widget.WidgetSnapshotStore
 import dev.hermeskotlin.core.bots.BotDetails
 import dev.hermeskotlin.core.bots.BotDraft
 import dev.hermeskotlin.core.bots.BotHealth
@@ -113,6 +114,8 @@ class BotsViewModel(
     attention: AttentionTracker,
     /** The chats saved on this device, which go with their bot. */
     private val cache: OfflineCache? = null,
+    /** The widgets' snapshots, which go with their bot's chats. */
+    private val widgetStore: WidgetSnapshotStore? = null,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(BotsUiState())
@@ -493,6 +496,7 @@ class BotsViewModel(
                 is ApiResult.Success -> {
                     chats.forget(bot.name)
                     cache?.forgetProfile(url, bot.name)
+                    widgetStore?.forgetProfile(url.value, bot.name)
                     _state.update { it.regroup(it.all.filterNot { b -> b.name == bot.name }).copy(notice = words(Res.string.bots_deleted, bot.label)) }
                     onDeleted()
                 }

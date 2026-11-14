@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Tasks (Kanban) widget sizing (docs/WIDGETS-DESIGN.md §2, WIDGETS-SPEC.md D24): both sizing attribute
+    sets (minWidth/minHeight for API 26-30, target cells for API 31+), the 30-minute system update
+    floor, and the static/live previews.
+-->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:minWidth="276dp"
+    android:minHeight="220dp"
+    android:targetCellWidth="4"
+    android:targetCellHeight="2"
+    android:minResizeWidth="203dp"
+    android:minResizeHeight="220dp"
+    android:resizeMode="horizontal|vertical"
+    android:widgetCategory="home_screen"
+    android:updatePeriodMillis="1800000"
+    android:initialLayout="@layout/widget_kanban"
+    android:previewImage="@drawable/widget_preview_kanban"
+    android:previewLayout="@layout/widget_kanban"
+    android:description="@string/widget_kanban_description"
+    tools:targetApi="31" />

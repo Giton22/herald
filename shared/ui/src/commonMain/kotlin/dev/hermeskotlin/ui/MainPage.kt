@@ -6,6 +6,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 
+/** Kanban uses the main content area on every platform; other sidebar pages do only beside a docked desktop sidebar. */
+internal fun showInMain(desktopPages: Boolean, pageKey: String?): Boolean = desktopPages || pageKey == "kanban"
+
 /**
  * Where the sidebar's pages (Scheduled, Insights, Capabilities…) show on a desktop: in the chat's place, beside
  * the docked sidebar, as a desktop app opens its sections. A phone, or a window too narrow to dock the sidebar,

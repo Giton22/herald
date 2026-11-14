@@ -19,6 +19,8 @@ import dev.hermeskotlin.android.wear.WatchAccentSync
 import dev.hermeskotlin.android.wear.WatchRinger
 import dev.hermeskotlin.android.wear.WearRequests
 import dev.hermeskotlin.android.wear.wearModule
+import dev.hermeskotlin.android.widget.WidgetUpdater
+import dev.hermeskotlin.android.widget.widgetModule
 import dev.hermeskotlin.core.phone.PhoneToolsBridge
 import dev.hermeskotlin.core.push.PushSetup
 import dev.hermeskotlin.core.settings.AppLockTimer
@@ -54,7 +56,7 @@ class HermesApplication : Application() {
         super.onCreate()
         val koin = startKoin {
             androidContext(this@HermesApplication)
-            modules(sharedModules + notifyModule + wearModule)
+            modules(sharedModules + notifyModule + wearModule + widgetModule)
         }.koin
         // Before anything the Pebble app hands over is read: only the picked Pebble app is heard.
         PebbleApps.choose(this, koin.get())
@@ -73,6 +75,8 @@ class HermesApplication : Application() {
         koin.get<PhoneToolsBridge>().start()
         // Android forgets proximity alerts on a restart; a restart or an update wakes Herald to arm them again.
         koin.get<Geofences>().start()
+        // The home-screen widgets stay current while the process lives: state changes debounce into refreshes.
+        koin.get<WidgetUpdater>().start()
         followLanguageSetting(koin.get(), koin.get())
     }
 

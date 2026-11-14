@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Home-screen widgets (docs/WIDGETS-DESIGN.md §1.1, §4): every layout value is a resource;
+         values-v31 overrides only widget_outer_radius with the launcher system radius. -->
+    <dimen name="widget_outer_radius">24dp</dimen>
+    <dimen name="widget_content_padding_horizontal">12dp</dimen>
+    <dimen name="widget_content_padding_vertical">8dp</dimen>
+    <dimen name="widget_header_height">48dp</dimen>
+    <dimen name="widget_action_size">48dp</dimen>
+    <dimen name="widget_action_glyph">20dp</dimen>
+    <dimen name="widget_header_divider_height">1dp</dimen>
+
+    <dimen name="widget_gap_standard">8dp</dimen>
+    <dimen name="widget_gap_related">4dp</dimen>
+    <dimen name="widget_eyebrow_height">14dp</dimen>
+
+    <dimen name="widget_face_lead">40dp</dimen>
+    <dimen name="widget_face_row">32dp</dimen>
+    <dimen name="widget_glyph_slot_small">24dp</dimen>
+    <dimen name="widget_glyph_size">20dp</dimen>
+    <dimen name="widget_status_dot">8dp</dimen>
+    <dimen name="widget_marker_size">16dp</dimen>
+    <dimen name="widget_empty_icon">32dp</dimen>
+
+    <dimen name="widget_lead_height">80dp</dimen>
+    <dimen name="widget_lead_radius">16dp</dimen>
+    <dimen name="widget_running_row_height">60dp</dimen>
+    <dimen name="widget_running_strip_height">48dp</dimen>
+    <dimen name="widget_running_strip_radius">12dp</dimen>
+
+    <dimen name="widget_chats_row_height">48dp</dimen>
+    <dimen name="widget_kanban_row_height">56dp</dimen>
+    <dimen name="widget_scheduled_problem_row_height">64dp</dimen>
+    <dimen name="widget_scheduled_row_height">52dp</dimen>
+    <dimen name="widget_time_column_width">64dp</dimen>
+
+    <dimen name="widget_count_strip_height">28dp</dimen>
+    <dimen name="widget_count_pill_height">20dp</dimen>
+    <dimen name="widget_pill_radius">10dp</dimen>
+    <dimen name="widget_pill_padding_horizontal">6dp</dimen>
+    <dimen name="widget_pill_gap">4dp</dimen>
+
+    <dimen name="widget_notice_height">28dp</dimen>
+    <dimen name="widget_saved_notice_height">30dp</dimen>
+    <dimen name="widget_quiet_hero_height">64dp</dimen>
+    <dimen name="widget_quiet_mark">48dp</dimen>
+    <dimen name="widget_quick_action_height">48dp</dimen>
+    <dimen name="widget_quick_action_radius">12dp</dimen>
+
+    <dimen name="widget_placeholder_lead_height">80dp</dimen>
+    <dimen name="widget_placeholder_row_height">48dp</dimen>
+    <dimen name="widget_placeholder_short_height">36dp</dimen>
+
+    <dimen name="widget_text_title">16sp</dimen>
+    <dimen name="widget_text_context">12sp</dimen>
+    <dimen name="widget_text_eyebrow">12sp</dimen>
+    <dimen name="widget_text_lead_title">18sp</dimen>
+    <dimen name="widget_text_quiet_title">24sp</dimen>
+    <dimen name="widget_text_row_title">16sp</dimen>
+    <dimen name="widget_text_metadata">13sp</dimen>
+    <dimen name="widget_text_body">14sp</dimen>
+    <dimen name="widget_text_time_primary">15sp</dimen>
+</resources>

@@ -1,4 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="window_background">#0A0A0B</color>
+
+    <!-- Home-screen widgets, dark scheme (docs/WIDGETS-DESIGN.md §3.1). -->
+    <color name="widget_surface">#FF16161A</color>
+    <color name="widget_surface_2">#FF1C1C22</color>
+    <color name="widget_well">#FF121215</color>
+    <color name="widget_text">#FFF4F4F6</color>
+    <color name="widget_text_secondary">#FFD4D4D8</color>
+    <color name="widget_text_tertiary">#FF8A8A94</color>
+    <color name="widget_stroke">#12FFFFFF</color>
+    <color name="widget_danger">#FFF85149</color>
+    <color name="widget_warning">#FFF5A524</color>
+    <color name="widget_success">#FF3FB950</color>
+    <color name="widget_danger_soft">#24F85149</color>
+    <color name="widget_warning_soft">#21F5A524</color>
+    <color name="widget_success_soft">#213FB950</color>
 </resources>

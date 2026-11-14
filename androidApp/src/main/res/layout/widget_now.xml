@@ -1,0 +1,708 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Now widget, Regular 4x2 (docs/WIDGETS-DESIGN.md §6, §10.1). Fixed rows, no collection.
+    The XML is the complete safe default state: the loading placeholder shows until the first
+    render decides the real state. WidgetViews.kt owns all visibility and colors.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_background"
+    android:orientation="vertical"
+    android:paddingHorizontal="@dimen/widget_content_padding_horizontal"
+    android:paddingVertical="@dimen/widget_content_padding_vertical">
+
+    <LinearLayout
+        android:baselineAligned="false"
+        android:id="@+id/header"
+        android:layout_width="match_parent"
+        android:layout_height="@dimen/widget_header_height"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/title"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:fontFamily="sans-serif"
+                android:includeFontPadding="false"
+                android:maxLines="1"
+                android:text="@string/widget_now_label"
+                android:textColor="@color/widget_text"
+                android:textSize="@dimen/widget_text_title"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/context"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:includeFontPadding="false"
+                android:maxLines="1"
+                android:textColor="@color/widget_text_tertiary"
+                android:textSize="@dimen/widget_text_context"
+                android:visibility="gone" />
+        </LinearLayout>
+
+        <FrameLayout
+            android:id="@+id/refresh"
+            android:layout_width="@dimen/widget_action_size"
+            android:layout_height="@dimen/widget_action_size"
+            android:background="@android:color/transparent">
+
+            <ImageView
+                android:id="@+id/refresh_icon"
+                android:layout_width="@dimen/widget_action_glyph"
+                android:layout_height="@dimen/widget_action_glyph"
+                android:layout_gravity="center"
+                android:contentDescription="@string/widget_refresh_now"
+                android:src="@drawable/widget_ic_refresh" />
+        </FrameLayout>
+    </LinearLayout>
+
+    <ProgressBar
+        android:id="@+id/refresh_progress"
+        style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="match_parent"
+        android:layout_height="2dp"
+        android:indeterminate="true"
+        android:visibility="gone" />
+
+    <ImageView
+        android:layout_width="match_parent"
+        android:layout_height="@dimen/widget_header_divider_height"
+        android:background="@color/widget_stroke" android:importantForAccessibility="no" />
+
+    <FrameLayout
+        android:id="@+id/body"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <!-- Initial loading: header + "Refreshing…" + three static placeholders (§6.5). -->
+        <LinearLayout
+            android:id="@+id/state_loading"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:includeFontPadding="false"
+                android:text="@string/widget_refreshing"
+                android:textColor="@color/widget_text_tertiary"
+                android:textSize="@dimen/widget_text_context" />
+
+            <ImageView
+                android:layout_width="match_parent"
+                android:layout_height="@dimen/widget_placeholder_lead_height"
+                android:layout_marginTop="@dimen/widget_gap_related"
+                android:background="@drawable/widget_lead_background" android:importantForAccessibility="no" />
+
+            <ImageView
+                android:layout_width="match_parent"
+                android:layout_height="@dimen/widget_placeholder_row_height"
+                android:layout_marginTop="@dimen/widget_gap_related"
+                android:background="@drawable/widget_surface2_background" android:importantForAccessibility="no" />
+
+            <ImageView
+                android:layout_width="match_parent"
+                android:layout_height="@dimen/widget_placeholder_short_height"
+                android:layout_marginTop="@dimen/widget_gap_related"
+                android:background="@drawable/widget_surface2_background" android:importantForAccessibility="no" />
+        </LinearLayout>
+
+        <!-- App lock (D16): counts only, no content-shaped values. -->
+        <TextView
+            android:id="@+id/state_locked"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:text="@string/widget_now_locked_counts"
+            android:textColor="@color/widget_text_secondary"
+            android:textSize="@dimen/widget_text_row_title"
+            android:visibility="gone" />
+
+        <!-- Needs you (§6.1, §6.4): eyebrow, 80dp lead aperture, optional second row. -->
+        <LinearLayout
+            android:id="@+id/state_needs"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/needs_eyebrow"
+                android:layout_width="match_parent"
+                android:layout_height="@dimen/widget_eyebrow_height"
+                android:gravity="center_vertical"
+                android:includeFontPadding="false"
+                android:letterSpacing="0.08"
+                android:text="@string/widget_needs_you"
+                android:textAllCaps="true"
+                android:textColor="@color/widget_text"
+                android:textSize="@dimen/widget_text_eyebrow"
+                android:textStyle="bold" />
+
+            <LinearLayout
+                android:id="@+id/needs_lead"
+                android:layout_width="match_parent"
+                android:layout_height="@dimen/widget_lead_height"
+                android:layout_marginTop="@dimen/widget_gap_related"
+                android:background="@drawable/widget_lead_background"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:padding="@dimen/widget_gap_standard">
+
+                <ImageView
+                    android:id="@+id/lead_icon"
+                    android:layout_width="@dimen/widget_face_lead"
+                    android:layout_height="@dimen/widget_face_lead"
+                    android:contentDescription="@null" />
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginHorizontal="@dimen/widget_gap_standard"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:id="@+id/lead_title"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:ellipsize="end"
+                        android:includeFontPadding="false"
+                        android:maxLines="1"
+                        android:textColor="@color/widget_text"
+                        android:textSize="@dimen/widget_text_lead_title"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/lead_detail"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:ellipsize="end"
+                        android:maxLines="2"
+                        android:textColor="@color/widget_text_secondary"
+                        android:textSize="@dimen/widget_text_body" />
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/lead_badge"
+                    android:layout_width="wrap_content"
+                    android:layout_height="@dimen/widget_count_pill_height"
+                    android:background="@drawable/widget_pill_neutral"
+                    android:gravity="center"
+                    android:includeFontPadding="false"
+                    android:minWidth="@dimen/widget_count_pill_height"
+                    android:paddingHorizontal="@dimen/widget_pill_padding_horizontal"
+                    android:textColor="@color/widget_danger"
+                    android:textSize="@dimen/widget_text_metadata"
+                    android:visibility="gone" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/needs_second"
+                android:layout_width="match_parent"
+                android:layout_height="@dimen/widget_placeholder_row_height"
+                android:layout_marginTop="@dimen/widget_gap_related"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:visibility="gone">
+
+                <ImageView
+                    android:id="@+id/second_icon"
+                    android:layout_width="@dimen/widget_face_row"
+                    android:layout_height="@dimen/widget_face_row"
+                    android:contentDescription="@null" />
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="@dimen/widget_gap_standard"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:id="@+id/second_title"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:ellipsize="end"
+                        android:includeFontPadding="false"
+                        android:maxLines="1"
+                        android:textColor="@color/widget_text"
+                        android:textSize="@dimen/widget_text_row_title"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/second_detail"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:ellipsize="end"
+                        android:includeFontPadding="false"
+                        android:maxLines="1"
+                        android:textColor="@color/widget_text_secondary"
+                        android:textSize="@dimen/widget_text_metadata" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- Combined variant (§6.4): the running target replaces the second Needs-you row. -->
+            <LinearLayout
+                android:id="@+id/running_strip"
+                android:layout_width="match_parent"
+                android:layout_height="@dimen/widget_running_strip_height"
+                android:layout_marginTop="@dimen/widget_gap_related"
+                android:background="@drawable/widget_well_background"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingHorizontal="@dimen/widget_gap_standard"
+                android:visibility="gone">
+
+                <ImageView
+                    android:id="@+id/running_strip_icon"
+                    android:layout_width="@dimen/widget_glyph_size"
+                    android:layout_height="@dimen/widget_glyph_size"
+                    android:contentDescription="@null"
+                    android:src="@drawable/widget_ic_running" />
+
+                <TextView
+                    android:id="@+id/running_strip_title"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="@dimen/widget_gap_related"
+                    android:layout_weight="1"
+                    android:ellipsize="end"
+                    android:includeFontPadding="false"
+                    android:maxLines="1"
+                    android:textColor="@color/widget_text_secondary"
+                    android:textSize="@dimen/widget_text_metadata" />
+
+                <TextView
+                    android:id="@+id/running_strip_elapsed"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:gravity="end"
+                    android:includeFontPadding="false"
+                    android:minWidth="44dp"
+                    android:textColor="@color/widget_text_tertiary"
+                    android:textSize="@dimen/widget_text_metadata" />
+            </LinearLayout>
+        </LinearLayout>
+            <TextView
+                android:id="@+id/more"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:includeFontPadding="false"
+                android:maxLines="1"
+                android:textColor="@color/widget_text_tertiary"
+                android:textSize="@dimen/widget_text_metadata"
+                android:visibility="gone" />
+
+        <LinearLayout
+            android:id="@+id/state_running"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/running_eyebrow"
+                android:layout_width="match_parent"
+                android:layout_height="@dimen/widget_eyebrow_height"
+                android:gravity="center_vertical"
+                android:includeFontPadding="false"
+                android:letterSpacing="0.08"
+                android:text="@string/widget_running_eyebrow"
+                android:textAllCaps="true"
+                android:textColor="@color/widget_text"
+                android:textSize="@dimen/widget_text_eyebrow"
+                android:textStyle="bold" />
+
+            <LinearLayout
+                android:id="@+id/running_first"
+                android:layout_width="match_parent"
+                android:layout_height="@dimen/widget_running_row_height"
+                android:layout_marginTop="@dimen/widget_gap_related"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <ImageView
+                    android:id="@+id/running_first_icon"
+                    android:layout_width="@dimen/widget_face_row"
+                    android:layout_height="@dimen/widget_face_row"
+                    android:contentDescription="@null" />
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginHorizontal="@dimen/widget_gap_standard"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:id="@+id/running_first_title"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:ellipsize="end"
+                        android:includeFontPadding="false"
+                        android:maxLines="1"
+                        android:textColor="@color/widget_text"
+                        android:textSize="@dimen/widget_text_row_title"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/running_first_meta"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:ellipsize="end"
+                        android:includeFontPadding="false"
+                        android:maxLines="1"
+                        android:textColor="@color/widget_text_secondary"
+                        android:textSize="@dimen/widget_text_metadata" />
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/running_first_elapsed"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:fontFamily="sans-serif"
+                    android:gravity="end"
+                    android:includeFontPadding="false"
+                    android:minWidth="44dp"
+                    android:textColor="@color/widget_text_tertiary"
+                    android:textSize="@dimen/widget_text_metadata" />
+            </LinearLayout>
+
+            <ImageView
+                android:layout_width="match_parent"
+                android:layout_height="@dimen/widget_header_divider_height"
+                android:background="@color/widget_stroke" android:importantForAccessibility="no" />
+
+            <LinearLayout
+                android:id="@+id/running_second"
+                android:layout_width="match_parent"
+                android:layout_height="@dimen/widget_running_row_height"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:visibility="gone">
+
+                <ImageView
+                    android:id="@+id/running_second_icon"
+                    android:layout_width="@dimen/widget_face_row"
+                    android:layout_height="@dimen/widget_face_row"
+                    android:contentDescription="@null" />
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginHorizontal="@dimen/widget_gap_standard"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:id="@+id/running_second_title"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:ellipsize="end"
+                        android:includeFontPadding="false"
+                        android:maxLines="1"
+                        android:textColor="@color/widget_text"
+                        android:textSize="@dimen/widget_text_row_title"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/running_second_meta"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:ellipsize="end"
+                        android:includeFontPadding="false"
+                        android:maxLines="1"
+                        android:textColor="@color/widget_text_secondary"
+                        android:textSize="@dimen/widget_text_metadata" />
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/running_second_elapsed"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:gravity="end"
+                    android:includeFontPadding="false"
+                    android:minWidth="44dp"
+                    android:textColor="@color/widget_text_tertiary"
+                    android:textSize="@dimen/widget_text_metadata" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- Everything is quiet (§6.3): HeraldMark hero, next job, two quick actions. -->
+        <LinearLayout
+            android:id="@+id/state_quiet"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="@dimen/widget_quiet_hero_height"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <ImageView
+                    android:id="@+id/quiet_mark"
+                    android:layout_width="@dimen/widget_quiet_mark"
+                    android:layout_height="@dimen/widget_quiet_mark"
+                    android:contentDescription="@null"
+                    android:src="@drawable/widget_herald_mark" />
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="@dimen/widget_gap_standard"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:id="@+id/quiet_title"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:ellipsize="end"
+                        android:includeFontPadding="false"
+                        android:maxLines="1"
+                        android:text="@string/widget_all_quiet"
+                        android:textColor="@color/widget_text"
+                        android:textSize="@dimen/widget_text_quiet_title"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/quiet_detail"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:ellipsize="end"
+                        android:includeFontPadding="false"
+                        android:maxLines="1"
+                        android:text="@string/widget_everything_quiet"
+                        android:textColor="@color/widget_text_tertiary"
+                        android:textSize="@dimen/widget_text_metadata" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/quiet_next"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/widget_gap_related"
+                android:ellipsize="end"
+                android:includeFontPadding="false"
+                android:maxLines="1"
+                android:textColor="@color/widget_text_tertiary"
+                android:textSize="@dimen/widget_text_metadata"
+                android:visibility="gone" />
+
+            <LinearLayout
+                android:baselineAligned="false"
+                android:layout_width="match_parent"
+                android:layout_height="@dimen/widget_quick_action_height"
+                android:layout_marginTop="@dimen/widget_gap_standard"
+                android:orientation="horizontal">
+
+                <FrameLayout
+                    android:id="@+id/action_new_chat"
+                    android:layout_width="0dp"
+                    android:layout_height="@dimen/widget_quick_action_height"
+                    android:layout_weight="1"
+                    android:background="@drawable/widget_action_secondary">
+
+                    <ImageView
+                android:id="@+id/action_new_chat_icon"
+                        android:layout_width="@dimen/widget_action_glyph"
+                        android:layout_height="@dimen/widget_action_glyph"
+                        android:layout_gravity="center"
+                        android:contentDescription="@string/widget_action_new_chat"
+                        android:src="@drawable/widget_ic_plus" />
+                </FrameLayout>
+
+                <FrameLayout
+                    android:id="@+id/action_dictate"
+                    android:layout_width="0dp"
+                    android:layout_height="@dimen/widget_quick_action_height"
+                    android:layout_marginStart="@dimen/widget_gap_standard"
+                    android:layout_weight="1"
+                    android:background="@drawable/widget_action_secondary">
+
+                    <ImageView
+                android:id="@+id/action_dictate_icon"
+                        android:layout_width="@dimen/widget_action_glyph"
+                        android:layout_height="@dimen/widget_action_glyph"
+                        android:layout_gravity="center"
+                        android:contentDescription="@string/widget_action_dictate"
+                        android:src="@drawable/widget_ic_microphone" />
+                </FrameLayout>
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- Fallback (§6.5): live unavailable / no snapshot / signed out / refresh error. -->
+        <LinearLayout
+            android:id="@+id/state_fallback"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <ImageView
+                android:id="@+id/fallback_icon"
+                android:layout_width="@dimen/widget_empty_icon"
+                android:layout_height="@dimen/widget_empty_icon"
+                android:contentDescription="@null" />
+
+            <TextView
+                android:id="@+id/fallback_title"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/widget_gap_standard"
+                android:ellipsize="end"
+                android:gravity="center"
+                android:includeFontPadding="false"
+                android:maxLines="1"
+                android:textColor="@color/widget_text"
+                android:textSize="@dimen/widget_text_lead_title"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/fallback_detail"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/widget_gap_related"
+                android:ellipsize="end"
+                android:gravity="center"
+                android:includeFontPadding="false"
+                android:maxLines="2"
+                android:textColor="@color/widget_text_secondary"
+                android:textSize="@dimen/widget_text_body" />
+
+            <TextView
+                android:id="@+id/fallback_next"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/widget_gap_related"
+                android:ellipsize="end"
+                android:gravity="center"
+                android:includeFontPadding="false"
+                android:maxLines="1"
+                android:textColor="@color/widget_text_tertiary"
+                android:textSize="@dimen/widget_text_metadata"
+                android:visibility="gone" />
+
+            <!-- The cold-unknown fallback keeps the quick actions (§6.5). -->
+            <LinearLayout
+                android:baselineAligned="false"
+                android:layout_width="match_parent"
+                android:layout_height="@dimen/widget_quick_action_height"
+                android:layout_marginTop="@dimen/widget_gap_standard"
+                android:orientation="horizontal">
+
+                <FrameLayout
+                    android:id="@+id/fallback_new_chat"
+                    android:layout_width="0dp"
+                    android:layout_height="@dimen/widget_quick_action_height"
+                    android:layout_weight="1"
+                    android:background="@drawable/widget_action_secondary">
+
+                    <ImageView
+                android:id="@+id/fallback_new_chat_icon"
+                        android:layout_width="@dimen/widget_action_glyph"
+                        android:layout_height="@dimen/widget_action_glyph"
+                        android:layout_gravity="center"
+                        android:contentDescription="@string/widget_action_new_chat"
+                        android:src="@drawable/widget_ic_plus" />
+                </FrameLayout>
+
+                <FrameLayout
+                    android:id="@+id/fallback_dictate"
+                    android:layout_width="0dp"
+                    android:layout_height="@dimen/widget_quick_action_height"
+                    android:layout_marginStart="@dimen/widget_gap_standard"
+                    android:layout_weight="1"
+                    android:background="@drawable/widget_action_secondary">
+
+                    <ImageView
+                android:id="@+id/fallback_dictate_icon"
+                        android:layout_width="@dimen/widget_action_glyph"
+                        android:layout_height="@dimen/widget_action_glyph"
+                        android:layout_gravity="center"
+                        android:contentDescription="@string/widget_action_dictate"
+                        android:src="@drawable/widget_ic_microphone" />
+                </FrameLayout>
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- Bottom notice: cold-unknown live status, or "Couldn't refresh · Saved HH:MM" (§6.5).
+             Two pre-tinted TextViews: a compound drawable's tint is static, the icon differs. -->
+        <FrameLayout
+            android:id="@+id/notice_info"
+            android:layout_gravity="bottom"
+            android:layout_width="match_parent"
+            android:layout_height="@dimen/widget_notice_height"
+            android:visibility="gone">
+
+            <ImageView
+                android:id="@+id/notice_info_icon"
+                android:layout_width="@dimen/widget_marker_size"
+                android:layout_height="@dimen/widget_marker_size"
+                android:layout_gravity="center_vertical"
+                android:contentDescription="@null"
+                android:src="@drawable/widget_ic_info" />
+
+            <TextView
+                android:id="@+id/notice_info_text"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:layout_marginStart="@dimen/widget_gap_related"
+                android:ellipsize="end"
+                android:gravity="center_vertical"
+                android:includeFontPadding="false"
+                android:maxLines="1"
+                android:textColor="@color/widget_warning"
+                android:textSize="@dimen/widget_text_metadata" />
+        </FrameLayout>
+
+        <FrameLayout
+            android:id="@+id/notice_warning"
+            android:layout_gravity="bottom"
+            android:layout_width="match_parent"
+            android:layout_height="@dimen/widget_notice_height"
+            android:visibility="gone">
+
+            <ImageView
+                android:id="@+id/notice_warning_icon"
+                android:layout_width="@dimen/widget_marker_size"
+                android:layout_height="@dimen/widget_marker_size"
+                android:layout_gravity="center_vertical"
+                android:contentDescription="@null"
+                android:src="@drawable/widget_ic_warning" />
+
+            <TextView
+                android:id="@+id/notice_warning_text"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:layout_marginStart="@dimen/widget_gap_related"
+                android:ellipsize="end"
+                android:gravity="center_vertical"
+                android:includeFontPadding="false"
+                android:maxLines="1"
+                android:textColor="@color/widget_warning"
+                android:textSize="@dimen/widget_text_metadata" />
+        </FrameLayout>
+    </FrameLayout>
+</LinearLayout>
